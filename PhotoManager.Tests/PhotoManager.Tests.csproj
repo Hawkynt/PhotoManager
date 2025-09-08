@@ -7,6 +7,15 @@
 
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
+    
+    <!-- Assembly Information -->
+    <AssemblyTitle>Photo Manager Tests</AssemblyTitle>
+    <AssemblyDescription>Unit and integration tests for the Photo Manager application.</AssemblyDescription>
+    <AssemblyCompany>Hawkynt</AssemblyCompany>
+    <AssemblyProduct>Photo Manager Tests</AssemblyProduct>
+    <AssemblyCopyright>Copyright © Hawkynt 2025</AssemblyCopyright>
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <FileVersion>1.0.0.0</FileVersion>
   </PropertyGroup>
 
   <ItemGroup>
