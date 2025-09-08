@@ -1,10 +1,31 @@
 # PhotoManager.CLI
 
-Command-line interface for batch photo organization.
+![License](https://img.shields.io/github/license/Hawkynt/PhotoManager)
+![Platform](https://img.shields.io/badge/platform-cross--platform-green)
+![.NET](https://img.shields.io/badge/%2ENET-8%2E0-purple)
+[![Last Commit](https://img.shields.io/github/last-commit/Hawkynt/PhotoManager?branch=main&path=PhotoManager%2ECLI)](https://github.com/Hawkynt/PhotoManager/commits/main/PhotoManager.CLI)
+[![GitHub release](https://img.shields.io/github/v/release/Hawkynt/PhotoManager)](https://github.com/Hawkynt/PhotoManager/releases/latest)
+
+> Command-line interface for organizing and managing photo collections with metadata-driven sorting and duplicate handling.
+
+## Features
+
+- ⚡ **High Performance** - Multi-threaded processing with progress reporting
+- 🔄 **Smart Duplicate Handling** - Content-based duplicate detection and resolution
+- 📊 **Detailed Reporting** - Comprehensive statistics and operation summaries  
+- 🎛️ **Flexible Configuration** - Multiple duplicate handling strategies and options
+- 🔍 **Preview Mode** - Dry-run capability to preview operations without changes
+- 🖥️ **Cross-Platform** - Runs on Windows, Linux, and macOS
 
 ## Installation
 
+### From Release
+Download the latest release from [GitHub Releases](https://github.com/Hawkynt/PhotoManager/releases) and extract to your desired location.
+
+### Build from Source
 ```bash
+git clone https://github.com/Hawkynt/PhotoManager.git
+cd PhotoManager/PhotoManager.CLI
 dotnet build -c Release
 ```
 

@@ -1,14 +1,27 @@
 # PhotoManager.Core
 
-Core library containing the business logic, models, and services for the PhotoManager application suite.
+![License](https://img.shields.io/github/license/Hawkynt/PhotoManager)
+![Language](https://img.shields.io/github/languages/top/Hawkynt/PhotoManager?color=purple)
+[![Last Commit](https://img.shields.io/github/last-commit/Hawkynt/PhotoManager?branch=main&path=PhotoManager%2ECore)](https://github.com/Hawkynt/PhotoManager/commits/main/PhotoManager.Core)
+[![NuGet](https://img.shields.io/nuget/v/PhotoManager%2ECore)](https://www.nuget.org/packages/PhotoManager.Core/)
+[![Downloads](https://img.shields.io/nuget/dt/PhotoManager%2ECore)](https://www.nuget.org/packages/PhotoManager.Core/)
+
+> Core library for photo organization and management with metadata-driven sorting, duplicate handling, and flexible import strategies.
 
 ## Overview
 
 This library provides the core functionality for photo organization, including:
-- Metadata extraction from image files
-- Date detection from multiple sources
-- File organization logic
-- Configurable import settings
+- 🔍 **Metadata extraction** from image files (EXIF, GPS, filesystem)
+- 🎯 **Smart date detection** from multiple sources with reliability scoring
+- 📁 **File organization** with configurable folder structure patterns
+- 🔄 **Duplicate handling** with multiple resolution strategies (Smart/Rename/Skip/Overwrite)
+- 📊 **Progress reporting** and detailed operation results
+
+## Installation
+
+```bash
+dotnet add package PhotoManager.Core
+```
 
 ## Key Components
 

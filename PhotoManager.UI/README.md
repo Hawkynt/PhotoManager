@@ -1,14 +1,22 @@
 # PhotoManager.UI
 
-Windows Forms application for photo organization with MVC architecture.
+![License](https://img.shields.io/github/license/Hawkynt/PhotoManager)
+![Platform](https://img.shields.io/badge/platform-Windows-blue)
+![.NET](https://img.shields.io/badge/%2ENET-8%2E0-purple)
+[![Last Commit](https://img.shields.io/github/last-commit/Hawkynt/PhotoManager?branch=main&path=PhotoManager%2EUI)](https://github.com/Hawkynt/PhotoManager/commits/main/PhotoManager.UI)
+[![GitHub release](https://img.shields.io/github/v/release/Hawkynt/PhotoManager)](https://github.com/Hawkynt/PhotoManager/releases/latest)
+
+> Windows Forms application for organizing and managing photo collections with metadata-driven sorting and duplicate handling.
 
 ## Features
 
-- **Drag & Drop Support** - Easily add photos by dragging folders
-- **Real-time Progress** - Visual feedback during processing
-- **Settings Persistence** - Remembers last used directories
-- **Multi-language Support** - Localized user interface
-- **MVC Architecture** - Clean separation of concerns
+- 🖱️ **User-Friendly Interface** - Intuitive Windows Forms GUI with easy navigation
+- 📁 **Directory Selection** - Browser dialogs for source and destination folder selection  
+- ⚙️ **Configurable Options** - Duplicate handling, recursive processing, preserve originals
+- 📊 **Real-Time Progress** - Live progress bar and status updates during processing
+- 💾 **Settings Persistence** - Automatically saves and restores user preferences
+- ⏹️ **Cancellation Support** - Stop processing operations at any time
+- 🎯 **MVC Architecture** - Clean separation of concerns with dependency injection
 
 ## Architecture
 
