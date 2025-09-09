@@ -33,7 +33,7 @@ public class DuplicateHandlingTests {
     await File.WriteAllTextAsync(file2, content);
 
     // Act
-    var result = await this._organizer.AreFilesIdenticalAsync(file1, file2);
+    var result = await this._organizer.AreFilesIdenticalAsync(new FileInfo(file1), new FileInfo(file2));
 
     // Assert
     Assert.That(result, Is.True);
@@ -49,7 +49,7 @@ public class DuplicateHandlingTests {
     await File.WriteAllTextAsync(file2, "Content B");
 
     // Act
-    var result = await this._organizer.AreFilesIdenticalAsync(file1, file2);
+    var result = await this._organizer.AreFilesIdenticalAsync(new FileInfo(file1), new FileInfo(file2));
 
     // Assert
     Assert.That(result, Is.False);
@@ -68,7 +68,7 @@ public class DuplicateHandlingTests {
     await File.WriteAllBytesAsync(file2, largeContent);
 
     // Act
-    var result = await this._organizer.AreFilesIdenticalAsync(file1, file2);
+    var result = await this._organizer.AreFilesIdenticalAsync(new FileInfo(file1), new FileInfo(file2));
 
     // Assert
     Assert.That(result, Is.True);
@@ -131,7 +131,7 @@ public class DuplicateHandlingTests {
     Assert.That(result, Is.EqualTo(FileOperationResult.Success));
     Assert.That(File.Exists(sourceFile), Is.False, "Source should be moved");
     Assert.That(File.Exists(expectedRenamedFile), Is.True, "File should be renamed");
-    Assert.That(path, Is.EqualTo(expectedRenamedFile));
+    Assert.That(path?.FullName, Is.EqualTo(expectedRenamedFile));
   }
 
   [Test]
@@ -218,7 +218,7 @@ public class DuplicateHandlingTests {
     Assert.That(result, Is.EqualTo(FileOperationResult.Success));
     Assert.That(File.Exists(sourceFile), Is.False, "Source should be moved");
     Assert.That(File.Exists(expectedRenamedFile), Is.True, "File should be renamed");
-    Assert.That(path, Is.EqualTo(expectedRenamedFile));
+    Assert.That(path?.FullName, Is.EqualTo(expectedRenamedFile));
   }
 
   [Test]

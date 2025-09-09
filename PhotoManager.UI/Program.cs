@@ -40,6 +40,7 @@ static class Program {
     services.AddSingleton<MainViewModel>();
     services.AddSingleton<MainController>();
     services.AddSingleton<MainForm>();
+    services.AddTransient<AboutController>();
 
     return services.BuildServiceProvider();
   }

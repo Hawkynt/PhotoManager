@@ -22,9 +22,20 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="FrameworkExtensions.Corlib" Version="1.0.2.537" />
+    <PackageReference Include="FrameworkExtensions.System.Windows.Forms" Version="1.0.0.80" />
     <PackageReference Include="Microsoft.Extensions.Configuration" Version="8.0.0" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="8.0.0" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.0" />
+    <PackageReference Include="SixLabors.ImageSharp" Version="3.1.11" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Update="Resources\Strings.Designer.cs">
+      <DesignTime>True</DesignTime>
+      <AutoGen>True</AutoGen>
+      <DependentUpon>Resources\Strings.resx</DependentUpon>
+    </Compile>
   </ItemGroup>
 
 </Project>

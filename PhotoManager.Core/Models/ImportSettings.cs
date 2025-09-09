@@ -11,6 +11,10 @@ public record ImportSettings {
   public bool DryRun { get; init; } = false;
   public int MaxParallelism { get; init; } = Environment.ProcessorCount;
   public DateTime MinimumValidDate { get; init; } = new(1990, 1, 1);
-  public HashSet<DateTime> DefaultDatesToIgnore { get; init; } = [new(1970, 1, 1), new(1980, 1, 1)];
+  public HashSet<DateTime> DefaultDatesToIgnore { get; init; } = [
+    new(1970, 1, 1), 
+    new(1980, 1, 1)
+  ];
+
   public DuplicateHandling DuplicateHandling { get; init; } = DuplicateHandling.Smart;
 }

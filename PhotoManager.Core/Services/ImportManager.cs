@@ -2,23 +2,26 @@ using System.Diagnostics;
 using PhotoManager.Core.Enums;
 using PhotoManager.Core.Interfaces;
 using PhotoManager.Core.Models;
+using PhotoManager.Core.Utilities;
 
 namespace PhotoManager.Core.Services;
 
-public class ImportManager(IDateTimeParser? dateTimeParser = null, IFileOrganizer? fileOrganizer = null)
+public class ImportManager(IDateTimeParser? dateTimeParser = null, IFileOrganizer? fileOrganizer = null, ISupportedFormatsService? supportedFormatsService = null)
   : IImportManager {
   private readonly IDateTimeParser _dateTimeParser = dateTimeParser ?? new DateTimeParser();
   private readonly IFileOrganizer _fileOrganizer = fileOrganizer ?? new FileOrganizer();
+  private readonly ISupportedFormatsService _supportedFormatsService = supportedFormatsService ?? new SupportedFormatsService();
 
   public async IAsyncEnumerable<FileToImport> EnumerateDirectory(DirectoryInfo root, bool recursive) {
-    if (root is not { Exists: true })
-      yield break;
+    ThrowHelpers.ThrowIfDirectoryNotExists(root);
 
     var searchOption = recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
 
     foreach (var file in root.EnumerateFiles("*", searchOption).OrderBy(i => i.Name)) {
-      yield return new FileToImport(file);
-      await Task.Yield();
+      if (this._supportedFormatsService.IsExtensionSupported(file.Extension)) {
+        yield return new FileToImport(file);
+        await Task.Yield();
+      }
     }
   }
 
@@ -69,6 +72,7 @@ public class ImportManager(IDateTimeParser? dateTimeParser = null, IFileOrganize
     if (gpsDate.HasValue && exifDate.HasValue) {
       if (exifDate.Value > gpsDate.Value && (exifDate.Value - gpsDate.Value).TotalHours <= 1)
         return exifDate;
+
       return gpsDate;
     }
 
@@ -82,10 +86,59 @@ public class ImportManager(IDateTimeParser? dateTimeParser = null, IFileOrganize
     return sortedDates.FirstOrDefault();
   }
 
+  public async Task<(DateTime? Date, DateTimeSource Source)> GetMostLogicalCreationDateWithSourceAsync(FileToImport fileToImport) {
+    ArgumentNullException.ThrowIfNull(fileToImport);
+    ThrowHelpers.ThrowIfFileNotExists(fileToImport.Source);
+    var settings = new ImportSettings();
+    var currentDateTime = DateTime.UtcNow;
+
+    DateTime? gpsDate = null;
+    DateTime? exifDate = null;
+    var gpsSource = DateTimeSource.Unknown;
+    var exifSource = DateTimeSource.Unknown;
+
+    var dates = new List<(DateTimeSource, DateTime)>();
+    await foreach (var (source, dateTime) in this.EnumerateDateTimes(fileToImport))
+      if (!settings.DefaultDatesToIgnore.Contains(dateTime) &&
+          dateTime >= settings.MinimumValidDate &&
+          dateTime <= currentDateTime) {
+        
+        switch (source) {
+          case DateTimeSource.Gps when gpsDate == null || dateTime > gpsDate.Value:
+            gpsDate = dateTime;
+            gpsSource = source;
+            break;
+          case DateTimeSource.ExifSubIfd when (exifDate == null || dateTime > exifDate.Value):
+            exifDate = dateTime;
+            exifSource = source;
+            break;
+        }
+
+        dates.Add((source, dateTime));
+      }
+
+    // Special handling for GPS vs EXIF dates
+    if (gpsDate.HasValue && exifDate.HasValue) {
+      if (exifDate.Value > gpsDate.Value && (exifDate.Value - gpsDate.Value).TotalHours <= 1)
+        return (exifDate, exifSource);
+      return (gpsDate, gpsSource);
+    }
+
+    // Sort by reliability and get the best date with its source
+    var bestDate = dates
+      .OrderByDescending(d => GetSourceReliability(d.Item1))
+      .ThenByDescending(d => d.Item2)
+      .FirstOrDefault();
+
+    return bestDate != default ? (bestDate.Item2, bestDate.Item1) : (null, DateTimeSource.Unknown);
+  }
+
   public async Task<ImportResult> ProcessDirectoryAsync(
     ImportSettings settings,
     IProgress<ImportProgress>? progress = null,
     CancellationToken cancellationToken = default) {
+    ArgumentNullException.ThrowIfNull(settings);
+    ThrowHelpers.ThrowIfDirectoryNotExists(settings.SourceDirectory);
     var stopwatch = Stopwatch.StartNew();
     var results = new List<ImportFileResult>();
     var totalFiles = 0;
@@ -132,31 +185,23 @@ public class ImportManager(IDateTimeParser? dateTimeParser = null, IFileOrganize
     };
   }
 
-  private async Task<ImportFileResult> ProcessSingleFile(FileToImport fileToImport, ImportSettings settings) {
+  public async Task<ImportFileResult> ProcessSingleFile(FileToImport fileToImport, ImportSettings settings) {
     try {
       var mostProbableDate = await this.GetMostLogicalCreationDateAsync(fileToImport);
       if (!mostProbableDate.HasValue)
-        return new ImportFileResult {
-          SourcePath = fileToImport.Source.FullName,
-          Success = false,
-          ErrorMessage = "Could not determine date"
-        };
+        return ImportFileResult.FromException(fileToImport.Source, "Could not determine date");
 
       var (result, targetPath, message) = await this._fileOrganizer.ProcessFileAsync(fileToImport, mostProbableDate.Value, settings);
 
-      return new ImportFileResult {
-        SourcePath = fileToImport.Source.FullName,
-        DestinationPath = targetPath,
-        Success = result is FileOperationResult.Success or FileOperationResult.DuplicateRemoved,
-        ErrorMessage = result == FileOperationResult.Failed ? message : null,
-        DetectedDate = mostProbableDate
-      };
+      return new (
+        fileToImport.Source,
+        targetPath,
+        result is FileOperationResult.Success or FileOperationResult.DuplicateRemoved,
+        result == FileOperationResult.Failed ? message : null,
+        mostProbableDate
+      );
     } catch (Exception ex) {
-      return new ImportFileResult {
-        SourcePath = fileToImport.Source.FullName,
-        Success = false,
-        ErrorMessage = ex.Message
-      };
+      return ImportFileResult.FromException(fileToImport.Source, ex.Message);
     }
   }
 

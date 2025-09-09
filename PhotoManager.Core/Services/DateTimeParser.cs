@@ -70,7 +70,7 @@ public class DateTimeParser : IDateTimeParser {
       var second = match.Groups["second"].Success ? int.Parse(match.Groups["second"].Value) : defaultValues.Second;
 
       if (match.Groups["year"].Length == 2)
-        year += year < 50 ? 2000 : 1900;
+        year += year < 80 ? 2000 : 1900;
 
       DateTime? result = null;
       try {

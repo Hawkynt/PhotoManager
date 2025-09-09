@@ -37,9 +37,9 @@ public class FileOrganizerTests {
     var targetPath = await this._organizer.GenerateTargetPath(file, dateTime, settings);
 
     // Assert
-    Assert.That(targetPath, Does.Contain("2024"));
-    Assert.That(targetPath, Does.Contain("20240115"));
-    Assert.That(targetPath, Does.EndWith("143022.jpg"));
+    Assert.That(targetPath.FullName, Does.Contain("2024"));
+    Assert.That(targetPath.FullName, Does.Contain("20240115"));
+    Assert.That(targetPath.FullName, Does.EndWith("143022.jpg"));
   }
 
   [Test]
@@ -58,9 +58,9 @@ public class FileOrganizerTests {
     var targetPath = await this._organizer.GenerateTargetPath(file, dateTime, settings);
 
     // Assert
-    Assert.That(targetPath, Does.Contain("2023-12"));
-    Assert.That(targetPath, Does.Contain("25"));
-    Assert.That(targetPath, Does.EndWith("18-45-30.png"));
+    Assert.That(targetPath.FullName, Does.Contain("2023-12"));
+    Assert.That(targetPath.FullName, Does.Contain("25"));
+    Assert.That(targetPath.FullName, Does.EndWith("18-45-30.png"));
   }
 
   [Test]
@@ -72,7 +72,7 @@ public class FileOrganizerTests {
     File.WriteAllText(sourcePath, "test content");
 
     // Act
-    var result = await this._organizer.MoveFileAsync(sourcePath, targetPath);
+    var result = await this._organizer.MoveFileAsync(new FileInfo(sourcePath), new FileInfo(targetPath));
 
     // Assert
     Assert.That(result, Is.True);
@@ -90,7 +90,7 @@ public class FileOrganizerTests {
     File.WriteAllText(sourcePath, "test content");
 
     // Act
-    var result = await this._organizer.CopyFileAsync(sourcePath, targetPath);
+    var result = await this._organizer.CopyFileAsync(new FileInfo(sourcePath), new FileInfo(targetPath));
 
     // Assert
     Assert.That(result, Is.True);
@@ -108,7 +108,7 @@ public class FileOrganizerTests {
     File.WriteAllText(targetPath, "existing content");
 
     // Act
-    var result = await this._organizer.MoveFileAsync(sourcePath, targetPath, overwrite: false);
+    var result = await this._organizer.MoveFileAsync(new FileInfo(sourcePath), new FileInfo(targetPath), overwrite: false);
 
     // Assert
     Assert.That(result, Is.False);

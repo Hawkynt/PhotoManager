@@ -15,100 +15,60 @@ public class MainViewModel : INotifyPropertyChanged {
   private DuplicateHandling _duplicateHandling = DuplicateHandling.Smart;
   private bool _recursive = true;
   private bool _preserveOriginals = false;
+  private List<TreeViewPathData> _treeViewPaths = new();
 
   public string SourceDirectory {
     get => this._sourceDirectory;
-    set {
-      if (this._sourceDirectory != value) {
-        this._sourceDirectory = value;
-        this.OnPropertyChanged();
-      }
-    }
+    set => this.SetProperty(this.OnPropertyChanged, ref this._sourceDirectory, value);
   }
 
   public string DestinationDirectory {
     get => this._destinationDirectory;
-    set {
-      if (this._destinationDirectory != value) {
-        this._destinationDirectory = value;
-        this.OnPropertyChanged();
-      }
-    }
+    set => this.SetProperty(this.OnPropertyChanged, ref this._destinationDirectory, value);
   }
 
   public bool IsProcessing {
     get => this._isProcessing;
-    set {
-      if (this._isProcessing != value) {
-        this._isProcessing = value;
-        this.OnPropertyChanged();
-      }
-    }
+    set => this.SetProperty(this.OnPropertyChanged, ref this._isProcessing, value);
   }
 
   public int ProgressValue {
     get => this._progressValue;
-    set {
-      if (this._progressValue != value) {
-        this._progressValue = value;
-        this.OnPropertyChanged();
-      }
-    }
+    set => this.SetProperty(this.OnPropertyChanged, ref this._progressValue, value);
   }
 
   public string StatusMessage {
     get => this._statusMessage;
-    set {
-      if (this._statusMessage != value) {
-        this._statusMessage = value;
-        this.OnPropertyChanged();
-      }
-    }
+    set => this.SetProperty(this.OnPropertyChanged, ref this._statusMessage, value);
   }
 
   public ImportResult? LastResult {
     get => this._lastResult;
-    set {
-      if (this._lastResult != value) {
-        this._lastResult = value;
-        this.OnPropertyChanged();
-      }
-    }
+    set => this.SetProperty(this.OnPropertyChanged, ref this._lastResult, value);
   }
 
   public DuplicateHandling DuplicateHandling {
     get => this._duplicateHandling;
-    set {
-      if (this._duplicateHandling != value) {
-        this._duplicateHandling = value;
-        this.OnPropertyChanged();
-      }
-    }
+    set => this.SetProperty(this.OnPropertyChanged, ref this._duplicateHandling, value);
   }
 
   public bool Recursive {
     get => this._recursive;
-    set {
-      if (this._recursive != value) {
-        this._recursive = value;
-        this.OnPropertyChanged();
-      }
-    }
+    set => this.SetProperty(this.OnPropertyChanged, ref this._recursive, value);
   }
 
   public bool PreserveOriginals {
     get => this._preserveOriginals;
-    set {
-      if (this._preserveOriginals != value) {
-        this._preserveOriginals = value;
-        this.OnPropertyChanged();
-      }
-    }
+    set => this.SetProperty(this.OnPropertyChanged, ref this._preserveOriginals, value);
+  }
+
+  public List<TreeViewPathData> TreeViewPaths {
+    get => this._treeViewPaths;
+    set => this.SetProperty(this.OnPropertyChanged, ref this._treeViewPaths, value);
   }
 
   public event PropertyChangedEventHandler? PropertyChanged;
 
-  protected virtual void OnPropertyChanged([CallerMemberName] string? propertyName = null) {
-    this.PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
-  }
+  protected virtual void OnPropertyChanged([CallerMemberName] string? propertyName = null) => this.PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+
 }

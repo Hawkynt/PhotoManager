@@ -2,12 +2,15 @@ using System.Security.Cryptography;
 using PhotoManager.Core.Enums;
 using PhotoManager.Core.Interfaces;
 using PhotoManager.Core.Models;
+using PhotoManager.Core.Utilities;
 using SystemIO = System.IO;
 
 namespace PhotoManager.Core.Services;
 
 public class FileOrganizer : IFileOrganizer {
-  public async Task<string> GenerateTargetPath(FileToImport file, DateTime dateTime, ImportSettings settings) {
+  public async Task<FileInfo> GenerateTargetPath(FileToImport file, DateTime dateTime, ImportSettings settings) {
+    ArgumentNullException.ThrowIfNull(file);
+    ArgumentNullException.ThrowIfNull(settings);
     var destinationDir = settings.DestinationDirectory ?? settings.SourceDirectory;
 
     // Parse the date format pattern to build the path
@@ -26,81 +29,92 @@ public class FileOrganizer : IFileOrganizer {
 
     // Handle duplicates based on strategy
     if (settings.DuplicateHandling != DuplicateHandling.Rename)
-      return await Task.FromResult(targetPath);
+      return await Task.FromResult(new FileInfo(targetPath));
 
+    // TODO: isnt this already handled in ProcessFileAsync?
     for (var i = 2; File.Exists(targetPath); ++i)
       targetPath = Path.Combine(directory, $"{baseFileName} ({i}){extension}");
 
-    return await Task.FromResult(targetPath);
+    return await Task.FromResult(new FileInfo(targetPath));
   }
 
-  public async Task<bool> MoveFileAsync(string sourcePath, string targetPath, bool overwrite = false) {
+  public async Task<bool> MoveFileAsync(FileInfo sourcePath, FileInfo targetPath, bool overwrite = false) {
+    ArgumentNullException.ThrowIfNull(sourcePath);
+    ArgumentNullException.ThrowIfNull(targetPath);
+
     try {
-      var targetDir = Path.GetDirectoryName(targetPath);
+      var targetDir = targetPath.DirectoryName;
       if (targetDir != null && !SystemIO.Directory.Exists(targetDir))
         SystemIO.Directory.CreateDirectory(targetDir);
 
-      await Task.Run(() => File.Move(sourcePath, targetPath, overwrite));
+      await Task.Run(() => File.Move(sourcePath.FullName, targetPath.FullName, overwrite));
       return true;
     } catch {
       return false;
     }
   }
 
-  public async Task<bool> CopyFileAsync(string sourcePath, string targetPath, bool overwrite = false) {
+  public async Task<bool> CopyFileAsync(FileInfo sourcePath, FileInfo targetPath, bool overwrite = false) {
+    ArgumentNullException.ThrowIfNull(sourcePath);
+    ArgumentNullException.ThrowIfNull(targetPath);
+
     try {
-      var targetDir = Path.GetDirectoryName(targetPath);
+      var targetDir = targetPath.DirectoryName;
       if (targetDir != null && !SystemIO.Directory.Exists(targetDir))
         SystemIO.Directory.CreateDirectory(targetDir);
 
-      await Task.Run(() => File.Copy(sourcePath, targetPath, overwrite));
+      await Task.Run(() => File.Copy(sourcePath.FullName, targetPath.FullName, overwrite));
       return true;
     } catch {
       return false;
     }
   }
 
-  public async Task<bool> AreFilesIdenticalAsync(string filePath1, string filePath2) {
-    if (!File.Exists(filePath1) || !File.Exists(filePath2))
-      return false;
+  public async Task<bool> AreFilesIdenticalAsync(FileInfo filePath1, FileInfo filePath2) {
+    ArgumentNullException.ThrowIfNull(filePath1);
+    ArgumentNullException.ThrowIfNull(filePath2);
 
-    var file1Info = new FileInfo(filePath1);
-    var file2Info = new FileInfo(filePath2);
+    if (!filePath1.Exists || !filePath2.Exists)
+      return false;
 
     // Quick size check first
-    if (file1Info.Length != file2Info.Length)
+    if (filePath1.Length != filePath2.Length)
       return false;
 
     // For small files, do a byte-by-byte comparison
-    if (file1Info.Length < 100 * 1024 * 1024) { // 100MB
-      var bytes1 = await File.ReadAllBytesAsync(filePath1);
-      var bytes2 = await File.ReadAllBytesAsync(filePath2);
+    if (filePath1.Length < 100 * 1024 * 1024) { // 100MB
+      var bytes1 = await File.ReadAllBytesAsync(filePath1.FullName);
+      var bytes2 = await File.ReadAllBytesAsync(filePath2.FullName);
       return bytes1.SequenceEqual(bytes2);
     }
 
     // For larger files, use SHA-256 hash comparison
+    // TODO: we don't trust collisions, so maybe do a byte-by-byte. but be clever, compare the first and the last chunk first
     using var sha256 = SHA256.Create();
     
     byte[] hash1;
-    await using (var stream1 = File.OpenRead(filePath1))
+    await using (var stream1 = File.OpenRead(filePath1.FullName))
       hash1 = await sha256.ComputeHashAsync(stream1);
 
     byte[] hash2;
-    await using (var stream2 = File.OpenRead(filePath2))
+    await using (var stream2 = File.OpenRead(filePath2.FullName))
       hash2 = await sha256.ComputeHashAsync(stream2);
 
     return hash1.SequenceEqual(hash2);
   }
 
-  public async Task<(FileOperationResult result, string? targetPath, string? message)> ProcessFileAsync(
+  public async Task<(FileOperationResult result, FileInfo? targetPath, string? message)> ProcessFileAsync(
     FileToImport file, DateTime dateTime, ImportSettings settings) {
+    ArgumentNullException.ThrowIfNull(file);
+    ArgumentNullException.ThrowIfNull(settings);
+
     try {
       var targetPath = await this.GenerateTargetPath(file, dateTime, settings);
-      var sourcePath = file.Source.FullName;
+      var sourcePath = file.Source;
 
       // Handle dry run
       if (settings.DryRun) {
-        if (!File.Exists(targetPath))
+        if (!targetPath.Exists)
           return (FileOperationResult.Success, targetPath, "Would process normally");
 
         var areIdentical = await this.AreFilesIdenticalAsync(sourcePath, targetPath);
@@ -109,7 +123,7 @@ public class FileOrganizer : IFileOrganizer {
       }
 
       // Check if target already exists
-      if (File.Exists(targetPath)) {
+      if (targetPath.Exists) {
         switch (settings.DuplicateHandling) {
           case DuplicateHandling.Skip:
             return (FileOperationResult.Skipped, targetPath, "File already exists, skipped");
@@ -121,7 +135,7 @@ public class FileOrganizer : IFileOrganizer {
                 return (FileOperationResult.Skipped, targetPath, "Identical file exists, source preserved");
 
               // Files are identical, just remove the source
-              File.Delete(sourcePath);
+              File.Delete(sourcePath.FullName);
               return (FileOperationResult.DuplicateRemoved, targetPath, "Identical file exists, source removed");
             }
             // Files are different, fall through to rename logic
@@ -129,12 +143,14 @@ public class FileOrganizer : IFileOrganizer {
 
           case DuplicateHandling.Rename:
             // Generate new path with number suffix
-            var directory = Path.GetDirectoryName(targetPath)!;
-            var baseFileName = Path.GetFileNameWithoutExtension(targetPath);
-            var extension = Path.GetExtension(targetPath);
+            var directory = targetPath.DirectoryName!;
+            var baseFileName = Path.GetFileNameWithoutExtension(targetPath.FullName);
+            var extension = targetPath.Extension;
             
-            for (var i = 2; File.Exists(targetPath); ++i)
-              targetPath = Path.Combine(directory, $"{baseFileName} ({i}){extension}");
+            for (var i = 2; targetPath.Exists; ++i) {
+              var newPath = Path.Combine(directory, $"{baseFileName} ({i}){extension}");
+              targetPath = new FileInfo(newPath);
+            }
             break;
 
           case DuplicateHandling.Overwrite:
@@ -144,7 +160,7 @@ public class FileOrganizer : IFileOrganizer {
       }
 
       // Ensure target directory exists
-      var targetDir = Path.GetDirectoryName(targetPath);
+      var targetDir = targetPath.DirectoryName;
       if (targetDir != null && !SystemIO.Directory.Exists(targetDir))
         SystemIO.Directory.CreateDirectory(targetDir);
 

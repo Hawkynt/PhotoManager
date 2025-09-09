@@ -1,74 +1,83 @@
 # PhotoManager - Development TODO
 
+## Recent Completed Tasks (2025-09-08)
+- [x] **Resource Localization**: Replaced all hardcoded strings with resource references for internationalization
+- [x] **FileInfo/DirectoryInfo Usage**: Improved code quality by using FileInfo and DirectoryInfo instead of string paths where appropriate
+- [x] **UI Performance Optimization**: Fixed scanning performance issue with two-phase file loading
+- [x] **About Dialog**: Implemented proper About dialog with MVC pattern
+- [x] **Data Binding**: Replaced manual DataGridView row manipulation with proper data binding using strongly-typed models
+- [x] **Code Quality**: Addressed TODO comments and improved semantic type usage
+
 ## Architecture Restructuring
 
 ### Project Structure
-- [ ] Create multi-project solution architecture
-  - [ ] **PhotoManager.Core** - Shared business logic, models, interfaces
-  - [ ] **PhotoManager.Tests** - NUnit test project
-  - [ ] **PhotoManager.UI** - WinForms MVC application
-  - [ ] **PhotoManager.CLI** - Command-line interface
+- [x] Create multi-project solution architecture
+  - [x] **PhotoManager.Core** - Shared business logic, models, interfaces
+  - [x] **PhotoManager.Tests** - NUnit test project
+  - [x] **PhotoManager.UI** - WinForms MVC application
+  - [x] **PhotoManager.CLI** - Command-line interface
 
 ### PhotoManager.Core
-- [ ] Models
-  - [ ] Move `FileToImport` to Core
-  - [ ] Create `PhotoMetadata` model
-  - [ ] Create `ImportSettings` model
-  - [ ] Create `ImportResult` model with statistics
-- [ ] Services
-  - [ ] Move and refactor `ImportManager` 
-  - [ ] Create `IMetadataExtractor` interface and implementation
-  - [ ] Create `IDateTimeParser` interface and implementation
-  - [ ] Create `IFileOrganizer` interface and implementation
+- [x] Models
+  - [x] Move `FileToImport` to Core
+  - [x] Create `PhotoMetadata` model
+  - [x] Create `ImportSettings` model
+  - [x] Create `ImportResult` model with statistics
+- [x] Services
+  - [x] Move and refactor `ImportManager` 
+  - [x] Create `IMetadataExtractor` interface and implementation
+  - [x] Create `IDateTimeParser` interface and implementation
+  - [x] Create `IFileOrganizer` interface and implementation
 - [ ] Configuration
   - [ ] Create `IConfiguration` interface
   - [ ] Implement configuration providers
 
 ### PhotoManager.Tests
-- [ ] Unit Tests
-  - [ ] DateTimeParser tests (filename parsing)
-  - [ ] ImportManager logic tests
-  - [ ] MetadataExtractor tests
-  - [ ] FileOrganizer tests
-- [ ] Integration Tests
-  - [ ] End-to-end import workflow
-  - [ ] File system operations
-- [ ] Test Data
-  - [ ] Sample images with various metadata
-  - [ ] Edge cases and error scenarios
+- [x] Unit Tests
+  - [x] DateTimeParser tests (filename parsing)
+  - [x] ImportManager logic tests
+  - [x] MetadataExtractor tests
+  - [x] FileOrganizer tests
+- [x] Integration Tests
+  - [x] End-to-end import workflow
+  - [x] File system operations
+- [x] Test Data
+  - [x] Sample images with various metadata
+  - [x] Edge cases and error scenarios
 
 ### PhotoManager.UI (WinForms MVC)
-- [ ] Models
-  - [ ] Create ViewModels for data binding
-  - [ ] Implement INotifyPropertyChanged
-- [ ] Views
-  - [ ] Main window with menu and toolbar
-  - [ ] Import wizard dialog
-  - [ ] Progress dialog with cancellation
-  - [ ] Settings dialog
-  - [ ] Preview panel for file organization
-- [ ] Controllers
-  - [ ] MainController
-  - [ ] ImportController
-  - [ ] SettingsController
-- [ ] Infrastructure
-  - [ ] Implement dependency injection
-  - [ ] Add logging framework
-  - [ ] Settings persistence (user/app settings)
-  - [ ] Resource localization (multi-language support)
+- [x] Models
+  - [x] Create ViewModels for data binding
+  - [x] Implement INotifyPropertyChanged
+  - [x] Use FileInfo/DirectoryInfo instead of string paths
+- [x] Views
+  - [x] Main window with menu and toolbar
+  - [x] Import wizard dialog → Replaced with integrated scan/run workflow
+  - [x] Progress dialog with cancellation → Integrated into main form
+  - [x] Settings dialog → Replaced with About dialog and inline settings
+  - [x] Preview panel for file organization → Implemented with image preview and metadata
+- [x] Controllers
+  - [x] MainController
+  - [x] AboutController (replaces SettingsController)
+  - [x] ImportController → Integrated into MainController
+- [x] Infrastructure
+  - [x] Implement dependency injection
+  - [x] Add logging framework → Using System.Diagnostics
+  - [x] Settings persistence (user/app settings)
+  - [x] Resource localization (multi-language support)
 
 ### PhotoManager.CLI
-- [ ] Command Structure
-  - [ ] `import` - Import and organize files
-  - [ ] `preview` - Dry run without moving files
+- [x] Command Structure
+  - [x] `import` - Import and organize files
+  - [x] `preview` - Dry run without moving files
   - [ ] `config` - Manage settings
   - [ ] `help` - Display help information
-- [ ] Arguments
-  - [ ] `--source` / `-s` - Source directory
-  - [ ] `--destination` / `-d` - Destination directory
-  - [ ] `--recursive` / `-r` - Process subdirectories
-  - [ ] `--pattern` / `-p` - Custom naming pattern
-  - [ ] `--dry-run` - Preview without changes
+- [x] Arguments
+  - [x] `--source` / `-s` - Source directory
+  - [x] `--destination` / `-d` - Destination directory
+  - [x] `--recursive` / `-r` - Process subdirectories
+  - [x] `--pattern` / `-p` - Custom naming pattern
+  - [x] `--dry-run` - Preview without changes
   - [ ] `--verbose` / `-v` - Detailed output
   - [ ] `--config` / `-c` - Config file path
 

@@ -10,15 +10,15 @@ public class SettingsService : ISettingsService {
     var appDataPath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
     var appFolder = Path.Combine(appDataPath, "PhotoManager");
     Directory.CreateDirectory(appFolder);
-    _settingsPath = Path.Combine(appFolder, "settings.json");
+    this._settingsPath = Path.Combine(appFolder, "settings.json");
   }
 
   public async Task<UserSettingsData> LoadAsync() {
     try {
-      if (!File.Exists(_settingsPath))
+      if (!File.Exists(this._settingsPath))
         return new UserSettingsData();
 
-      var json = await File.ReadAllTextAsync(_settingsPath);
+      var json = await File.ReadAllTextAsync(this._settingsPath);
       var settings = JsonSerializer.Deserialize<UserSettingsData>(json);
       return settings ?? new UserSettingsData();
     }
@@ -34,7 +34,7 @@ public class SettingsService : ISettingsService {
         WriteIndented = true
       };
       var json = JsonSerializer.Serialize(settings, options);
-      await File.WriteAllTextAsync(_settingsPath, json);
+      await File.WriteAllTextAsync(this._settingsPath, json);
     }
     catch {
       // Silently fail if saving doesn't work
