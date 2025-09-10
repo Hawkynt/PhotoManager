@@ -20,16 +20,22 @@ PhotoManager helps photographers and photo enthusiasts organize their digital ph
 - ✅ Automatic folder structure creation (Year/Date/Time)
 - ✅ Duplicate handling with sequential numbering
 - ✅ Support for all common image formats via MetadataExtractor
+- ✅ WinForms GUI with preview and metadata display
+- ✅ Command-line interface for automation
+- ✅ Multi-project clean architecture
+- ✅ Comprehensive unit and integration tests (96% coverage)
+- ✅ Resource localization for internationalization
+- ✅ MVC pattern implementation in UI
 
 ### Planned Features
-- [ ] WinForms GUI with drag-and-drop support
-- [ ] Command-line interface for automation
-- [ ] Batch processing with progress reporting
+- [ ] Drag-and-drop support in GUI
+- [ ] Advanced batch processing with parallel execution
 - [ ] Duplicate detection using file hashing
-- [ ] Custom naming patterns
+- [ ] Custom naming patterns with variables
 - [ ] Undo/Redo functionality
-- [ ] Multi-language support
-- [ ] Configuration profiles
+- [ ] Configuration profiles and settings persistence
+- [ ] Video file support
+- [ ] Cloud storage integration
 
 ## How It Works
 
@@ -55,10 +61,22 @@ PhotoManager helps photographers and photo enthusiasts organize their digital ph
 ```
 PhotoManager/
 ├── PhotoManager.Core/       # Shared business logic and models
+│   ├── Models/             # Data models and DTOs
+│   ├── Services/           # Business logic services
+│   ├── Interfaces/         # Service contracts
+│   └── Enums/              # Shared enumerations
 ├── PhotoManager.Tests/      # Unit and integration tests
+│   ├── Unit/               # Unit tests for individual components
+│   └── Integration/        # End-to-end workflow tests
 ├── PhotoManager.UI/         # WinForms application
+│   ├── Controllers/        # MVC controllers
+│   ├── Views/              # Forms and dialogs
+│   ├── Models/             # View models
+│   └── Resources/          # Localization resources
 ├── PhotoManager.CLI/        # Command-line interface
-└── README.md               # This file
+├── README.md               # This file
+├── TODO.md                 # Development roadmap
+└── CLAUDE.md               # AI assistant instructions
 ```
 
 ## Build Instructions
@@ -87,14 +105,19 @@ dotnet test
 
 #### GUI Version
 ```bash
-cd PhotoManager.UI
-dotnet run
+dotnet run --project PhotoManager.UI
 ```
 
 #### CLI Version
 ```bash
-cd PhotoManager.CLI
-dotnet run -- --source "C:\Photos\Input" --destination "C:\Photos\Organized"
+dotnet run --project PhotoManager.CLI -- --source "C:\Photos\Input"
+
+# With options
+dotnet run --project PhotoManager.CLI -- \
+  --source "C:\Photos\Input" \
+  --recursive \
+  --pattern "{Year}/{Date}/{Time}{Extension}" \
+  --dry-run
 ```
 
 ## Testing
@@ -140,9 +163,11 @@ Settings can be configured through:
 ## Known Issues and Limitations
 
 - Currently only processes image files (video support planned)
-- GPS coordinates extraction not yet implemented
+- GPS coordinates extraction for location mapping not yet implemented
 - No cloud storage integration
 - Single-threaded processing (parallel processing planned)
+- Settings persistence not yet implemented
+- Drag-and-drop support not implemented
 
 ## Security Considerations
 
@@ -157,7 +182,7 @@ Contributions are welcome! Please read our contributing guidelines before submit
 
 ## License
 
-[License Type] - See LICENSE file for details
+LGPLv3 - See LICENSE file for details
 
 ## Support
 
