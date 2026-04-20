@@ -1,9 +1,12 @@
 # PhotoManager
 
+[![CI](https://github.com/Hawkynt/PhotoManager/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Hawkynt/PhotoManager/actions/workflows/ci.yml)
+[![Release](https://github.com/Hawkynt/PhotoManager/actions/workflows/release.yml/badge.svg)](https://github.com/Hawkynt/PhotoManager/actions/workflows/release.yml)
+[![Latest release](https://img.shields.io/github/v/release/Hawkynt/PhotoManager?label=release&sort=semver)](https://github.com/Hawkynt/PhotoManager/releases/latest)
+[![Latest nightly](https://img.shields.io/github/v/release/Hawkynt/PhotoManager?include_prereleases&label=nightly&sort=date)](https://github.com/Hawkynt/PhotoManager/releases?q=prerelease%3Atrue)
 ![License](https://img.shields.io/github/license/Hawkynt/PhotoManager)
 ![Language](https://img.shields.io/github/languages/top/Hawkynt/PhotoManager?color=purple)
 [![Last Commit](https://img.shields.io/github/last-commit/Hawkynt/PhotoManager?branch=main)![Activity](https://img.shields.io/github/commit-activity/y/Hawkynt/PhotoManager?branch=main)](https://github.com/Hawkynt/PhotoManager/commits/main)
-[![GitHub release](https://img.shields.io/github/v/release/Hawkynt/PhotoManager)](https://github.com/Hawkynt/PhotoManager/releases/latest)
 [![Downloads](https://img.shields.io/github/downloads/Hawkynt/PhotoManager/total)](https://github.com/Hawkynt/PhotoManager/releases)
 
 > A powerful photo organization tool that automatically sorts your photo collection based on metadata and intelligent date detection.

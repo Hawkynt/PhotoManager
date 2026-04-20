@@ -1,0 +1,82 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_call: {}
+
+jobs:
+  test:
+    name: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.x'
+
+      - name: Stamp versions into csprojs
+        shell: bash
+        run: perl .github/workflows/scripts/version.pl --stamp
+
+      - name: Restore
+        run: dotnet restore PhotoManager.sln
+
+      # PhotoManager.UI is net8.0-windows -- builds on ubuntu only with
+      # EnableWindowsTargeting. Skip it on ubuntu, run full solution on windows.
+      - name: Build (windows - full)
+        if: matrix.os == 'windows-latest'
+        run: dotnet build PhotoManager.sln --configuration Release --no-restore
+
+      - name: Build (ubuntu - CLI + Core + Tests)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          dotnet build PhotoManager.Core/PhotoManager.Core.csproj --configuration Release --no-restore
+          dotnet build PhotoManager.CLI/PhotoManager.CLI.csproj --configuration Release --no-restore
+          dotnet build PhotoManager.Tests/PhotoManager.Tests.csproj --configuration Release --no-restore
+
+      - name: Test
+        run: dotnet test PhotoManager.Tests/PhotoManager.Tests.csproj --configuration Release --no-build --logger "trx;LogFileName=tests.trx"
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ matrix.os }}
+          path: '**/TestResults/*.trx'
+
+  coverage:
+    name: coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.x'
+
+      - name: Stamp versions into csprojs
+        run: perl .github/workflows/scripts/version.pl --stamp
+
+      - name: Test with coverage
+        run: dotnet test PhotoManager.Tests/PhotoManager.Tests.csproj --configuration Release --collect:"XPlat Code Coverage" --results-directory ./coverage
+
+      - name: Generate coverage report
+        run: |
+          dotnet tool install -g dotnet-reportgenerator-globaltool
+          reportgenerator -reports:./coverage/**/coverage.cobertura.xml -targetdir:./coverage/report -reporttypes:HtmlInline_AzurePipelines
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: ./coverage/report

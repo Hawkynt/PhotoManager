@@ -1,0 +1,127 @@
+name: Build artifacts
+
+# Shared artifact-build block. Called by release.yml + nightly.yml.
+# Produces:
+#   * PhotoManager-CLI-<rid>-<version>.zip     for win-x64 and linux-x64
+#   * PhotoManager-UI-win-x64-<version>.zip    (WinForms, Windows-only)
+#   * PhotoManager.Core.<version>.nupkg        (release only)
+on:
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
+      release-kind:
+        required: true
+        type: string
+      changelog-flag:
+        required: true
+        type: string
+      ref:
+        required: false
+        type: string
+        default: ""
+    outputs:
+      cli-win-artifact:
+        value: ${{ jobs.build-exe.outputs.cli-win-artifact }}
+      cli-linux-artifact:
+        value: ${{ jobs.build-exe.outputs.cli-linux-artifact }}
+      ui-artifact:
+        value: ${{ jobs.build-exe.outputs.ui-artifact }}
+      nuget-artifact:
+        value: ${{ jobs.pack-nuget.outputs.artifact-name }}
+
+jobs:
+  build-exe:
+    runs-on: windows-latest
+    outputs:
+      cli-win-artifact:   PhotoManager-CLI-win-x64-${{ inputs.version }}
+      cli-linux-artifact: PhotoManager-CLI-linux-x64-${{ inputs.version }}
+      ui-artifact:        PhotoManager-UI-win-x64-${{ inputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          fetch-depth: 0
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.x'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Update CHANGELOG
+        shell: bash
+        run: node .github/workflows/scripts/update-changelog.mjs ${{ inputs.changelog-flag }}
+
+      - name: Stamp versions into csprojs
+        shell: bash
+        run: perl .github/workflows/scripts/version.pl --stamp
+
+      - name: Publish CLI (win-x64)
+        run: dotnet publish PhotoManager.CLI/PhotoManager.CLI.csproj -r win-x64 -c Release --self-contained --output publish/cli-win
+
+      - name: Publish CLI (linux-x64)
+        run: dotnet publish PhotoManager.CLI/PhotoManager.CLI.csproj -r linux-x64 -c Release --self-contained --output publish/cli-linux
+
+      - name: Publish UI (win-x64)
+        run: dotnet publish PhotoManager.UI/PhotoManager.UI.csproj -r win-x64 -c Release --self-contained --output publish/ui
+
+      - name: Package CLI win-x64 zip
+        shell: pwsh
+        run: |
+          $v = "${{ inputs.version }}"
+          Compress-Archive -Path publish/cli-win/* -DestinationPath "PhotoManager-CLI-win-x64-$v.zip"
+
+      - name: Package CLI linux-x64 zip
+        shell: pwsh
+        run: |
+          $v = "${{ inputs.version }}"
+          Compress-Archive -Path publish/cli-linux/* -DestinationPath "PhotoManager-CLI-linux-x64-$v.zip"
+
+      - name: Package UI zip
+        shell: pwsh
+        run: |
+          $v = "${{ inputs.version }}"
+          Compress-Archive -Path publish/ui/* -DestinationPath "PhotoManager-UI-win-x64-$v.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PhotoManager-CLI-win-x64-${{ inputs.version }}
+          path: PhotoManager-CLI-win-x64-${{ inputs.version }}.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PhotoManager-CLI-linux-x64-${{ inputs.version }}
+          path: PhotoManager-CLI-linux-x64-${{ inputs.version }}.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PhotoManager-UI-win-x64-${{ inputs.version }}
+          path: PhotoManager-UI-win-x64-${{ inputs.version }}.zip
+
+  pack-nuget:
+    if: inputs.release-kind == 'release'
+    runs-on: ubuntu-latest
+    outputs:
+      artifact-name: PhotoManagerCore-nupkg-${{ inputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          fetch-depth: 0
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.x'
+
+      - name: Stamp versions into csprojs
+        run: perl .github/workflows/scripts/version.pl --stamp
+
+      - name: Pack NuGet
+        run: dotnet pack PhotoManager.Core/PhotoManager.Core.csproj --configuration Release --output artifacts
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PhotoManagerCore-nupkg-${{ inputs.version }}
+          path: artifacts/*.nupkg
