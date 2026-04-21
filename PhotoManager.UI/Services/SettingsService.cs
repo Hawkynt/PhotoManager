@@ -23,7 +23,6 @@ public class SettingsService : ISettingsService {
       return settings ?? new UserSettingsData();
     }
     catch {
-      // Return default settings if loading fails
       return new UserSettingsData();
     }
   }

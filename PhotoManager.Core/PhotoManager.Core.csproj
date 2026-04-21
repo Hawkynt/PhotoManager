@@ -16,6 +16,10 @@
     <PackageTags>photo;organization;metadata;exif;duplicate-handling;file-management</PackageTags>
     <RepositoryUrl>https://github.com/Hawkynt/PhotoManager</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
+
+    <!-- Embed debug info inside the DLL so apps consuming this library as a
+         project reference produce a clean single-file publish (no loose .pdb). -->
+    <DebugType>embedded</DebugType>
   </PropertyGroup>
 
   <ItemGroup>

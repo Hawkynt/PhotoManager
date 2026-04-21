@@ -48,7 +48,13 @@ jobs:
       - uses: actions/download-artifact@v4
         with: { name: "${{ needs.build.outputs.cli-linux-artifact }}", path: dist }
       - uses: actions/download-artifact@v4
-        with: { name: "${{ needs.build.outputs.ui-artifact }}",        path: dist }
+        with: { name: "${{ needs.build.outputs.cli-osx-artifact }}",   path: dist }
+      - uses: actions/download-artifact@v4
+        with: { name: "${{ needs.build.outputs.ui-win-artifact }}",    path: dist }
+      - uses: actions/download-artifact@v4
+        with: { name: "${{ needs.build.outputs.ui-linux-artifact }}",  path: dist }
+      - uses: actions/download-artifact@v4
+        with: { name: "${{ needs.build.outputs.ui-osx-artifact }}",    path: dist }
       - uses: actions/download-artifact@v4
         with: { name: "${{ needs.build.outputs.nuget-artifact }}",     path: dist }
 
@@ -60,9 +66,11 @@ jobs:
           body: |
             ## PhotoManager v${{ needs.version.outputs.version }}
 
-            - **CLI** (`PhotoManager.CLI`) — cross-platform, self-contained: win-x64 + linux-x64.
-            - **UI** — WinForms, Windows-only.
-            - **PhotoManager.Core** — NuGet library.
+            Cross-platform self-contained builds for win-x64, linux-x64, and osx-arm64.
+
+            - **CLI** — `PhotoManager.CLI`
+            - **UI** — `PhotoManager.UI` (Avalonia)
+            - **PhotoManager.Core** — NuGet library
           files: |
             dist/*.zip
             dist/*.nupkg

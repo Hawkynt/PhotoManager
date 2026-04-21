@@ -1,45 +1,42 @@
+using Avalonia;
+using Avalonia.ReactiveUI;
 using Microsoft.Extensions.DependencyInjection;
 using PhotoManager.Core.Interfaces;
 using PhotoManager.Core.Services;
 using PhotoManager.UI.Controllers;
 using PhotoManager.UI.Models;
 using PhotoManager.UI.Services;
-using PhotoManager.UI.Views;
 
 namespace PhotoManager.UI;
 
-static class Program {
-  /// <summary>
-  ///   The main entry point for the application.
-  /// </summary>
+internal static class Program {
+  public static IServiceProvider Services { get; private set; } = null!;
+
   [STAThread]
-  static void Main() {
-    ApplicationConfiguration.Initialize();
-
-    // Configure dependency injection
-    var serviceProvider = ConfigureServices();
-
-    // Get the main form with dependencies injected
-    var mainForm = serviceProvider.GetRequiredService<MainForm>();
-
-    Application.Run(mainForm);
+  public static void Main(string[] args) {
+    Services = ConfigureServices();
+    BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
   }
+
+  public static AppBuilder BuildAvaloniaApp()
+    => AppBuilder.Configure<App>()
+      .UsePlatformDetect()
+      .WithInterFont()
+      .LogToTrace()
+      .UseReactiveUI();
 
   private static IServiceProvider ConfigureServices() {
     var services = new ServiceCollection();
 
-    // Register Core services
     services.AddSingleton<IImportManager, ImportManager>();
     services.AddSingleton<IDateTimeParser, DateTimeParser>();
     services.AddSingleton<IFileOrganizer, FileOrganizer>();
 
-    // Register UI services
     services.AddSingleton<ISettingsService, SettingsService>();
+    services.AddSingleton<IFolderPicker, AvaloniaFolderPicker>();
 
-    // Register UI components
     services.AddSingleton<MainViewModel>();
     services.AddSingleton<MainController>();
-    services.AddSingleton<MainForm>();
     services.AddTransient<AboutController>();
 
     return services.BuildServiceProvider();

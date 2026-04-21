@@ -56,7 +56,13 @@ jobs:
       - uses: actions/download-artifact@v4
         with: { name: "${{ needs.build.outputs.cli-linux-artifact }}", path: dist }
       - uses: actions/download-artifact@v4
-        with: { name: "${{ needs.build.outputs.ui-artifact }}",        path: dist }
+        with: { name: "${{ needs.build.outputs.cli-osx-artifact }}",   path: dist }
+      - uses: actions/download-artifact@v4
+        with: { name: "${{ needs.build.outputs.ui-win-artifact }}",    path: dist }
+      - uses: actions/download-artifact@v4
+        with: { name: "${{ needs.build.outputs.ui-linux-artifact }}",  path: dist }
+      - uses: actions/download-artifact@v4
+        with: { name: "${{ needs.build.outputs.ui-osx-artifact }}",    path: dist }
 
       - name: Delete same-date nightly if it exists
         env:
@@ -78,7 +84,7 @@ jobs:
 
           Version: \`${{ needs.meta.outputs.version }}\`
 
-          CLI (win-x64 + linux-x64) + UI (Windows). NuGet packages ship only from tagged releases." \
+          CLI + UI for win-x64, linux-x64, osx-arm64. NuGet packages ship only from tagged releases." \
               dist/*.zip
 
   prune:

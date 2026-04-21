@@ -71,4 +71,11 @@ public class MainViewModel : INotifyPropertyChanged {
 
   protected virtual void OnPropertyChanged([CallerMemberName] string? propertyName = null) => this.PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
 
+  private void SetProperty<T>(Action<string> onChanged, ref T field, T value, [CallerMemberName] string? propertyName = null) {
+    if (EqualityComparer<T>.Default.Equals(field, value))
+      return;
+
+    field = value;
+    onChanged(propertyName ?? string.Empty);
+  }
 }

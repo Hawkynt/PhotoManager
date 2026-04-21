@@ -2,9 +2,9 @@ name: Build artifacts
 
 # Shared artifact-build block. Called by release.yml + nightly.yml.
 # Produces:
-#   * PhotoManager-CLI-<rid>-<version>.zip     for win-x64 and linux-x64
-#   * PhotoManager-UI-win-x64-<version>.zip    (WinForms, Windows-only)
-#   * PhotoManager.Core.<version>.nupkg        (release only)
+#   * PhotoManager-CLI-<rid>-<version>.zip   for win-x64, linux-x64, osx-arm64
+#   * PhotoManager-UI-<rid>-<version>.zip    for win-x64, linux-x64, osx-arm64 (Avalonia)
+#   * PhotoManager.Core.<version>.nupkg      (release only)
 on:
   workflow_call:
     inputs:
@@ -26,18 +26,27 @@ on:
         value: ${{ jobs.build-exe.outputs.cli-win-artifact }}
       cli-linux-artifact:
         value: ${{ jobs.build-exe.outputs.cli-linux-artifact }}
-      ui-artifact:
-        value: ${{ jobs.build-exe.outputs.ui-artifact }}
+      cli-osx-artifact:
+        value: ${{ jobs.build-exe.outputs.cli-osx-artifact }}
+      ui-win-artifact:
+        value: ${{ jobs.build-exe.outputs.ui-win-artifact }}
+      ui-linux-artifact:
+        value: ${{ jobs.build-exe.outputs.ui-linux-artifact }}
+      ui-osx-artifact:
+        value: ${{ jobs.build-exe.outputs.ui-osx-artifact }}
       nuget-artifact:
         value: ${{ jobs.pack-nuget.outputs.artifact-name }}
 
 jobs:
   build-exe:
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
     outputs:
       cli-win-artifact:   PhotoManager-CLI-win-x64-${{ inputs.version }}
       cli-linux-artifact: PhotoManager-CLI-linux-x64-${{ inputs.version }}
-      ui-artifact:        PhotoManager-UI-win-x64-${{ inputs.version }}
+      cli-osx-artifact:   PhotoManager-CLI-osx-arm64-${{ inputs.version }}
+      ui-win-artifact:    PhotoManager-UI-win-x64-${{ inputs.version }}
+      ui-linux-artifact:  PhotoManager-UI-linux-x64-${{ inputs.version }}
+      ui-osx-artifact:    PhotoManager-UI-osx-arm64-${{ inputs.version }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -53,39 +62,37 @@ jobs:
           node-version: '22'
 
       - name: Update CHANGELOG
-        shell: bash
         run: node .github/workflows/scripts/update-changelog.mjs ${{ inputs.changelog-flag }}
 
       - name: Stamp versions into csprojs
-        shell: bash
         run: perl .github/workflows/scripts/version.pl --stamp
 
+      # CLI
       - name: Publish CLI (win-x64)
         run: dotnet publish PhotoManager.CLI/PhotoManager.CLI.csproj -r win-x64 -c Release --self-contained --output publish/cli-win
-
       - name: Publish CLI (linux-x64)
         run: dotnet publish PhotoManager.CLI/PhotoManager.CLI.csproj -r linux-x64 -c Release --self-contained --output publish/cli-linux
+      - name: Publish CLI (osx-arm64)
+        run: dotnet publish PhotoManager.CLI/PhotoManager.CLI.csproj -r osx-arm64 -c Release --self-contained --output publish/cli-osx
 
+      # UI (Avalonia, cross-platform)
       - name: Publish UI (win-x64)
-        run: dotnet publish PhotoManager.UI/PhotoManager.UI.csproj -r win-x64 -c Release --self-contained --output publish/ui
+        run: dotnet publish PhotoManager.UI/PhotoManager.UI.csproj -r win-x64 -c Release --self-contained --output publish/ui-win
+      - name: Publish UI (linux-x64)
+        run: dotnet publish PhotoManager.UI/PhotoManager.UI.csproj -r linux-x64 -c Release --self-contained --output publish/ui-linux
+      - name: Publish UI (osx-arm64)
+        run: dotnet publish PhotoManager.UI/PhotoManager.UI.csproj -r osx-arm64 -c Release --self-contained --output publish/ui-osx
 
-      - name: Package CLI win-x64 zip
-        shell: pwsh
+      - name: Package zips
         run: |
-          $v = "${{ inputs.version }}"
-          Compress-Archive -Path publish/cli-win/* -DestinationPath "PhotoManager-CLI-win-x64-$v.zip"
-
-      - name: Package CLI linux-x64 zip
-        shell: pwsh
-        run: |
-          $v = "${{ inputs.version }}"
-          Compress-Archive -Path publish/cli-linux/* -DestinationPath "PhotoManager-CLI-linux-x64-$v.zip"
-
-      - name: Package UI zip
-        shell: pwsh
-        run: |
-          $v = "${{ inputs.version }}"
-          Compress-Archive -Path publish/ui/* -DestinationPath "PhotoManager-UI-win-x64-$v.zip"
+          V="${{ inputs.version }}"
+          cd publish
+          (cd cli-win    && zip -r "../../PhotoManager-CLI-win-x64-$V.zip"    .)
+          (cd cli-linux  && zip -r "../../PhotoManager-CLI-linux-x64-$V.zip"  .)
+          (cd cli-osx    && zip -r "../../PhotoManager-CLI-osx-arm64-$V.zip"  .)
+          (cd ui-win     && zip -r "../../PhotoManager-UI-win-x64-$V.zip"     .)
+          (cd ui-linux   && zip -r "../../PhotoManager-UI-linux-x64-$V.zip"   .)
+          (cd ui-osx     && zip -r "../../PhotoManager-UI-osx-arm64-$V.zip"   .)
 
       - uses: actions/upload-artifact@v4
         with:
@@ -97,8 +104,20 @@ jobs:
           path: PhotoManager-CLI-linux-x64-${{ inputs.version }}.zip
       - uses: actions/upload-artifact@v4
         with:
+          name: PhotoManager-CLI-osx-arm64-${{ inputs.version }}
+          path: PhotoManager-CLI-osx-arm64-${{ inputs.version }}.zip
+      - uses: actions/upload-artifact@v4
+        with:
           name: PhotoManager-UI-win-x64-${{ inputs.version }}
           path: PhotoManager-UI-win-x64-${{ inputs.version }}.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PhotoManager-UI-linux-x64-${{ inputs.version }}
+          path: PhotoManager-UI-linux-x64-${{ inputs.version }}.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PhotoManager-UI-osx-arm64-${{ inputs.version }}
+          path: PhotoManager-UI-osx-arm64-${{ inputs.version }}.zip
 
   pack-nuget:
     if: inputs.release-kind == 'release'

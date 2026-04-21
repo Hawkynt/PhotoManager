@@ -1,16 +1,171 @@
+using System.Collections.ObjectModel;
 using PhotoManager.Core.Enums;
 using PhotoManager.Core.Interfaces;
 using PhotoManager.Core.Models;
 using PhotoManager.Core.Services;
 using PhotoManager.UI.Models;
 using PhotoManager.UI.Services;
-using System.ComponentModel;
 
 namespace PhotoManager.UI.Controllers;
 
-public class MainController(IImportManager importManager, MainViewModel viewModel, ISettingsService settingsService, IFileOrganizer fileOrganizer, ISupportedFormatsService? supportedFormatsService = null) {
+public class MainController(
+  IImportManager importManager,
+  MainViewModel viewModel,
+  ISettingsService settingsService,
+  IFileOrganizer fileOrganizer,
+  IFolderPicker folderPicker,
+  ISupportedFormatsService? supportedFormatsService = null
+) {
   private CancellationTokenSource? _cancellationTokenSource;
   private readonly ISupportedFormatsService _supportedFormatsService = supportedFormatsService ?? new SupportedFormatsService();
+
+  public MainViewModel ViewModel => viewModel;
+
+  public ObservableCollection<SourceTreeNode> SourceTreeRoots { get; } = new();
+
+  public SourceTreeNode AddSourceTreeRoot(DirectoryInfo path, bool recursive) {
+    var node = new SourceTreeNode(path, recursive, isRoot: true);
+    this.PopulateRecursiveChildren(node);
+    this.AttachNodeListeners(node);
+    this.SourceTreeRoots.Add(node);
+    this.SyncTreeStateToViewModel();
+    _ = this.SaveSettingsAsync();
+    return node;
+  }
+
+  public void RemoveSourceTreeRoot(SourceTreeNode node) {
+    this.DetachNodeListeners(node);
+    this.SourceTreeRoots.Remove(node);
+    this.SyncTreeStateToViewModel();
+    _ = this.SaveSettingsAsync();
+  }
+
+  public void ToggleRecursive(SourceTreeNode node) {
+    if (!node.IsRoot)
+      return;
+
+    foreach (var child in node.Children)
+      child.PropertyChanged -= this.OnTreeNodePropertyChanged;
+
+    node.IsRecursive = !node.IsRecursive;
+
+    if (node.IsRecursive) {
+      this.PopulateRecursiveChildren(node);
+      foreach (var child in node.Children)
+        child.PropertyChanged += this.OnTreeNodePropertyChanged;
+    } else {
+      node.Children.Clear();
+    }
+
+    this.SyncTreeStateToViewModel();
+    _ = this.SaveSettingsAsync();
+  }
+
+  public void RebuildSourceTreeFromSettings() {
+    foreach (var existing in this.SourceTreeRoots)
+      this.DetachNodeListeners(existing);
+    this.SourceTreeRoots.Clear();
+
+    foreach (var pathData in viewModel.TreeViewPaths) {
+      var directory = new DirectoryInfo(pathData.Path);
+      if (!directory.Exists)
+        continue;
+
+      var node = new SourceTreeNode(directory, pathData.Recursive, isRoot: true) {
+        IsChecked = pathData.Checked
+      };
+      this.PopulateRecursiveChildren(node);
+      this.AttachNodeListeners(node);
+      this.SourceTreeRoots.Add(node);
+    }
+  }
+
+  private void AttachNodeListeners(SourceTreeNode node) {
+    node.PropertyChanged += this.OnTreeNodePropertyChanged;
+    foreach (var child in node.Children)
+      child.PropertyChanged += this.OnTreeNodePropertyChanged;
+  }
+
+  private void DetachNodeListeners(SourceTreeNode node) {
+    node.PropertyChanged -= this.OnTreeNodePropertyChanged;
+    foreach (var child in node.Children)
+      child.PropertyChanged -= this.OnTreeNodePropertyChanged;
+  }
+
+  private void OnTreeNodePropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e) {
+    if (e.PropertyName is not (nameof(SourceTreeNode.IsChecked) or nameof(SourceTreeNode.IsRecursive)))
+      return;
+
+    this.SyncTreeStateToViewModel();
+    _ = this.SaveSettingsAsync();
+  }
+
+  public void SyncTreeStateToViewModel() {
+    var list = new List<TreeViewPathData>();
+    foreach (var node in this.SourceTreeRoots) {
+      list.Add(new TreeViewPathData {
+        Path = node.Path.FullName,
+        Recursive = node.IsRecursive,
+        Checked = node.IsChecked
+      });
+    }
+
+    viewModel.TreeViewPaths = list;
+  }
+
+  public IReadOnlyList<(DirectoryInfo Path, bool Recursive)> GetCheckedSourcePaths() {
+    var collected = new List<(DirectoryInfo Path, bool Recursive)>();
+
+    foreach (var root in this.SourceTreeRoots) {
+      if (root.IsChecked) {
+        collected.Add((root.Path, root.IsRecursive));
+        if (root.IsRecursive)
+          continue;
+      }
+
+      foreach (var child in root.Children) {
+        if (child.IsChecked)
+          collected.Add((child.Path, false));
+      }
+    }
+
+    var recursivePaths = collected
+      .Where(p => p.Recursive)
+      .Select(p => p.Path.FullName)
+      .ToArray();
+
+    return collected
+      .Where(p => !recursivePaths.Any(rp =>
+        p.Path.FullName.StartsWith(rp, StringComparison.OrdinalIgnoreCase) &&
+        !p.Path.FullName.Equals(rp, StringComparison.OrdinalIgnoreCase)))
+      .Distinct()
+      .ToList();
+  }
+
+  private void PopulateRecursiveChildren(SourceTreeNode root) {
+    if (!root.IsRecursive)
+      return;
+
+    root.Children.Clear();
+    try {
+      foreach (var directory in root.Path.GetDirectories())
+        root.Children.Add(new SourceTreeNode(directory, isRecursive: false, isRoot: false));
+    } catch {
+      // Access denied or other enumeration failures — ignore quietly
+    }
+  }
+
+  public async Task AddSourcePathInteractiveAsync() {
+    var picked = await folderPicker.PickFolderAsync("Add source directory");
+    if (string.IsNullOrEmpty(picked))
+      return;
+
+    var dir = new DirectoryInfo(picked);
+    if (!dir.Exists)
+      return;
+
+    this.AddSourceTreeRoot(dir, recursive: true);
+  }
 
   public async Task ProcessSelectedFilesAsync(IEnumerable<FileItemModel> selectedFiles) {
     if (viewModel.IsProcessing)
@@ -52,15 +207,15 @@ public class MainController(IImportManager importManager, MainViewModel viewMode
             failed++;
           } else {
             var settings = new ImportSettings {
-              SourceDirectory = fileItem.FileInfo!.Directory!, // Each file's own directory for in-place fallback
-              DestinationDirectory = destinationDirectory, // If specified, all files go here; if null, fallback to SourceDirectory
+              SourceDirectory = fileItem.FileInfo!.Directory!,
+              DestinationDirectory = destinationDirectory,
               DryRun = false,
               PreserveOriginals = viewModel.PreserveOriginals,
               DuplicateHandling = viewModel.DuplicateHandling
             };
 
             var (result, targetPath, message) = await fileOrganizer.ProcessFileAsync(fileToImport, mostProbableDate.Value, settings);
-            
+
             results.Add(new ImportFileResult(
               fileItem.FileInfo!,
               targetPath,
@@ -98,7 +253,7 @@ public class MainController(IImportManager importManager, MainViewModel viewMode
         Failed = failed,
         Skipped = skipped,
         FileResults = results,
-        ElapsedTime = TimeSpan.Zero // We could add timing if needed
+        ElapsedTime = TimeSpan.Zero
       };
 
       viewModel.LastResult = finalResult;
@@ -166,8 +321,7 @@ public class MainController(IImportManager importManager, MainViewModel viewMode
       viewModel.ProgressValue = 0;
       this._cancellationTokenSource?.Dispose();
       this._cancellationTokenSource = null;
-      
-      // Save settings after processing
+
       await this.SaveSettingsAsync();
     }
   }
@@ -178,14 +332,18 @@ public class MainController(IImportManager importManager, MainViewModel viewMode
 
   public async Task LoadSettingsAsync() {
     var settings = await settingsService.LoadAsync();
-    
+
     viewModel.SourceDirectory = settings.LastSourceDirectory;
     viewModel.DestinationDirectory = settings.LastDestinationDirectory;
     viewModel.DuplicateHandling = settings.DuplicateHandling;
     viewModel.Recursive = settings.Recursive;
     viewModel.PreserveOriginals = settings.PreserveOriginals;
     viewModel.TreeViewPaths = settings.TreeViewPaths;
+    this.RebuildSourceTreeFromSettings();
   }
+
+  public Task<ObservableCollection<FileItemModel>> ScanCheckedSourcesAsync()
+    => this.ScanSourceFilesAsync(this.GetCheckedSourcePaths());
 
   public async Task SaveSettingsAsync() {
     var settings = new UserSettingsData {
@@ -196,54 +354,42 @@ public class MainController(IImportManager importManager, MainViewModel viewMode
       PreserveOriginals = viewModel.PreserveOriginals,
       TreeViewPaths = viewModel.TreeViewPaths
     };
-    
+
     await settingsService.SaveAsync(settings);
   }
 
-  public void SelectSourceDirectory() {
-    using var dialog = new FolderBrowserDialog {
-      Description = "Select source directory",
-      ShowNewFolderButton = false
-    };
+  public async Task SelectSourceDirectoryAsync() {
+    var picked = await folderPicker.PickFolderAsync("Select source directory", viewModel.SourceDirectory);
+    if (string.IsNullOrEmpty(picked))
+      return;
 
-    if (!string.IsNullOrEmpty(viewModel.SourceDirectory))
-      dialog.SelectedPath = viewModel.SourceDirectory;
-
-    if (dialog.ShowDialog() == DialogResult.OK) {
-      viewModel.SourceDirectory = dialog.SelectedPath;
-      _ = this.SaveSettingsAsync(); // Fire and forget
-    }
+    viewModel.SourceDirectory = picked;
+    _ = this.SaveSettingsAsync();
   }
 
-  public void SelectDestinationDirectory() {
-    using var dialog = new FolderBrowserDialog {
-      Description = "Select destination directory (leave empty to organize in-place)",
-      ShowNewFolderButton = true
-    };
+  public async Task SelectDestinationDirectoryAsync() {
+    var picked = await folderPicker.PickFolderAsync("Select destination directory (leave empty to organize in-place)", viewModel.DestinationDirectory);
+    if (string.IsNullOrEmpty(picked))
+      return;
 
-    if (!string.IsNullOrEmpty(viewModel.DestinationDirectory))
-      dialog.SelectedPath = viewModel.DestinationDirectory;
-
-    if (dialog.ShowDialog() == DialogResult.OK) {
-      viewModel.DestinationDirectory = dialog.SelectedPath;
-      _ = this.SaveSettingsAsync(); // Fire and forget
-    }
+    viewModel.DestinationDirectory = picked;
+    _ = this.SaveSettingsAsync();
   }
 
   public async Task<string> GetTargetLocation(string filePath, string outputPath) {
     ArgumentException.ThrowIfNullOrWhiteSpace(filePath);
-    
+
     try {
       var fileInfo = new FileInfo(filePath);
       if (!fileInfo.Exists)
         return "File not found";
-        
+
       var fileToImport = new FileToImport(fileInfo);
       var mostProbableDate = await importManager.GetMostLogicalCreationDateAsync(fileToImport);
-      
+
       if (!mostProbableDate.HasValue)
         return "Could not determine date";
-      
+
       var settings = new ImportSettings {
         SourceDirectory = fileInfo.Directory!,
         DestinationDirectory = string.IsNullOrWhiteSpace(outputPath) ? null : new DirectoryInfo(outputPath),
@@ -251,22 +397,19 @@ public class MainController(IImportManager importManager, MainViewModel viewMode
         PreserveOriginals = viewModel.PreserveOriginals,
         DryRun = true
       };
-      
+
       var targetPath = await fileOrganizer.GenerateTargetPath(fileToImport, mostProbableDate.Value, settings);
-      return this.GetRelativeTargetPath(targetPath.FullName, filePath, outputPath);
+      return GetRelativeTargetPath(targetPath.FullName, filePath, outputPath);
     } catch (Exception ex) {
       return $"Error: {ex.Message}";
     }
   }
-  
-  private string GetRelativeTargetPath(string fullTargetPath, string sourceFilePath, string outputPath) {
-    // If target path is an error, return as is
+
+  private static string GetRelativeTargetPath(string fullTargetPath, string sourceFilePath, string outputPath) {
     if (fullTargetPath.StartsWith("Error:") || fullTargetPath.StartsWith("Could not"))
       return fullTargetPath;
-    
-    // If no output path specified, we're organizing in-place
+
     if (string.IsNullOrWhiteSpace(outputPath)) {
-      // For in-place organization, show path relative to the source file's directory
       var sourceDir = Path.GetDirectoryName(sourceFilePath);
       if (string.IsNullOrEmpty(sourceDir))
         return fullTargetPath;
@@ -274,60 +417,50 @@ public class MainController(IImportManager importManager, MainViewModel viewMode
       try {
         return Path.GetRelativePath(sourceDir, fullTargetPath);
       } catch {
-        // If can't calculate relative path, just show the file structure part
-        return this.ExtractRelativeStructure(fullTargetPath);
+        return ExtractRelativeStructure(fullTargetPath);
       }
     }
-    
-    // Output path is specified, show path relative to output directory
+
     try {
       var relativePath = Path.GetRelativePath(outputPath, fullTargetPath);
-      // If the path starts with ".." it means it's outside the output directory
-      return relativePath.StartsWith("..") ? this.ExtractRelativeStructure(fullTargetPath) : relativePath;
+      return relativePath.StartsWith("..") ? ExtractRelativeStructure(fullTargetPath) : relativePath;
     } catch {
-      // Fallback to showing just the structure
-      return this.ExtractRelativeStructure(fullTargetPath);
+      return ExtractRelativeStructure(fullTargetPath);
     }
   }
-  
-  private string ExtractRelativeStructure(string fullPath) {
-    // Extract just the date-based folder structure and filename
-    // Pattern is typically: yyyy/yyyyMMdd/HHmmss.ext
+
+  private static string ExtractRelativeStructure(string fullPath) {
     var parts = fullPath.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-    
-    // Find the year folder (4 digits)
+
     for (var i = 0; i < parts.Length - 2; ++i) {
       if (parts[i].Length == 4 && int.TryParse(parts[i], out _)) {
-        // Found the year, return from here onwards
         return Path.Combine(parts.Skip(i).ToArray());
       }
     }
-    
-    // If no year pattern found, return the last 3 parts (or all if less)
+
     var takeCount = Math.Min(3, parts.Length);
     return Path.Combine(parts.Skip(parts.Length - takeCount).ToArray());
   }
-  
-  public async Task<(DateTime? Date, Core.Enums.DateTimeSource Source)> GetMostLogicalDateWithSourceAsync(FileToImport fileToImport) {
-    return await importManager.GetMostLogicalCreationDateWithSourceAsync(fileToImport);
-  }
 
-  public async Task<SortableBindingList<FileItemModel>> ScanSourceFilesAsync(List<(DirectoryInfo Path, bool Recursive)> sourcePaths) {
+  public Task<(DateTime? Date, DateTimeSource Source)> GetMostLogicalDateWithSourceAsync(FileToImport fileToImport)
+    => importManager.GetMostLogicalCreationDateWithSourceAsync(fileToImport);
+
+  public async Task<ObservableCollection<FileItemModel>> ScanSourceFilesAsync(IReadOnlyList<(DirectoryInfo Path, bool Recursive)> sourcePaths) {
     ArgumentNullException.ThrowIfNull(sourcePaths);
 
     if (!sourcePaths.Any()) {
       viewModel.StatusMessage = "Please select source paths";
-      return new SortableBindingList<FileItemModel>();
+      return new ObservableCollection<FileItemModel>();
     }
 
     viewModel.StatusMessage = "Scanning files...";
-    
+
     try {
       var allFiles = new List<string>();
-      
+
       foreach (var (path, recursive) in sourcePaths) {
         if (!path.Exists) continue;
-        
+
         var searchOption = recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
         foreach (var extension in await this.GetSupportedExtensionsAsync()) {
           var files = Directory.GetFiles(path.FullName, extension, searchOption);
@@ -335,131 +468,69 @@ public class MainController(IImportManager importManager, MainViewModel viewMode
         }
       }
 
-      // Create file items for data binding (without calculating target locations yet for speed)
       var fileItemsList = new List<FileItemModel>();
       foreach (var file in allFiles.Distinct()) {
         var fileInfo = new FileInfo(file);
-        var sourcePath = this.GetRelativeSourcePath(file, sourcePaths);
+        var sourcePath = GetRelativeSourcePath(file, sourcePaths);
 
         fileItemsList.Add(new FileItemModel {
           FileName = fileInfo.Name,
-          TargetLocation = "Calculating...", // Will be calculated asynchronously
+          TargetLocation = "Calculating...",
           SourcePath = sourcePath,
           FileInfo = fileInfo
         });
       }
 
-      // Use SortableBindingList for sortable DataGridView
-      var fileItems = new SortableBindingList<FileItemModel>(fileItemsList);
-      
+      var fileItems = new ObservableCollection<FileItemModel>(fileItemsList);
+
       viewModel.StatusMessage = $"Found {fileItems.Count} files. Calculating target locations...";
-      
-      // Calculate target locations in background
+
       _ = Task.Run(async () => await this.CalculateTargetLocationsAsync(fileItems));
-      
+
       return fileItems;
-      
+
     } catch (Exception ex) {
       viewModel.StatusMessage = $"Scan error: {ex.Message}";
-      return new SortableBindingList<FileItemModel>();
+      return new ObservableCollection<FileItemModel>();
     }
   }
 
-  public List<(DirectoryInfo Path, bool Recursive)> GetCheckedSourcePaths(IEnumerable<TreeNode> nodes) {
-    ArgumentNullException.ThrowIfNull(nodes);
-    
-    var allPaths = new List<(DirectoryInfo, bool)>();
-    
-    foreach (TreeNode node in nodes) {
-      if (node.Checked && node.Tag is TreeViewNodeData nodeData) {
-        allPaths.Add((nodeData.Path, nodeData.Recursive));
-        
-        // Only add checked child nodes if parent is NOT recursive
-        if (nodeData.Recursive)
-          continue;
+  private async Task<string[]> GetSupportedExtensionsAsync()
+    => await this._supportedFormatsService.GetSupportedExtensionsAsync();
 
-        foreach (TreeNode childNode in node.Nodes) {
-          if (!childNode.Checked || childNode.Tag is not TreeViewNodeData childData)
-            continue;
-
-          allPaths.Add((childData.Path, false));
-        }
-      } else if (node is { Checked: false, Tag: TreeViewNodeData parentData }) {
-        // If parent is unchecked, still check for individually checked children
-        if (parentData.Recursive)
-          continue;
-
-        foreach (TreeNode childNode in node.Nodes) {
-          if (!childNode.Checked || childNode.Tag is not TreeViewNodeData childData)
-            continue;
-
-          allPaths.Add((childData.Path, false));
-        }
-      }
-    }
-    
-    // Remove duplicates and paths that are covered by recursive parents
-    var recursivePaths = allPaths.Where(p => p.Item2).Select(p => p.Item1.FullName).ToList();
-
-    var finalPaths = new List<(DirectoryInfo, bool)>();
-    finalPaths.AddRange(
-      from path in allPaths
-      let isAlreadyCoveredByRecursive = recursivePaths.Any(rp =>
-        path.Item1.FullName.StartsWith(rp, StringComparison.OrdinalIgnoreCase) &&
-        !path.Item1.FullName.Equals(rp, StringComparison.OrdinalIgnoreCase))
-      where !isAlreadyCoveredByRecursive && !finalPaths.Contains(path)
-      select path
-    );
-    
-    return finalPaths;
-  }
-
-  private async Task<string[]> GetSupportedExtensionsAsync() {
-    return await this._supportedFormatsService.GetSupportedExtensionsAsync();
-  }
-
-  private string GetRelativeSourcePath(string filePath, List<(DirectoryInfo Path, bool Recursive)> sourcePaths) {
-    // Find the source path that contains this file
+  private static string GetRelativeSourcePath(string filePath, IReadOnlyList<(DirectoryInfo Path, bool Recursive)> sourcePaths) {
     var containingPath = sourcePaths
       .Select(sp => sp.Path.FullName)
       .Where(sp => filePath.StartsWith(sp, StringComparison.OrdinalIgnoreCase))
       .OrderByDescending(sp => sp.Length)
       .FirstOrDefault();
-    
-    if (containingPath == null) {
-      // Fallback: show just the directory name of the file
+
+    if (containingPath == null)
       return Path.GetDirectoryName(filePath) ?? string.Empty;
-    }
-    
+
     try {
-      // Get relative path from the containing source path
       var relativePath = Path.GetRelativePath(containingPath, filePath);
       var directoryPart = Path.GetDirectoryName(relativePath) ?? string.Empty;
-      
-      // If it's in the root of the source path, show the source folder name
-      if (string.IsNullOrEmpty(directoryPart)) {
+
+      if (string.IsNullOrEmpty(directoryPart))
         return Path.GetFileName(containingPath);
-      }
-      
-      // Show relative path with TreeView root prefix for clarity
+
       var sourceFolderName = Path.GetFileName(containingPath);
       return $"{sourceFolderName}{Path.DirectorySeparatorChar}{directoryPart}";
     } catch {
-      // Fallback: show just the directory name
       return Path.GetDirectoryName(filePath) ?? string.Empty;
     }
   }
 
-  private async Task CalculateTargetLocationsAsync(SortableBindingList<FileItemModel> fileItems) {
+  private async Task CalculateTargetLocationsAsync(ObservableCollection<FileItemModel> fileItems) {
     try {
       var cancellationToken = this._cancellationTokenSource?.Token ?? CancellationToken.None;
       var totalFiles = fileItems.Count;
       var processed = 0;
       var progressLock = new object();
-      
-      // Use parallel processing with controlled concurrency
-      var semaphore = new SemaphoreSlim(Environment.ProcessorCount * 2); // Limit concurrent operations
-      
+
+      var semaphore = new SemaphoreSlim(Environment.ProcessorCount * 2);
+
       await Parallel.ForEachAsync(
         fileItems.Select((item, index) => new { Item = item, Index = index }),
         new ParallelOptions {
@@ -470,22 +541,18 @@ public class MainController(IImportManager importManager, MainViewModel viewMode
           await semaphore.WaitAsync(ct);
           try {
             var targetLocation = await this.GetTargetLocation(
-              itemWithIndex.Item.FileInfo?.FullName ?? "", 
+              itemWithIndex.Item.FileInfo?.FullName ?? "",
               viewModel.DestinationDirectory ?? ""
             );
-            
-            // Update the item (this will notify the UI through data binding)
+
             itemWithIndex.Item.TargetLocation = targetLocation;
-            
-            // Update progress with throttling to prevent UI sluggishness
+
             lock (progressLock) {
               processed++;
-              // Adaptive throttling: update every 10 items for small batches, every 50 for large batches
               var updateInterval = totalFiles > 1000 ? 50 : 10;
               if (processed % updateInterval == 0 || processed == totalFiles) {
                 var progressPercent = (int)((double)processed / totalFiles * 100);
-                // Update status message on UI thread without blocking parallel operations
-                Task.Run(() => {
+                _ = Task.Run(() => {
                   viewModel.StatusMessage = $"Calculating targets: {processed}/{totalFiles} ({progressPercent}%)";
                 });
               }
@@ -495,9 +562,9 @@ public class MainController(IImportManager importManager, MainViewModel viewMode
           }
         }
       );
-      
+
       viewModel.StatusMessage = $"Ready. {fileItems.Count} files found.";
-      
+
     } catch (OperationCanceledException) {
       viewModel.StatusMessage = "Target calculation cancelled.";
     } catch (Exception ex) {

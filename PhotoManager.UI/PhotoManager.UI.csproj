@@ -1,31 +1,46 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <OutputType>WinExe</OutputType>
-    <TargetFramework>net8.0-windows</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
-    <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
-    
-    <!-- Application Information -->
+    <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+
     <AssemblyTitle>Photo Manager</AssemblyTitle>
-    <AssemblyDescription>Windows Forms application for organizing and managing photo collections with metadata-driven sorting and duplicate handling.</AssemblyDescription>
+    <AssemblyDescription>Cross-platform front-end for Photo Manager. Organizes photo collections with metadata-driven sorting and duplicate handling on Windows, macOS, and Linux.</AssemblyDescription>
     <AssemblyCompany>Hawkynt</AssemblyCompany>
     <AssemblyProduct>Photo Manager</AssemblyProduct>
     <AssemblyCopyright>Copyright © Hawkynt 2025</AssemblyCopyright>
     <AssemblyVersion>1.0.0.0</AssemblyVersion>
     <FileVersion>1.0.0.0</FileVersion>
+
+    <!-- Single-file publish: one self-contained exe per RID. IncludeNativeLibraries...
+         is required for Avalonia's Skia/HarfBuzz/platform-render native deps. These are
+         no-ops for `dotnet build` / `dotnet run` and only activate during `dotnet publish`. -->
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <DebugType>embedded</DebugType>
   </PropertyGroup>
+
+  <ItemGroup>
+    <AvaloniaResource Include="Assets\**" />
+  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\PhotoManager.Core\PhotoManager.Core.csproj" />
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="FrameworkExtensions.Corlib" Version="1.0.2.537" />
-    <PackageReference Include="FrameworkExtensions.System.Windows.Forms" Version="1.0.0.80" />
-    <PackageReference Include="Microsoft.Extensions.Configuration" Version="8.0.0" />
-    <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="8.0.0" />
+    <PackageReference Include="Avalonia" Version="11.2.3" />
+    <PackageReference Include="Avalonia.Desktop" Version="11.2.3" />
+    <PackageReference Include="Avalonia.Controls.DataGrid" Version="11.2.3" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="11.2.3" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="11.2.3" />
+    <PackageReference Include="Avalonia.ReactiveUI" Version="11.2.3" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.0" />
     <PackageReference Include="SixLabors.ImageSharp" Version="3.1.11" />
   </ItemGroup>
@@ -36,6 +51,10 @@
       <AutoGen>True</AutoGen>
       <DependentUpon>Resources\Strings.resx</DependentUpon>
     </Compile>
+    <EmbeddedResource Update="Resources\Strings.resx">
+      <Generator>ResXFileCodeGenerator</Generator>
+      <LastGenOutput>Strings.Designer.cs</LastGenOutput>
+    </EmbeddedResource>
   </ItemGroup>
 
 </Project>

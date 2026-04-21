@@ -13,7 +13,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [ubuntu-latest, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -28,14 +28,11 @@ jobs:
         shell: bash
         run: perl .github/workflows/scripts/version.pl --stamp
 
-      # EnableWindowsTargeting lets ubuntu restore/build the net8.0-windows
-      # PhotoManager.UI project (tests can't RUN the UI's tests on ubuntu,
-      # but the solution builds cleanly).
       - name: Restore
-        run: dotnet restore PhotoManager.sln -p:EnableWindowsTargeting=true
+        run: dotnet restore PhotoManager.sln
 
       - name: Build
-        run: dotnet build PhotoManager.sln --configuration Release --no-restore -p:EnableWindowsTargeting=true
+        run: dotnet build PhotoManager.sln --configuration Release --no-restore
 
       # CLAUDE.md documents the known-failing two-digit-year parse test. Filter
       # it out so CI reflects real regressions, not the pre-existing quirk.
