@@ -1,0 +1,41 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:mapsui="using:Mapsui.UI.Avalonia"
+        mc:Ignorable="d"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        d:DesignWidth="860" d:DesignHeight="640"
+        x:Class="PhotoManager.UI.Views.MapPickerWindow"
+        Width="860" Height="680"
+        WindowStartupLocation="CenterOwner"
+        Title="Pick location on map">
+  <Grid RowDefinitions="Auto,*,Auto,Auto">
+    <!-- Mode switch row: camera-only, camera+target, or target-only. -->
+    <Border Grid.Row="0" Background="#F7F7F7" BorderBrush="#DDD" BorderThickness="0,0,0,1" Padding="8">
+      <StackPanel Orientation="Horizontal" Spacing="16">
+        <RadioButton x:Name="CameraModeRadio" GroupName="PickMode" Content="Pick camera position" IsChecked="True" Checked="OnPickModeChanged" />
+        <RadioButton x:Name="TargetModeRadio" GroupName="PickMode" Content="Pick target (subject)" Checked="OnPickModeChanged" />
+        <TextBlock Text="Double-click = drop pin · right-click = clear" Opacity="0.6" VerticalAlignment="Center" />
+      </StackPanel>
+    </Border>
+
+    <mapsui:MapControl Grid.Row="1" x:Name="MapControl" />
+
+    <!-- Coordinate + bearing summary. -->
+    <Grid Grid.Row="2" ColumnDefinitions="Auto,*,Auto,*" Margin="10,8,10,0">
+      <TextBlock Grid.Column="0" Text="Camera:" FontWeight="SemiBold" Margin="0,0,6,0" />
+      <TextBlock Grid.Column="1" x:Name="CameraText" FontFamily="Consolas" Text="(not set)" />
+      <TextBlock Grid.Column="2" Text="Target:" FontWeight="SemiBold" Margin="12,0,6,0" />
+      <TextBlock Grid.Column="3" x:Name="TargetText" FontFamily="Consolas" Text="(not set)" />
+    </Grid>
+    <Grid Grid.Row="2" Margin="10,28,10,0">
+      <TextBlock x:Name="BearingText" Opacity="0.75" />
+    </Grid>
+
+    <Grid Grid.Row="3" ColumnDefinitions="*,Auto,Auto" Margin="10">
+      <TextBlock Grid.Column="0" Opacity="0.6" Text="Double-click the map to place the active pin. Right-click clears it. OK returns camera + target + bearing." VerticalAlignment="Center" />
+      <Button Grid.Column="1" x:Name="OkButton" Content="OK" Width="80" IsEnabled="False" Margin="0,0,6,0" Click="OnOkClick" />
+      <Button Grid.Column="2" Content="Cancel" Width="80" Click="OnCancelClick" />
+    </Grid>
+  </Grid>
+</Window>

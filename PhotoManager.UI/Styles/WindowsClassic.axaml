@@ -1,0 +1,58 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <!--
+    A thin "make it feel like a traditional Windows app" style layer applied
+    on top of FluentTheme. Deliberately surgical: we change the controls that
+    users spot as "not Windows-y" (tabs, buttons, borders, separators) and
+    leave everything else alone so DataGrid, Mapsui and co still work.
+  -->
+
+  <!-- Buttons: smaller padding, square corners, subtle border so they don't
+       look like oversized pill shapes. -->
+  <Style Selector="Button">
+    <Setter Property="CornerRadius" Value="2" />
+    <Setter Property="Padding" Value="10,4" />
+    <Setter Property="MinHeight" Value="26" />
+  </Style>
+
+  <!-- Input controls: tighter border and square corners. -->
+  <Style Selector="TextBox">
+    <Setter Property="CornerRadius" Value="2" />
+    <Setter Property="MinHeight" Value="24" />
+  </Style>
+  <Style Selector="ComboBox">
+    <Setter Property="CornerRadius" Value="2" />
+    <Setter Property="MinHeight" Value="24" />
+  </Style>
+  <Style Selector="CheckBox">
+    <Setter Property="MinHeight" Value="22" />
+  </Style>
+
+  <!-- Tabs: classic flat look with a bottom-underline on the selected tab,
+       matching the WPF/WinForms standard. Fluent's default is a pill-like
+       selection chip that looks out of place in a properties dialog. -->
+  <Style Selector="TabItem">
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="Padding" Value="14,6" />
+    <Setter Property="MinHeight" Value="30" />
+  </Style>
+  <Style Selector="TabItem /template/ Border#PART_SelectedPipe">
+    <Setter Property="Height" Value="2" />
+    <Setter Property="Margin" Value="0" />
+    <Setter Property="CornerRadius" Value="0" />
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+  </Style>
+
+  <!-- Group/panel borders: crisper 1-pixel gray that signals section
+       boundaries without the Fluent card-shadow aesthetic. -->
+  <Style Selector="Border.panel">
+    <Setter Property="BorderBrush" Value="#C0C0C0" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="2" />
+  </Style>
+
+  <!-- GridSplitter visible enough that users recognize it as a drag handle. -->
+  <Style Selector="GridSplitter">
+    <Setter Property="Background" Value="#E5E5E5" />
+  </Style>
+</Styles>

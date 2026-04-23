@@ -1,4 +1,5 @@
 using System.CommandLine;
+using PhotoManager.CLI;
 using PhotoManager.Core.Enums;
 using PhotoManager.Core.Interfaces;
 using PhotoManager.Core.Models;
@@ -73,6 +74,10 @@ previewCommand.AddOption(patternOption);
 previewCommand.SetHandler(async (source, destination, recursive, pattern) => { await ProcessPhotos(source, destination, recursive, pattern, dryRun: true, verbose: true, preserve: false, DuplicateHandling.Smart); }, sourceOption, destinationOption, recursiveOption, patternOption);
 
 rootCommand.AddCommand(previewCommand);
+rootCommand.AddCommand(MetadataCommands.Build());
+rootCommand.AddCommand(FacesCommands.Build());
+rootCommand.AddCommand(RegionsCommands.Build());
+rootCommand.AddCommand(ModelsCommands.Build());
 
 // Execute command
 return await rootCommand.InvokeAsync(args);

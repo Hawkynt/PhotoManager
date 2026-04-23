@@ -5,5 +5,7 @@
   <Application.Styles>
     <FluentTheme />
     <StyleInclude Source="avares://Avalonia.Controls.DataGrid/Themes/Fluent.xaml" />
+    <!-- Custom overrides applied LAST so they win over FluentTheme defaults. -->
+    <StyleInclude Source="avares://PhotoManager.UI/Styles/WindowsClassic.axaml" />
   </Application.Styles>
 </Application>

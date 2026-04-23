@@ -1,0 +1,30 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="420" d:DesignHeight="260"
+        x:Class="PhotoManager.UI.Views.PersonPickerWindow"
+        Width="420" Height="260" CanResize="False"
+        WindowStartupLocation="CenterOwner"
+        Title="Tag region">
+  <Grid RowDefinitions="Auto,Auto,Auto,*,Auto" Margin="12">
+    <TextBlock Grid.Row="0" Text="Tag region" FontSize="15" FontWeight="SemiBold" Margin="0,0,0,8" />
+    <TextBlock Grid.Row="1" x:Name="SubtitleText" Opacity="0.75" TextWrapping="Wrap" Margin="0,0,0,8"
+               Text="Pick an existing person or type a new name. New names are added to the people registry; if the region has a face embedding, that embedding becomes the first reference for the new person." />
+
+    <AutoCompleteBox Grid.Row="2" x:Name="NameBox"
+                     Watermark="Person name"
+                     FilterMode="StartsWith"
+                     MinimumPopulateDelay="0:0:0.05" />
+
+    <CheckBox Grid.Row="3" x:Name="AddToRegistryBox"
+              Content="Add new name to people registry (uses this region's embedding if present)"
+              IsChecked="True" VerticalAlignment="Top" Margin="0,8,0,0" />
+
+    <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="6">
+      <Button Content="Remove label" Click="OnClearClick" />
+      <Button Content="Cancel" Click="OnCancelClick" IsCancel="True" />
+      <Button Content="OK" Click="OnOkClick" IsDefault="True" FontWeight="Bold" />
+    </StackPanel>
+  </Grid>
+</Window>

@@ -1,0 +1,65 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:models="using:PhotoManager.UI.Models"
+        mc:Ignorable="d" d:DesignWidth="1100" d:DesignHeight="720"
+        x:Class="PhotoManager.UI.Views.FaceGalleryWindow"
+        Width="1100" Height="720"
+        MinWidth="800" MinHeight="520"
+        WindowStartupLocation="CenterOwner"
+        Title="Face gallery">
+  <Grid RowDefinitions="Auto,Auto,*,Auto" Margin="12">
+    <StackPanel Grid.Row="0" Spacing="4" Margin="0,0,0,8">
+      <TextBlock Text="Face gallery" FontSize="16" FontWeight="SemiBold" />
+      <TextBlock x:Name="IntroText" Opacity="0.75" TextWrapping="Wrap"
+                 Text="Scan a folder to collect every tagged face. Photos tagged with embeddings (ArcFace/MobileFaceNet) get clustered into suggested groups — name a cluster to propagate the name onto every photo it contains. Merge clusters that actually belong to the same person; split later from the main window by relabeling a specific face." />
+    </StackPanel>
+
+    <Grid Grid.Row="1" ColumnDefinitions="Auto,*,Auto,Auto,Auto" Margin="0,0,0,8">
+      <TextBlock Grid.Column="0" Text="Folder:" VerticalAlignment="Center" Margin="0,0,6,0" />
+      <TextBox Grid.Column="1" x:Name="FolderBox" Watermark="Path to library root" />
+      <Button Grid.Column="2" Content="Browse..." Margin="6,0,0,0" Click="OnBrowseClick" />
+      <Button Grid.Column="3" Content="Scan" Margin="6,0,0,0" Click="OnScanClick" FontWeight="Bold" />
+      <CheckBox Grid.Column="4" x:Name="RecursiveBox" Content="Recursive" IsChecked="True" Margin="12,0,0,0" VerticalAlignment="Center" />
+    </Grid>
+
+    <Border Grid.Row="2" BorderBrush="#DDD" BorderThickness="1" CornerRadius="4">
+      <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+        <ItemsControl x:Name="ClustersList" Padding="6">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+              <WrapPanel />
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate DataType="models:FaceClusterViewModel">
+              <Border Width="220" Margin="4" BorderBrush="#BBB" BorderThickness="1" CornerRadius="4" Background="White">
+                <StackPanel>
+                  <Border Height="160" Background="#F7F7F7">
+                    <Image Source="{CompiledBinding Thumbnail}" Stretch="Uniform" />
+                  </Border>
+                  <StackPanel Margin="8" Spacing="4">
+                    <TextBlock Text="{CompiledBinding DisplayName}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                    <TextBlock Text="{CompiledBinding CountText}" FontSize="11" Opacity="0.7" />
+                    <TextBox Text="{CompiledBinding Name, Mode=TwoWay}" Watermark="(enter name)" FontSize="12" />
+                    <StackPanel Orientation="Horizontal" Spacing="4">
+                      <CheckBox Content="select" IsChecked="{CompiledBinding IsSelected, Mode=TwoWay}" FontSize="11" />
+                      <Button Content="Apply name" FontSize="11" Padding="6,2" Click="OnApplyNameClick" Tag="{CompiledBinding}" />
+                    </StackPanel>
+                  </StackPanel>
+                </StackPanel>
+              </Border>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </ScrollViewer>
+    </Border>
+
+    <Grid Grid.Row="3" ColumnDefinitions="*,Auto,Auto,Auto,Auto" Margin="0,8,0,0">
+      <TextBlock Grid.Column="0" x:Name="StatusText" VerticalAlignment="Center" Opacity="0.75" />
+      <Button Grid.Column="1" Content="Merge selected" Click="OnMergeSelectedClick" />
+      <Button Grid.Column="2" Content="Close" Margin="6,0,0,0" Click="OnCloseClick" IsCancel="True" />
+    </Grid>
+  </Grid>
+</Window>

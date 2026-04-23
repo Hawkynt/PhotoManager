@@ -1,0 +1,53 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="820" d:DesignHeight="640"
+        x:Class="PhotoManager.UI.Views.GpxGeotagWindow"
+        Width="820" Height="640"
+        MinWidth="700" MinHeight="460"
+        WindowStartupLocation="CenterOwner"
+        Title="Geotag photos from GPX track">
+  <Grid RowDefinitions="Auto,Auto,Auto,Auto,*,Auto" Margin="12">
+    <StackPanel Grid.Row="0" Spacing="4" Margin="0,0,0,8">
+      <TextBlock Text="Geotag from GPX" FontSize="16" FontWeight="SemiBold" />
+      <TextBlock Opacity="0.75" TextWrapping="Wrap"
+                 Text="Load a GPX track, pick a folder of photos, and we match each photo to the nearest trackpoint by timestamp. Camera timezone drift is handled via the clock-offset field." />
+    </StackPanel>
+
+    <Grid Grid.Row="1" ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,6">
+      <TextBlock Grid.Column="0" Text="GPX file:" VerticalAlignment="Center" Margin="0,0,6,0" />
+      <TextBox Grid.Column="1" x:Name="GpxPathBox" Watermark="Path to .gpx" />
+      <Button Grid.Column="2" Content="Browse..." Margin="6,0,0,0" Click="OnBrowseGpxClick" />
+    </Grid>
+
+    <Grid Grid.Row="2" ColumnDefinitions="Auto,*,Auto,Auto" Margin="0,0,0,6">
+      <TextBlock Grid.Column="0" Text="Photos folder:" VerticalAlignment="Center" Margin="0,0,6,0" />
+      <TextBox Grid.Column="1" x:Name="FolderBox" Watermark="Path to photos" />
+      <Button Grid.Column="2" Content="Browse..." Margin="6,0,0,0" Click="OnBrowseFolderClick" />
+      <CheckBox Grid.Column="3" x:Name="RecursiveBox" Content="Recursive" IsChecked="True" Margin="12,0,0,0" VerticalAlignment="Center" />
+    </Grid>
+
+    <Grid Grid.Row="3" ColumnDefinitions="Auto,Auto,Auto,Auto,Auto,*,Auto,Auto" Margin="0,0,0,8">
+      <TextBlock Grid.Column="0" Text="Clock offset (h):" VerticalAlignment="Center" Margin="0,0,4,0" />
+      <TextBox Grid.Column="1" x:Name="OffsetHoursBox" Text="0" Width="50" />
+      <TextBlock Grid.Column="2" Text="min:" VerticalAlignment="Center" Margin="8,0,4,0" />
+      <TextBox Grid.Column="3" x:Name="OffsetMinutesBox" Text="0" Width="50" />
+      <TextBlock Grid.Column="4" Text=" Tol (s):" VerticalAlignment="Center" Margin="16,0,4,0" />
+      <TextBox Grid.Column="5" x:Name="ToleranceBox" Text="60" HorizontalAlignment="Left" Width="70" />
+      <CheckBox Grid.Column="6" x:Name="OverwriteBox" Content="Overwrite existing GPS" Margin="16,0,0,0" VerticalAlignment="Center" />
+      <Button Grid.Column="7" Content="Geotag" Margin="12,0,0,0" FontWeight="Bold" Click="OnGeotagClick" />
+    </Grid>
+
+    <Border Grid.Row="4" BorderBrush="#DDD" BorderThickness="1" CornerRadius="4">
+      <ScrollViewer>
+        <ItemsControl x:Name="ResultsList" Padding="4" />
+      </ScrollViewer>
+    </Border>
+
+    <Grid Grid.Row="5" ColumnDefinitions="*,Auto" Margin="0,8,0,0">
+      <TextBlock Grid.Column="0" x:Name="StatusText" VerticalAlignment="Center" Opacity="0.75" />
+      <Button Grid.Column="1" Content="Close" Click="OnCloseClick" IsCancel="True" />
+    </Grid>
+  </Grid>
+</Window>

@@ -1,0 +1,133 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:mapsui="using:Mapsui.UI.Avalonia"
+        mc:Ignorable="d"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        d:DesignWidth="1280" d:DesignHeight="780"
+        x:Class="PhotoManager.UI.Views.TriangulateFromPhotoWindow"
+        Width="1280" Height="780"
+        MinWidth="900" MinHeight="520"
+        WindowStartupLocation="CenterOwner"
+        Title="Triangulate from photo">
+  <Grid RowDefinitions="Auto,*,Auto">
+    <Border Grid.Row="0" Background="#F7F7F7" BorderBrush="#DDD" BorderThickness="0,0,0,1" Padding="10">
+      <StackPanel Spacing="4">
+        <TextBlock FontWeight="SemiBold" Text="Triangulate heading + target from landmarks" />
+        <TextBlock Opacity="0.8" TextWrapping="Wrap"
+                   Text="Workflow: click the photo, double-click the map — the active landmark advances automatically once both halves are set. Two landmarks + the photo's camera GPS (purple pin) give heading + target. A third landmark also solves the camera position (for photos without GPS). Right-click a marker to clear it." />
+      </StackPanel>
+    </Border>
+
+    <Grid Grid.Row="1" ColumnDefinitions="*,4,*,4,320">
+      <!-- Photo with click-to-drop markers. -->
+      <Border Grid.Column="0" Background="#111" BorderBrush="#333" BorderThickness="1" CornerRadius="4" Margin="8,8,0,8">
+        <Grid>
+          <Image x:Name="PhotoImage"
+                 HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                 Stretch="Uniform" StretchDirection="DownOnly"
+                 PointerPressed="OnPhotoPointerPressed" />
+          <Canvas x:Name="PhotoOverlay"
+                  HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                  IsHitTestVisible="False" />
+        </Grid>
+      </Border>
+
+      <GridSplitter Grid.Column="1" ResizeDirection="Columns" Background="Transparent" />
+
+      <!-- Embedded map: double-click drops active landmark, right-click clears. -->
+      <Border Grid.Column="2" BorderBrush="#333" BorderThickness="1" CornerRadius="4" Margin="0,8,0,8">
+        <mapsui:MapControl x:Name="MapControl" />
+      </Border>
+
+      <GridSplitter Grid.Column="3" ResizeDirection="Columns" Background="Transparent" />
+
+      <!-- Controls column. -->
+      <ScrollViewer Grid.Column="4" VerticalScrollBarVisibility="Auto" Margin="4,8,8,8">
+        <StackPanel Spacing="8">
+          <Border Background="#FFFEEE" BorderBrush="#E6D37A" BorderThickness="1" CornerRadius="4" Padding="8">
+            <TextBlock x:Name="FlowHintText" FontSize="11" TextWrapping="Wrap"
+                       Text="Double-click the map to drop a target, OR click two landmarks in the photo and double-click each on the map for full triangulation." />
+          </Border>
+
+          <Border Background="#F5F9FF" BorderBrush="#B8DBFF" BorderThickness="1" CornerRadius="4" Padding="8">
+            <StackPanel Spacing="4">
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <Ellipse Width="12" Height="12" Fill="MediumPurple" VerticalAlignment="Center" />
+                <TextBlock Text="Camera" FontWeight="SemiBold" />
+              </StackPanel>
+              <TextBlock x:Name="CameraGpsText" Opacity="0.7" FontSize="11" TextWrapping="Wrap" />
+            </StackPanel>
+          </Border>
+
+          <Border Background="#FAFAFA" BorderBrush="#DDD" BorderThickness="1" CornerRadius="4" Padding="8">
+            <StackPanel Spacing="4">
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <Ellipse Width="12" Height="12" Fill="OrangeRed" VerticalAlignment="Center" />
+                <TextBlock Text="Target" FontWeight="SemiBold" />
+              </StackPanel>
+              <TextBlock x:Name="TargetGpsText" Opacity="0.7" Text="map: —" FontFamily="Consolas" FontSize="11" />
+              <Button Content="Clear target" Click="OnClearTargetClick" FontSize="11" Padding="6,2" HorizontalAlignment="Left" />
+            </StackPanel>
+          </Border>
+
+          <Border Background="#FAFAFA" BorderBrush="#DDD" BorderThickness="1" CornerRadius="4" Padding="8">
+            <StackPanel Spacing="4">
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <Ellipse Width="12" Height="12" Fill="DeepSkyBlue" VerticalAlignment="Center" />
+                <TextBlock Text="Landmark 1" FontWeight="SemiBold" />
+              </StackPanel>
+              <TextBlock x:Name="L1PixelText" Opacity="0.7" Text="photo: —" FontFamily="Consolas" FontSize="11" />
+              <TextBlock x:Name="L1GpsText"   Opacity="0.7" Text="map: —"   FontFamily="Consolas" FontSize="11" />
+              <Button Content="Clear" Click="OnClearLandmark1Click" FontSize="11" Padding="6,2" HorizontalAlignment="Left" />
+            </StackPanel>
+          </Border>
+
+          <Border Background="#FAFAFA" BorderBrush="#DDD" BorderThickness="1" CornerRadius="4" Padding="8">
+            <StackPanel Spacing="4">
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <Ellipse Width="12" Height="12" Fill="OrangeRed" VerticalAlignment="Center" />
+                <TextBlock Text="Landmark 2" FontWeight="SemiBold" />
+              </StackPanel>
+              <TextBlock x:Name="L2PixelText" Opacity="0.7" Text="photo: —" FontFamily="Consolas" FontSize="11" />
+              <TextBlock x:Name="L2GpsText"   Opacity="0.7" Text="map: —"   FontFamily="Consolas" FontSize="11" />
+              <Button Content="Clear" Click="OnClearLandmark2Click" FontSize="11" Padding="6,2" HorizontalAlignment="Left" />
+            </StackPanel>
+          </Border>
+
+          <Border Background="#FAFAFA" BorderBrush="#DDD" BorderThickness="1" CornerRadius="4" Padding="8">
+            <StackPanel Spacing="4">
+              <TextBlock Text="Field of view" FontWeight="SemiBold" />
+              <TextBlock x:Name="FovHintText" Opacity="0.7" FontSize="11" TextWrapping="Wrap"
+                         Text="Auto-derived from L1/L2 pixel spread + their map bearings once both landmarks are set. Manual entry is used otherwise." />
+              <Grid ColumnDefinitions="100,*">
+                <TextBlock Grid.Column="0" Text="H-FOV (°):" VerticalAlignment="Center" />
+                <TextBox Grid.Column="1" x:Name="FovBox" Text="60" />
+              </Grid>
+              <Grid ColumnDefinitions="100,*,Auto">
+                <TextBlock Grid.Column="0" Text="Focal (35eq):" VerticalAlignment="Center" />
+                <TextBox Grid.Column="1" x:Name="FocalBox" Watermark="mm" />
+                <Button Grid.Column="2" Content="→ FOV" Click="OnConvertFocalToFovClick" Margin="4,0,0,0" />
+              </Grid>
+            </StackPanel>
+          </Border>
+
+          <Border Background="#F5F9FF" BorderBrush="#B8DBFF" BorderThickness="1" CornerRadius="4" Padding="8">
+            <StackPanel Spacing="4">
+              <TextBlock Text="Result" FontWeight="SemiBold" />
+              <TextBlock x:Name="ResultText" FontFamily="Consolas" FontSize="11" TextWrapping="Wrap"
+                         Text="Place landmarks, then click Compute (2 pts) or Resect (3 pts)." />
+            </StackPanel>
+          </Border>
+        </StackPanel>
+      </ScrollViewer>
+    </Grid>
+
+    <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="10" Spacing="6">
+      <TextBlock x:Name="StatusText" VerticalAlignment="Center" Opacity="0.75" Margin="0,0,12,0" />
+      <Button Content="Clear all" Click="OnClearClick" />
+      <Button Content="Apply to photo" x:Name="ApplyButton" Click="OnApplyClick" IsEnabled="False" FontWeight="Bold" />
+      <Button Content="Close" Click="OnCloseClick" IsCancel="True" />
+    </StackPanel>
+  </Grid>
+</Window>

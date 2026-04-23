@@ -1,0 +1,60 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:models="using:PhotoManager.UI.Models"
+        mc:Ignorable="d" d:DesignWidth="620" d:DesignHeight="420"
+        x:Class="PhotoManager.UI.Views.ModelDownloadWindow"
+        Width="640" Height="440"
+        WindowStartupLocation="CenterOwner"
+        Title="Download detection models">
+  <Grid RowDefinitions="Auto,*,Auto" Margin="12">
+    <StackPanel Grid.Row="0" Spacing="4" Margin="0,0,0,10">
+      <TextBlock Text="Detection models" FontSize="16" FontWeight="SemiBold" />
+      <TextBlock Opacity="0.75" TextWrapping="Wrap"
+                 Text="YOLO and UltraFace power the Auto-Detect + Detect Faces buttons. Models are downloaded from public mirrors into the app's data directory; no model is required to use the rest of PhotoManager." />
+    </StackPanel>
+
+    <ItemsControl Grid.Row="1" x:Name="EntriesList">
+      <ItemsControl.ItemTemplate>
+        <DataTemplate DataType="models:ModelCatalogEntry">
+          <Border BorderBrush="#DDD" BorderThickness="1" CornerRadius="4" Padding="10" Margin="0,0,0,8">
+            <Grid RowDefinitions="Auto,Auto,Auto" ColumnDefinitions="*,Auto">
+              <StackPanel Grid.Row="0" Grid.Column="0" Spacing="1">
+                <TextBlock Text="{CompiledBinding DisplayName}" FontWeight="SemiBold" />
+                <TextBlock Text="{CompiledBinding Description}" TextWrapping="Wrap" Opacity="0.8" FontSize="12" />
+                <TextBlock Text="{CompiledBinding SizeText}" Opacity="0.6" FontSize="11" />
+              </StackPanel>
+              <StackPanel Grid.Row="0" Grid.Column="1" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                <Button Content="Download"
+                        IsEnabled="{CompiledBinding CanDownload}"
+                        Click="OnDownloadClick"
+                        Tag="{CompiledBinding Model.Name}" />
+                <Button Content="Install from file..."
+                        Click="OnInstallFromFileClick"
+                        Tag="{CompiledBinding Model.Name}"
+                        ToolTip.Tip="Point at a locally-downloaded ONNX (useful when the download URL is blocked)." />
+              </StackPanel>
+              <TextBlock Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2"
+                         Margin="0,4,0,0"
+                         Text="{CompiledBinding StatusText}"
+                         Opacity="0.7" FontSize="11"
+                         TextTrimming="CharacterEllipsis" />
+              <ProgressBar Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2"
+                           Margin="0,6,0,0"
+                           Height="6"
+                           Minimum="0" Maximum="1"
+                           Value="{CompiledBinding DownloadFraction}"
+                           IsVisible="{CompiledBinding IsDownloading}" />
+            </Grid>
+          </Border>
+        </DataTemplate>
+      </ItemsControl.ItemTemplate>
+    </ItemsControl>
+
+    <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="6" Margin="0,10,0,0">
+      <Button Content="Open models folder" Click="OnOpenFolderClick" />
+      <Button Content="Close" Click="OnCloseClick" IsDefault="True" />
+    </StackPanel>
+  </Grid>
+</Window>

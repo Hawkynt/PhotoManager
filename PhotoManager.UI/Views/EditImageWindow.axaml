@@ -1,0 +1,81 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="1100" d:DesignHeight="720"
+        x:Class="PhotoManager.UI.Views.EditImageWindow"
+        Width="1100" Height="720"
+        MinWidth="800" MinHeight="520"
+        WindowStartupLocation="CenterOwner"
+        Title="Develop image">
+  <Grid RowDefinitions="*,Auto" Margin="12">
+    <Grid Grid.Row="0" ColumnDefinitions="*,4,300">
+      <Border Grid.Column="0" Background="#111" BorderBrush="#333" BorderThickness="1" CornerRadius="4">
+        <Image x:Name="PreviewImage" Stretch="Uniform" StretchDirection="DownOnly" />
+      </Border>
+
+      <GridSplitter Grid.Column="1" Background="Transparent" />
+
+      <StackPanel Grid.Column="2" Spacing="12" Margin="4,0,0,0">
+        <StackPanel Spacing="4">
+          <TextBlock Text="Rotation" FontWeight="SemiBold" />
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <Button Content="↶ 90°"  Click="OnRotateLeftClick" />
+            <Button Content="↷ 90°" Click="OnRotateRightClick" />
+            <Button Content="180°"  Click="OnRotate180Click" />
+            <Button Content="Reset" Click="OnResetRotationClick" />
+          </StackPanel>
+        </StackPanel>
+
+        <StackPanel Spacing="4">
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <TextBlock Text="Exposure (EV)" FontWeight="SemiBold" />
+            <TextBlock x:Name="ExposureValue" Opacity="0.7" Text="0.0" />
+          </StackPanel>
+          <Slider x:Name="ExposureSlider" Minimum="-3" Maximum="3" TickFrequency="0.1" Value="0"
+                  ValueChanged="OnSettingsChanged" />
+        </StackPanel>
+
+        <StackPanel Spacing="4">
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <TextBlock Text="Contrast" FontWeight="SemiBold" />
+            <TextBlock x:Name="ContrastValue" Opacity="0.7" Text="0" />
+          </StackPanel>
+          <Slider x:Name="ContrastSlider" Minimum="-100" Maximum="100" Value="0"
+                  ValueChanged="OnSettingsChanged" />
+        </StackPanel>
+
+        <StackPanel Spacing="4">
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <TextBlock Text="Saturation" FontWeight="SemiBold" />
+            <TextBlock x:Name="SaturationValue" Opacity="0.7" Text="0" />
+          </StackPanel>
+          <Slider x:Name="SaturationSlider" Minimum="-100" Maximum="100" Value="0"
+                  ValueChanged="OnSettingsChanged" />
+        </StackPanel>
+
+        <StackPanel Spacing="4">
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <TextBlock Text="Temperature (warm/cool)" FontWeight="SemiBold" />
+            <TextBlock x:Name="TemperatureValue" Opacity="0.7" Text="0" />
+          </StackPanel>
+          <Slider x:Name="TemperatureSlider" Minimum="-100" Maximum="100" Value="0"
+                  ValueChanged="OnSettingsChanged" />
+        </StackPanel>
+
+        <Button Content="Reset all" Click="OnResetAllClick" HorizontalAlignment="Stretch" />
+
+        <Border Background="#F8F8F8" BorderBrush="#DDD" BorderThickness="1" CornerRadius="4" Padding="8">
+          <TextBlock x:Name="HintText" Opacity="0.75" TextWrapping="Wrap" FontSize="11"
+                     Text="Sliders update the preview live. Save as… renders a full-resolution JPEG to a new file; the original is never modified." />
+        </Border>
+      </StackPanel>
+    </Grid>
+
+    <Grid Grid.Row="1" ColumnDefinitions="*,Auto,Auto" Margin="0,12,0,0">
+      <TextBlock Grid.Column="0" x:Name="StatusText" VerticalAlignment="Center" Opacity="0.75" />
+      <Button Grid.Column="1" Content="Save as..." Click="OnSaveAsClick" FontWeight="Bold" />
+      <Button Grid.Column="2" Content="Close" Click="OnCloseClick" IsCancel="True" Margin="6,0,0,0" />
+    </Grid>
+  </Grid>
+</Window>

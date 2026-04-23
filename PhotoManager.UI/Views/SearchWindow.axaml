@@ -1,0 +1,71 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:models="using:PhotoManager.UI.Models"
+        mc:Ignorable="d" d:DesignWidth="1100" d:DesignHeight="760"
+        x:Class="PhotoManager.UI.Views.SearchWindow"
+        Width="1100" Height="760"
+        MinWidth="800" MinHeight="520"
+        WindowStartupLocation="CenterOwner"
+        Title="Search library">
+  <Grid RowDefinitions="Auto,Auto,Auto,*,Auto" Margin="12">
+    <StackPanel Grid.Row="0" Spacing="4" Margin="0,0,0,8">
+      <TextBlock Text="Search library" FontSize="16" FontWeight="SemiBold" />
+      <TextBlock Opacity="0.75" TextWrapping="Wrap"
+                 Text="Index a folder once — every keyword, person, and place name across the library is held in memory so re-queries are instant. Index re-scans are cheap too: files whose mtime hasn't changed are served from cache." />
+    </StackPanel>
+
+    <Grid Grid.Row="1" ColumnDefinitions="Auto,*,Auto,Auto,Auto" Margin="0,0,0,6">
+      <TextBlock Grid.Column="0" Text="Folder:" VerticalAlignment="Center" Margin="0,0,6,0" />
+      <TextBox Grid.Column="1" x:Name="FolderBox" Watermark="Path to library root" />
+      <Button Grid.Column="2" Content="Browse..." Margin="6,0,0,0" Click="OnBrowseClick" />
+      <Button Grid.Column="3" Content="Index" Margin="6,0,0,0" Click="OnIndexClick" FontWeight="Bold" />
+      <CheckBox Grid.Column="4" x:Name="RecursiveBox" Content="Recursive" IsChecked="True" Margin="12,0,0,0" VerticalAlignment="Center" />
+    </Grid>
+
+    <Grid Grid.Row="2" ColumnDefinitions="*,Auto,*,Auto,*,Auto,Auto,Auto" Margin="0,0,0,8">
+      <TextBox Grid.Column="0" x:Name="AnyTextBox" Watermark="Search any field…" />
+      <TextBlock Grid.Column="1" VerticalAlignment="Center" Margin="6,0" Opacity="0.5" Text="|" />
+      <AutoCompleteBox Grid.Column="2" x:Name="PersonBox" Watermark="Person" FilterMode="ContainsOrdinal" />
+      <TextBlock Grid.Column="3" VerticalAlignment="Center" Margin="6,0" Opacity="0.5" Text="|" />
+      <AutoCompleteBox Grid.Column="4" x:Name="LocationBox" Watermark="Location/City/Country" FilterMode="ContainsOrdinal" />
+      <TextBlock Grid.Column="5" VerticalAlignment="Center" Margin="6,0" Opacity="0.5" Text="|" />
+      <AutoCompleteBox Grid.Column="6" x:Name="KeywordBox" Watermark="Keyword" Width="160" FilterMode="ContainsOrdinal" />
+      <Button Grid.Column="7" Content="Search" Margin="6,0,0,0" Click="OnSearchClick" />
+    </Grid>
+
+    <Border Grid.Row="3" BorderBrush="#DDD" BorderThickness="1" CornerRadius="4">
+      <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+        <ItemsControl x:Name="ResultsList" Padding="6">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+              <WrapPanel />
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate DataType="models:SearchHitViewModel">
+              <Border Width="180" Margin="4" BorderBrush="#BBB" BorderThickness="1" CornerRadius="4" Background="White"
+                      DoubleTapped="OnResultDoubleTapped">
+                <StackPanel>
+                  <Border Height="140" Background="#F7F7F7">
+                    <Image Source="{CompiledBinding Thumbnail}" Stretch="Uniform" />
+                  </Border>
+                  <StackPanel Margin="6" Spacing="2">
+                    <TextBlock Text="{CompiledBinding FileName}" FontWeight="SemiBold" FontSize="12" TextTrimming="CharacterEllipsis" />
+                    <TextBlock Text="{CompiledBinding Caption}" FontSize="11" Opacity="0.7" TextTrimming="CharacterEllipsis" />
+                  </StackPanel>
+                </StackPanel>
+              </Border>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </ScrollViewer>
+    </Border>
+
+    <Grid Grid.Row="4" ColumnDefinitions="*,Auto" Margin="0,8,0,0">
+      <TextBlock Grid.Column="0" x:Name="StatusText" VerticalAlignment="Center" Opacity="0.75" />
+      <Button Grid.Column="1" Content="Close" Click="OnCloseClick" IsCancel="True" />
+    </Grid>
+  </Grid>
+</Window>

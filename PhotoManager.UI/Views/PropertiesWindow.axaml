@@ -1,0 +1,431 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="720" d:DesignHeight="640"
+        x:Class="PhotoManager.UI.Views.PropertiesWindow"
+        Width="720" Height="640"
+        MinWidth="600" MinHeight="480"
+        WindowStartupLocation="CenterOwner"
+        Title="Properties">
+  <Grid RowDefinitions="Auto,*,Auto" Margin="12">
+    <TextBlock Grid.Row="0" x:Name="HeaderText" FontSize="14" FontWeight="SemiBold" Margin="0,0,0,8" />
+
+    <TabControl Grid.Row="1">
+      <TabItem Header="General">
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
+          <StackPanel Spacing="8" Margin="8">
+            <Grid ColumnDefinitions="120,*">
+              <TextBlock Grid.Column="0" Text="Title:" VerticalAlignment="Center" />
+              <TextBox Grid.Column="1" x:Name="TitleBox" />
+            </Grid>
+            <Grid ColumnDefinitions="120,*">
+              <TextBlock Grid.Column="0" Text="Headline:" VerticalAlignment="Center" />
+              <TextBox Grid.Column="1" x:Name="HeadlineBox" Watermark="Short one-liner summary" />
+            </Grid>
+            <Grid ColumnDefinitions="120,*">
+              <TextBlock Grid.Column="0" Text="Caption:" VerticalAlignment="Top" Margin="0,6,0,0" />
+              <TextBox Grid.Column="1" x:Name="CaptionBox" AcceptsReturn="True" TextWrapping="Wrap" Height="80" />
+            </Grid>
+            <Grid ColumnDefinitions="120,*">
+              <TextBlock Grid.Column="0" Text="Keywords:" VerticalAlignment="Center" />
+              <TextBox Grid.Column="1" x:Name="KeywordsBox" Watermark="comma-separated" />
+            </Grid>
+            <Grid ColumnDefinitions="120,140,120,*">
+              <TextBlock Grid.Column="0" Text="Rating:" VerticalAlignment="Center" />
+              <ComboBox Grid.Column="1" x:Name="RatingCombo" />
+              <TextBlock Grid.Column="2" Text="Color label:" VerticalAlignment="Center" Margin="12,0,0,0" />
+              <ComboBox Grid.Column="3" x:Name="LabelCombo" />
+            </Grid>
+          </StackPanel>
+        </ScrollViewer>
+      </TabItem>
+
+      <TabItem Header="Credits">
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
+          <StackPanel Spacing="8" Margin="8">
+            <Grid ColumnDefinitions="120,*">
+              <TextBlock Grid.Column="0" Text="Creator:" VerticalAlignment="Center"
+                         ToolTip.Tip="Photographer / author — dc:creator + IPTC By-line + EXIF Artist" />
+              <TextBox Grid.Column="1" x:Name="CreatorBox" />
+            </Grid>
+            <Grid ColumnDefinitions="120,*">
+              <TextBlock Grid.Column="0" Text="Credit:" VerticalAlignment="Center"
+                         ToolTip.Tip="Who to credit when publishing — photoshop:Credit + IPTC Credit" />
+              <TextBox Grid.Column="1" x:Name="CreditBox" />
+            </Grid>
+            <Grid ColumnDefinitions="120,*">
+              <TextBlock Grid.Column="0" Text="Source:" VerticalAlignment="Center"
+                         ToolTip.Tip="Original source of the image — photoshop:Source + IPTC Source" />
+              <TextBox Grid.Column="1" x:Name="SourceBox" />
+            </Grid>
+            <Grid ColumnDefinitions="120,*">
+              <TextBlock Grid.Column="0" Text="Copyright:" VerticalAlignment="Center"
+                         ToolTip.Tip="Copyright notice — dc:rights + IPTC Copyright" />
+              <TextBox Grid.Column="1" x:Name="CopyrightBox" Watermark="© 2026 Your Name" />
+            </Grid>
+            <Grid ColumnDefinitions="120,*">
+              <TextBlock Grid.Column="0" Text="Rights usage:" VerticalAlignment="Top" Margin="0,6,0,0"
+                         ToolTip.Tip="Usage terms — xmpRights:UsageTerms" />
+              <TextBox Grid.Column="1" x:Name="RightsUsageBox" AcceptsReturn="True" TextWrapping="Wrap" Height="60" />
+            </Grid>
+            <Grid ColumnDefinitions="120,*">
+              <TextBlock Grid.Column="0" Text="Instructions:" VerticalAlignment="Top" Margin="0,6,0,0"
+                         ToolTip.Tip="Special instructions — photoshop:Instructions + IPTC Special Instructions" />
+              <TextBox Grid.Column="1" x:Name="InstructionsBox" AcceptsReturn="True" TextWrapping="Wrap" Height="60" />
+            </Grid>
+          </StackPanel>
+        </ScrollViewer>
+      </TabItem>
+
+      <TabItem Header="Accessibility">
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
+          <StackPanel Spacing="8" Margin="8">
+            <TextBlock TextWrapping="Wrap" Opacity="0.75"
+                       Text="Accessibility text helps screen readers convey the image to users with visual impairments. Alt text is a short summary; extended description adds detail beyond what alt text covers." />
+            <Grid ColumnDefinitions="140,*">
+              <TextBlock Grid.Column="0" Text="Alt text:" VerticalAlignment="Top" Margin="0,6,0,0" />
+              <TextBox Grid.Column="1" x:Name="AltTextBox" AcceptsReturn="True" TextWrapping="Wrap" Height="60"
+                       Watermark="A brief description for screen readers (&lt;250 chars)" />
+            </Grid>
+            <Grid ColumnDefinitions="140,*">
+              <TextBlock Grid.Column="0" Text="Extended description:" VerticalAlignment="Top" Margin="0,6,0,0" />
+              <TextBox Grid.Column="1" x:Name="ExtendedDescBox" AcceptsReturn="True" TextWrapping="Wrap" Height="80"
+                       Watermark="Fuller description expanding on alt text" />
+            </Grid>
+            <Grid ColumnDefinitions="140,*">
+              <TextBlock Grid.Column="0" Text="Description writer:" VerticalAlignment="Center" />
+              <TextBox Grid.Column="1" x:Name="DescriptionWriterBox" />
+            </Grid>
+          </StackPanel>
+        </ScrollViewer>
+      </TabItem>
+
+      <TabItem Header="Dates">
+        <StackPanel Spacing="8" Margin="8">
+          <TextBlock TextWrapping="Wrap" Opacity="0.75"
+                     Text="Date taken — the moment the shutter closed. Separate from the file's modification time. Stored as photoshop:DateCreated in XMP and IPTC 2:55/2:60." />
+          <Grid ColumnDefinitions="120,Auto,Auto,Auto,*">
+            <TextBlock Grid.Column="0" Text="Date created:" VerticalAlignment="Center" />
+            <DatePicker Grid.Column="1" x:Name="DateCreatedPicker" Margin="0,0,8,0" />
+            <TimePicker Grid.Column="2" x:Name="TimeCreatedPicker" ClockIdentifier="24HourClock" />
+            <Button Grid.Column="3" Content="Clear" Click="OnClearDateClick" Margin="8,0,0,0" />
+          </Grid>
+        </StackPanel>
+      </TabItem>
+
+      <TabItem Header="Contact">
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
+          <StackPanel Spacing="8" Margin="8">
+            <TextBlock Opacity="0.75" TextWrapping="Wrap"
+                       Text="Creator contact info — an IPTC structured block. All fields are optional; partial info is fine." />
+            <Grid ColumnDefinitions="140,*">
+              <TextBlock Grid.Column="0" Text="Job title:" VerticalAlignment="Center" />
+              <TextBox Grid.Column="1" x:Name="CreatorJobTitleBox" />
+            </Grid>
+            <Grid ColumnDefinitions="140,*">
+              <TextBlock Grid.Column="0" Text="Address:" VerticalAlignment="Center" />
+              <TextBox Grid.Column="1" x:Name="ContactAddressBox" />
+            </Grid>
+            <Grid ColumnDefinitions="140,*,140,*">
+              <TextBlock Grid.Column="0" Text="City:" VerticalAlignment="Center" />
+              <TextBox Grid.Column="1" x:Name="ContactCityBox" Margin="0,0,8,0" />
+              <TextBlock Grid.Column="2" Text="State / Province:" VerticalAlignment="Center" />
+              <TextBox Grid.Column="3" x:Name="ContactStateBox" />
+            </Grid>
+            <Grid ColumnDefinitions="140,*,140,*">
+              <TextBlock Grid.Column="0" Text="Postal code:" VerticalAlignment="Center" />
+              <TextBox Grid.Column="1" x:Name="ContactPostalBox" Margin="0,0,8,0" />
+              <TextBlock Grid.Column="2" Text="Country:" VerticalAlignment="Center" />
+              <TextBox Grid.Column="3" x:Name="ContactCountryBox" />
+            </Grid>
+            <Grid ColumnDefinitions="140,*">
+              <TextBlock Grid.Column="0" Text="Phone:" VerticalAlignment="Center" />
+              <TextBox Grid.Column="1" x:Name="ContactPhoneBox" />
+            </Grid>
+            <Grid ColumnDefinitions="140,*">
+              <TextBlock Grid.Column="0" Text="Email:" VerticalAlignment="Center" />
+              <TextBox Grid.Column="1" x:Name="ContactEmailBox" />
+            </Grid>
+            <Grid ColumnDefinitions="140,*">
+              <TextBlock Grid.Column="0" Text="Website:" VerticalAlignment="Center" />
+              <TextBox Grid.Column="1" x:Name="ContactWebsiteBox" />
+            </Grid>
+          </StackPanel>
+        </ScrollViewer>
+      </TabItem>
+
+      <TabItem Header="Location">
+        <StackPanel Spacing="8" Margin="8">
+          <Grid ColumnDefinitions="120,*">
+            <TextBlock Grid.Column="0" Text="Sub-location:" VerticalAlignment="Center" />
+            <TextBox Grid.Column="1" x:Name="LocationBox" Watermark="e.g. street, neighborhood" />
+          </Grid>
+          <Grid ColumnDefinitions="120,*,120,*">
+            <TextBlock Grid.Column="0" Text="City:" VerticalAlignment="Center" />
+            <TextBox Grid.Column="1" x:Name="CityBox" Margin="0,0,8,0" />
+            <TextBlock Grid.Column="2" Text="State:" VerticalAlignment="Center" />
+            <TextBox Grid.Column="3" x:Name="StateBox" />
+          </Grid>
+          <Grid ColumnDefinitions="120,*,120,*">
+            <TextBlock Grid.Column="0" Text="Country:" VerticalAlignment="Center" />
+            <TextBox Grid.Column="1" x:Name="CountryBox" Margin="0,0,8,0" />
+            <TextBlock Grid.Column="2" Text="Country code:" VerticalAlignment="Center" />
+            <TextBox Grid.Column="3" x:Name="CountryCodeBox" Watermark="ISO 3166-1 (DE, US, ...)" />
+          </Grid>
+
+          <Separator Margin="0,8" />
+
+          <Grid ColumnDefinitions="120,*,*,Auto,Auto,Auto">
+            <TextBlock Grid.Column="0" Text="GPS:" VerticalAlignment="Center" />
+            <TextBox Grid.Column="1" x:Name="GpsLatBox" Watermark="Latitude" Margin="0,0,4,0" />
+            <TextBox Grid.Column="2" x:Name="GpsLonBox" Watermark="Longitude" Margin="0,0,4,0" />
+            <TextBox Grid.Column="3" x:Name="GpsAltBox" Watermark="Alt (m)" Width="80" />
+            <Button Grid.Column="4" Content="🗺" Width="28" Margin="4,0,0,0" Click="OnPickCameraOnMapClick"
+                    ToolTip.Tip="Pick coordinates on a map" />
+            <Button Grid.Column="5" Content="↑" Width="26" Margin="4,0,0,0" Click="OnFillElevationClick"
+                    ToolTip.Tip="Look up altitude via OpenTopoData" />
+          </Grid>
+
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <Button Content="Resolve address from GPS" Click="OnResolveAddressClick"
+                    ToolTip.Tip="Look up city/state/country from current lat/lon via OpenStreetMap" />
+          </StackPanel>
+
+          <Separator Margin="0,8" />
+
+          <TextBlock Text="Extended location (IPTC Extension)" FontWeight="SemiBold" />
+          <Grid ColumnDefinitions="140,*,140,*">
+            <TextBlock Grid.Column="0" Text="World region:" VerticalAlignment="Center" />
+            <TextBox Grid.Column="1" x:Name="WorldRegionCreatedBox" Watermark="e.g. Europe, Asia-Pacific" Margin="0,0,8,0" />
+            <TextBlock Grid.Column="2" Text="Location ID:" VerticalAlignment="Center" />
+            <TextBox Grid.Column="3" x:Name="LocationCreatedIdBox" Watermark="Wikidata URL, GeoNames ID" />
+          </Grid>
+        </StackPanel>
+      </TabItem>
+
+      <TabItem Header="Location Shown">
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
+          <StackPanel Spacing="8" Margin="8">
+            <TextBlock Opacity="0.75" TextWrapping="Wrap"
+                       Text="Where the image was taken is 'Location Created' (previous tab). This tab describes the location VISIBLE IN the image — they can differ when you photograph a distant subject. Stored under Iptcext:LocationShown." />
+            <Grid ColumnDefinitions="140,*">
+              <TextBlock Grid.Column="0" Text="Sub-location:" VerticalAlignment="Center" />
+              <TextBox Grid.Column="1" x:Name="LocShownSublocationBox" />
+            </Grid>
+            <Grid ColumnDefinitions="140,*,140,*">
+              <TextBlock Grid.Column="0" Text="City:" VerticalAlignment="Center" />
+              <TextBox Grid.Column="1" x:Name="LocShownCityBox" Margin="0,0,8,0" />
+              <TextBlock Grid.Column="2" Text="State:" VerticalAlignment="Center" />
+              <TextBox Grid.Column="3" x:Name="LocShownStateBox" />
+            </Grid>
+            <Grid ColumnDefinitions="140,*,140,*">
+              <TextBlock Grid.Column="0" Text="Country:" VerticalAlignment="Center" />
+              <TextBox Grid.Column="1" x:Name="LocShownCountryBox" Margin="0,0,8,0" />
+              <TextBlock Grid.Column="2" Text="Country code:" VerticalAlignment="Center" />
+              <TextBox Grid.Column="3" x:Name="LocShownCountryCodeBox" />
+            </Grid>
+            <Grid ColumnDefinitions="140,*,140,*">
+              <TextBlock Grid.Column="0" Text="World region:" VerticalAlignment="Center" />
+              <TextBox Grid.Column="1" x:Name="LocShownWorldRegionBox" Margin="0,0,8,0" />
+              <TextBlock Grid.Column="2" Text="Location ID:" VerticalAlignment="Center" />
+              <TextBox Grid.Column="3" x:Name="LocShownIdBox" />
+            </Grid>
+            <Grid ColumnDefinitions="140,*,*">
+              <TextBlock Grid.Column="0" Text="GPS:" VerticalAlignment="Center" />
+              <TextBox Grid.Column="1" x:Name="LocShownLatBox" Watermark="Latitude" Margin="0,0,4,0" />
+              <TextBox Grid.Column="2" x:Name="LocShownLonBox" Watermark="Longitude" />
+            </Grid>
+          </StackPanel>
+        </ScrollViewer>
+      </TabItem>
+
+      <TabItem Header="Direction &amp; Target">
+        <StackPanel Spacing="8" Margin="8">
+          <Grid ColumnDefinitions="120,120,Auto,*">
+            <TextBlock Grid.Column="0" Text="Image direction:" VerticalAlignment="Center" />
+            <TextBox Grid.Column="1" x:Name="DirectionBox" Watermark="0-360°" />
+            <CheckBox Grid.Column="2" x:Name="DirectionMagneticCheck" Content="Magnetic (vs True)" Margin="12,0,0,0" VerticalAlignment="Center" />
+          </Grid>
+
+          <Separator Margin="0,8" />
+
+          <Grid ColumnDefinitions="120,*,*,Auto">
+            <TextBlock Grid.Column="0" Text="Target GPS:" VerticalAlignment="Center"
+                       ToolTip.Tip="The point the camera was aimed at (distinct from the camera's own GPS)" />
+            <TextBox Grid.Column="1" x:Name="TargetLatBox" Watermark="Target Latitude" Margin="0,0,4,0" />
+            <TextBox Grid.Column="2" x:Name="TargetLonBox" Watermark="Target Longitude" Margin="0,0,4,0" />
+            <Button Grid.Column="3" Content="🗺" Width="28" Margin="4,0,0,0" Click="OnPickCameraAndTargetOnMapClick"
+                    ToolTip.Tip="Pick camera + target on a map (direction is inferred)" />
+          </Grid>
+
+          <TextBlock Opacity="0.7" TextWrapping="Wrap"
+                     Text="Tip: the map picker lets you drop a camera pin AND a target pin — the bearing between them is written to the direction field automatically." />
+
+          <Separator Margin="0,8" />
+
+          <StackPanel Spacing="4">
+            <TextBlock Text="Triangulate from the photo" FontWeight="SemiBold" />
+            <TextBlock Opacity="0.7" TextWrapping="Wrap"
+                       Text="Open a window where you click two landmarks in the photo, pin each on a map, and we compute heading + target. Also supports 3-landmark full resection when camera GPS is unknown." />
+            <Button Content="Triangulate from photo..." Click="OnTriangulateFromPhotoClick" HorizontalAlignment="Left" />
+          </StackPanel>
+        </StackPanel>
+      </TabItem>
+
+      <TabItem Header="Persons &amp; Events">
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
+          <StackPanel Spacing="8" Margin="8">
+            <TextBlock Opacity="0.75" TextWrapping="Wrap"
+                       Text="Persons shown is a simple list of names from the IPTC PersonInImage bag. Distinct from face regions (MWG-RS) — it's useful for captions and captioning search." />
+            <Grid ColumnDefinitions="140,*">
+              <TextBlock Grid.Column="0" Text="Persons shown:" VerticalAlignment="Center" />
+              <TextBox Grid.Column="1" x:Name="PersonsShownBox" Watermark="comma-separated names" />
+            </Grid>
+            <Grid ColumnDefinitions="140,*,140,*">
+              <TextBlock Grid.Column="0" Text="Event:" VerticalAlignment="Center" />
+              <TextBox Grid.Column="1" x:Name="EventBox" Margin="0,0,8,0" />
+              <TextBlock Grid.Column="2" Text="Event ID:" VerticalAlignment="Center" />
+              <TextBox Grid.Column="3" x:Name="EventIdBox" Watermark="URL, UUID, Wikidata ID" />
+            </Grid>
+          </StackPanel>
+        </ScrollViewer>
+      </TabItem>
+
+      <TabItem Header="Releases &amp; Licensing">
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
+          <StackPanel Spacing="8" Margin="8">
+            <TextBlock Opacity="0.75" TextWrapping="Wrap"
+                       Text="Release status URIs come from the PLUS vocabulary (e.g. http://ns.useplus.org/ldf/vocab/MR-NAP = 'no model release required'). ID fields hold the reference of a signed release on file." />
+            <Grid ColumnDefinitions="140,*,140,*">
+              <TextBlock Grid.Column="0" Text="Model release:" VerticalAlignment="Center" />
+              <ComboBox Grid.Column="1" x:Name="ModelReleaseStatusCombo" Margin="0,0,8,0" />
+              <TextBlock Grid.Column="2" Text="Release ID:" VerticalAlignment="Center" />
+              <TextBox Grid.Column="3" x:Name="ModelReleaseIdBox" />
+            </Grid>
+            <Grid ColumnDefinitions="140,*,140,*">
+              <TextBlock Grid.Column="0" Text="Property release:" VerticalAlignment="Center" />
+              <ComboBox Grid.Column="1" x:Name="PropertyReleaseStatusCombo" Margin="0,0,8,0" />
+              <TextBlock Grid.Column="2" Text="Release ID:" VerticalAlignment="Center" />
+              <TextBox Grid.Column="3" x:Name="PropertyReleaseIdBox" />
+            </Grid>
+            <Grid ColumnDefinitions="140,*">
+              <TextBlock Grid.Column="0" Text="Data mining:" VerticalAlignment="Center"
+                         ToolTip.Tip="Permission for AI/ML training (PLUS vocabulary)" />
+              <ComboBox Grid.Column="1" x:Name="DataMiningCombo" />
+            </Grid>
+
+            <Separator Margin="0,8" />
+
+            <TextBlock Text="Rights parties" FontWeight="SemiBold" />
+            <Grid ColumnDefinitions="140,*,140,*">
+              <TextBlock Grid.Column="0" Text="Licensor name:" VerticalAlignment="Center" />
+              <TextBox Grid.Column="1" x:Name="LicensorNameBox" Margin="0,0,8,0" />
+              <TextBlock Grid.Column="2" Text="Licensor ID:" VerticalAlignment="Center" />
+              <TextBox Grid.Column="3" x:Name="LicensorIdBox" />
+            </Grid>
+            <Grid ColumnDefinitions="140,*,140,*">
+              <TextBlock Grid.Column="0" Text="Supplier name:" VerticalAlignment="Center" />
+              <TextBox Grid.Column="1" x:Name="ImageSupplierNameBox" Margin="0,0,8,0" />
+              <TextBlock Grid.Column="2" Text="Supplier ID:" VerticalAlignment="Center" />
+              <TextBox Grid.Column="3" x:Name="ImageSupplierIdBox" />
+            </Grid>
+            <Grid ColumnDefinitions="140,*">
+              <TextBlock Grid.Column="0" Text="Supplier image ID:" VerticalAlignment="Center" />
+              <TextBox Grid.Column="1" x:Name="SupplierImageIdBox" />
+            </Grid>
+            <Grid ColumnDefinitions="140,*,140,*">
+              <TextBlock Grid.Column="0" Text="Copyright owner:" VerticalAlignment="Center" />
+              <TextBox Grid.Column="1" x:Name="CopyrightOwnerNameBox" Margin="0,0,8,0" />
+              <TextBlock Grid.Column="2" Text="Owner ID:" VerticalAlignment="Center" />
+              <TextBox Grid.Column="3" x:Name="CopyrightOwnerIdBox" />
+            </Grid>
+          </StackPanel>
+        </ScrollViewer>
+      </TabItem>
+
+      <TabItem Header="Artwork &amp; Product">
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
+          <StackPanel Spacing="8" Margin="8">
+            <TextBlock Text="Artwork / object shown" FontWeight="SemiBold" />
+            <TextBlock Opacity="0.75" TextWrapping="Wrap"
+                       Text="For reproductions of 2D/3D works — paintings, sculptures, museum items." />
+            <Grid ColumnDefinitions="140,*">
+              <TextBlock Grid.Column="0" Text="Title:" VerticalAlignment="Center" />
+              <TextBox Grid.Column="1" x:Name="ArtworkTitleBox" />
+            </Grid>
+            <Grid ColumnDefinitions="140,*,140,*">
+              <TextBlock Grid.Column="0" Text="Creator:" VerticalAlignment="Center" />
+              <TextBox Grid.Column="1" x:Name="ArtworkCreatorBox" Margin="0,0,8,0" />
+              <TextBlock Grid.Column="2" Text="Date created:" VerticalAlignment="Center" />
+              <TextBox Grid.Column="3" x:Name="ArtworkDateCreatedBox" Watermark="free-form e.g. &quot;ca. 1900&quot;" />
+            </Grid>
+            <Grid ColumnDefinitions="140,*">
+              <TextBlock Grid.Column="0" Text="Source:" VerticalAlignment="Center" />
+              <TextBox Grid.Column="1" x:Name="ArtworkSourceBox" Watermark="Museum, gallery, or owner" />
+            </Grid>
+            <Grid ColumnDefinitions="140,*">
+              <TextBlock Grid.Column="0" Text="Copyright:" VerticalAlignment="Center" />
+              <TextBox Grid.Column="1" x:Name="ArtworkCopyrightBox" />
+            </Grid>
+
+            <Separator Margin="0,12" />
+
+            <TextBlock Text="Product shown" FontWeight="SemiBold" />
+            <Grid ColumnDefinitions="140,*">
+              <TextBlock Grid.Column="0" Text="Name:" VerticalAlignment="Center" />
+              <TextBox Grid.Column="1" x:Name="ProductNameBox" />
+            </Grid>
+            <Grid ColumnDefinitions="140,*">
+              <TextBlock Grid.Column="0" Text="GTIN:" VerticalAlignment="Center"
+                         ToolTip.Tip="14-digit Global Trade Item Number (barcode)" />
+              <TextBox Grid.Column="1" x:Name="ProductGtinBox" />
+            </Grid>
+            <Grid ColumnDefinitions="140,*">
+              <TextBlock Grid.Column="0" Text="Description:" VerticalAlignment="Top" Margin="0,6,0,0" />
+              <TextBox Grid.Column="1" x:Name="ProductDescriptionBox" AcceptsReturn="True" TextWrapping="Wrap" Height="60" />
+            </Grid>
+          </StackPanel>
+        </ScrollViewer>
+      </TabItem>
+
+      <TabItem Header="Admin">
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
+          <StackPanel Spacing="8" Margin="8">
+            <Grid ColumnDefinitions="140,*">
+              <TextBlock Grid.Column="0" Text="Job identifier:" VerticalAlignment="Center"
+                         ToolTip.Tip="IPTC 2:103 TransmissionReference — job/assignment number" />
+              <TextBox Grid.Column="1" x:Name="JobIdentifierBox" />
+            </Grid>
+            <Grid ColumnDefinitions="140,*">
+              <TextBlock Grid.Column="0" Text="Digital source:" VerticalAlignment="Center"
+                         ToolTip.Tip="Declare if the image is AI-generated, composite, or from an original camera capture" />
+              <ComboBox Grid.Column="1" x:Name="DigitalSourceCombo" />
+            </Grid>
+            <Grid ColumnDefinitions="140,*">
+              <TextBlock Grid.Column="0" Text="Web statement:" VerticalAlignment="Center"
+                         ToolTip.Tip="URL pointing to rights / license terms online" />
+              <TextBox Grid.Column="1" x:Name="WebStatementBox" Watermark="https://..." />
+            </Grid>
+            <Grid ColumnDefinitions="140,*">
+              <TextBlock Grid.Column="0" Text="IPTC rating:" VerticalAlignment="Center" />
+              <TextBox Grid.Column="1" x:Name="IptcRatingBox" Watermark="0.0-5.0 (separate from XMP Rating)" />
+            </Grid>
+            <Grid ColumnDefinitions="140,*">
+              <TextBlock Grid.Column="0" Text="Genre:" VerticalAlignment="Center"
+                         ToolTip.Tip="IPTC Extension Genre URI or free text" />
+              <TextBox Grid.Column="1" x:Name="GenreBox" />
+            </Grid>
+          </StackPanel>
+        </ScrollViewer>
+      </TabItem>
+    </TabControl>
+
+    <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="6" Margin="0,8,0,0">
+      <TextBlock x:Name="StatusText" VerticalAlignment="Center" Opacity="0.75" Margin="0,0,12,0" />
+      <Button Content="Revert" Click="OnRevertClick" />
+      <Button Content="Cancel" Click="OnCancelClick" IsCancel="True" />
+      <Button Content="Save" Click="OnSaveClick" IsDefault="True" FontWeight="Bold" />
+    </StackPanel>
+  </Grid>
+</Window>

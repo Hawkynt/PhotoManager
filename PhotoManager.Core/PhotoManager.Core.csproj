@@ -24,8 +24,21 @@
 
   <ItemGroup>
     <PackageReference Include="MetadataExtractor" Version="2.8.1" />
+    <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.20.1" />
+    <PackageReference Include="SixLabors.ImageSharp" Version="3.1.11" />
   </ItemGroup>
-  
+
+  <!-- Cross-workspace reference to the shared JPEG metadata library. Works
+       because both repos live side-by-side under the same parent directory.
+       Break if the layout moves. -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\CompressionWorkbench\FileFormat.JpegArchive\FileFormat.JpegArchive.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="PhotoManager.Tests" />
+  </ItemGroup>
+
   <ItemGroup>
     <None Include="README.md" Pack="true" PackagePath="\" />
   </ItemGroup>

@@ -23,6 +23,21 @@
 
   <Grid RowDefinitions="Auto,*,Auto,Auto">
     <Menu Grid.Row="0">
+      <MenuItem Header="_File">
+        <MenuItem Header="_Add folder..." Click="OnAddPathClick" InputGesture="Ctrl+O" />
+        <MenuItem Header="Select _output..." Click="OnBrowseDestinationClick" />
+        <Separator />
+        <MenuItem Header="E_xit" Click="OnExitClick" InputGesture="Alt+F4" />
+      </MenuItem>
+      <MenuItem Header="_Tools">
+        <MenuItem Header="_Search library..." Click="OnOpenSearchClick" InputGesture="Ctrl+F" />
+        <Separator />
+        <MenuItem Header="Geotag from _GPX..." Click="OnOpenGpxClick" />
+        <MenuItem Header="_Face gallery..." Click="OnOpenFaceGalleryClick" />
+        <MenuItem Header="_Develop image..." Click="OnOpenDevelopClick" InputGesture="Ctrl+E" />
+        <Separator />
+        <MenuItem Header="_Download detection models..." Click="OnOpenModelsDialogClick" />
+      </MenuItem>
       <MenuItem Header="_Help">
         <MenuItem Header="_About..." Click="OnAboutClick" />
       </MenuItem>
@@ -56,8 +71,10 @@
 
       <GridSplitter Grid.Column="1" Background="Transparent" />
 
-      <!-- Center pane: settings + file grid -->
-      <Grid Grid.Column="2" RowDefinitions="Auto,*" Margin="0,8,0,0">
+      <!-- Center pane: settings (top) + preview (middle) + file grid (bottom),
+           with a sizable splitter between preview and grid so the user can
+           spend most vertical space on whichever they care about. -->
+      <Grid Grid.Column="2" RowDefinitions="Auto,2*,4,*" Margin="0,8,0,0">
         <StackPanel Grid.Row="0" Spacing="6" Margin="0,0,0,6">
           <Grid ColumnDefinitions="120,*,Auto">
             <TextBlock Grid.Column="0" Text="Output:" VerticalAlignment="Center" />
@@ -73,13 +90,40 @@
           </Grid>
         </StackPanel>
 
-        <DataGrid Grid.Row="1" x:Name="FilesGrid"
+        <Border Grid.Row="1" BorderBrush="#DDD" BorderThickness="1" CornerRadius="4" Background="White">
+          <!-- Image + Canvas share the same Grid cell with explicit
+               Stretch alignment — TryGetImageRenderBounds assumes they have
+               matching layout bounds so the overlay rectangles track the
+               rendered bitmap exactly. -->
+          <Grid>
+            <Image x:Name="PreviewImage"
+                   HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                   Stretch="Uniform"
+                   StretchDirection="DownOnly"
+                   DoubleTapped="OnPreviewDoubleTapped" />
+            <Canvas x:Name="RegionOverlay"
+                    HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
+          </Grid>
+        </Border>
+
+        <GridSplitter Grid.Row="2" ResizeDirection="Rows" Background="Transparent"
+                      HorizontalAlignment="Stretch" />
+
+        <DataGrid Grid.Row="3" x:Name="FilesGrid"
                   AutoGenerateColumns="False"
                   CanUserResizeColumns="True"
                   GridLinesVisibility="Horizontal"
                   IsReadOnly="True"
-                  SelectionMode="Single"
+                  SelectionMode="Extended"
                   SelectionChanged="OnFileSelectionChanged">
+          <DataGrid.ContextMenu>
+            <ContextMenu>
+              <MenuItem Header="_Properties..." Click="OnFilePropertiesClick" />
+              <Separator />
+              <MenuItem Header="Open in default _viewer" Click="OnOpenInViewerClick" />
+              <MenuItem Header="Show in _folder" Click="OnRevealInFolderClick" />
+            </ContextMenu>
+          </DataGrid.ContextMenu>
           <DataGrid.Columns>
             <DataGridTextColumn Header="File Name" Binding="{CompiledBinding FileName, DataType=models:FileItemModel}" Width="*" />
             <DataGridTextColumn Header="Target Location" Binding="{CompiledBinding TargetLocation, DataType=models:FileItemModel}" Width="2*" />
@@ -90,18 +134,13 @@
 
       <GridSplitter Grid.Column="3" Background="Transparent" />
 
-      <!-- Right pane: preview (top) + metadata (bottom) -->
-      <Grid Grid.Column="4" RowDefinitions="*,4,*" Margin="0,8,8,0">
-        <Border Grid.Row="0" BorderBrush="#DDD" BorderThickness="1" CornerRadius="4" Background="White">
-          <Image x:Name="PreviewImage"
-                 Stretch="Uniform"
-                 StretchDirection="DownOnly"
-                 DoubleTapped="OnPreviewDoubleTapped" />
-        </Border>
-
-        <GridSplitter Grid.Row="1" Background="Transparent" ResizeDirection="Rows" />
-
-        <Border Grid.Row="2" BorderBrush="#DDD" BorderThickness="1" CornerRadius="4">
+      <!-- Right pane: metadata / regions / edit, each in its own resizable
+           section. GridSplitters sit between so the user can grow whichever
+           section they're working in. Sections each start with a visible
+           header; there's no hidden-by-default accordion now — a collapsed
+           section = drag the splitter all the way down. -->
+      <Grid Grid.Column="4" Margin="0,8,8,0" RowDefinitions="*,4,*,4,*">
+        <Border Grid.Row="0" BorderBrush="#DDD" BorderThickness="1" CornerRadius="4">
           <Grid RowDefinitions="Auto,*">
             <TextBlock Grid.Row="0" Text="Metadata" Margin="8,6,8,2" FontWeight="SemiBold" />
             <ListBox Grid.Row="1" x:Name="MetadataList" Padding="0" BorderThickness="0">
@@ -121,13 +160,157 @@
             </ListBox>
           </Grid>
         </Border>
+
+        <GridSplitter Grid.Row="1" ResizeDirection="Rows" HorizontalAlignment="Stretch" Background="Transparent" />
+
+        <Border Grid.Row="2" BorderBrush="#DDD" BorderThickness="1" CornerRadius="4">
+          <Grid RowDefinitions="Auto,Auto,*">
+            <TextBlock Grid.Row="0" Text="Regions" Margin="8,6,8,2" FontWeight="SemiBold" />
+            <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="6" Margin="4,0,4,4">
+              <Button Content="Propose (YOLO)" Click="OnProposeRegionsClick"
+                      ToolTip.Tip="Run the object detector and add proposed regions to review" />
+              <Button Content="Detect Faces" Click="OnDetectFacesClick"
+                      ToolTip.Tip="Run the face detector; if an ArcFace model is installed each face also gets an embedding" />
+              <ToggleButton x:Name="DrawRegionToggle" Content="Draw Box"
+                            Checked="OnDrawRegionToggled" Unchecked="OnDrawRegionToggled"
+                            ToolTip.Tip="Click-drag on the preview to manually add a region" />
+              <TextBlock x:Name="RegionsSummary" VerticalAlignment="Center" Opacity="0.7" />
+            </StackPanel>
+            <ScrollViewer Grid.Row="2" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+              <ItemsControl x:Name="RegionsList">
+                    <ItemsControl.ItemsPanel>
+                      <ItemsPanelTemplate>
+                        <WrapPanel Orientation="Horizontal" />
+                      </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate DataType="models:RegionThumbnailViewModel">
+                        <Border Width="180" Margin="4" Padding="0"
+                                BorderBrush="{CompiledBinding CategoryColor}" BorderThickness="2" CornerRadius="4"
+                                Background="White">
+                          <StackPanel>
+                            <Border Height="120" Background="#F7F7F7">
+                              <Image Source="{CompiledBinding Thumbnail}" Stretch="Uniform" />
+                            </Border>
+                            <StackPanel Margin="6" Spacing="3">
+                              <StackPanel Orientation="Horizontal" Spacing="4">
+                                <TextBlock Text="{CompiledBinding CategoryText}" FontWeight="SemiBold" FontSize="11" />
+                                <TextBlock Text="·" FontSize="11" Opacity="0.5" IsVisible="{CompiledBinding IsProposed}" />
+                                <TextBlock Text="proposed" FontSize="11" Opacity="0.5" IsVisible="{CompiledBinding IsProposed}" />
+                              </StackPanel>
+                              <TextBlock Text="{CompiledBinding DisplayLabel}" FontSize="12" FontWeight="SemiBold"
+                                         TextTrimming="CharacterEllipsis"
+                                         ToolTip.Tip="{CompiledBinding DisplayLabel}" />
+                              <StackPanel Orientation="Horizontal" Spacing="3">
+                                <Button Content="Accept"  FontSize="11" Padding="6,2" Click="OnAcceptRegionClick"  Tag="{CompiledBinding Index}"
+                                        IsVisible="{CompiledBinding ShowAccept}"
+                                        ToolTip.Tip="Confirm this region and keep its current label" />
+                                <Button Content="Dismiss" FontSize="11" Padding="6,2" Click="OnDiscardRegionClick" Tag="{CompiledBinding Index}"
+                                        ToolTip.Tip="Remove the region entirely" />
+                                <Button Content="Tag..."  FontSize="11" Padding="6,2" Click="OnTagRegionClick"     Tag="{CompiledBinding Index}"
+                                        ToolTip.Tip="Pick or create a person to attach to this region" />
+                              </StackPanel>
+                            </StackPanel>
+                          </StackPanel>
+                        </Border>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </ScrollViewer>
+          </Grid>
+        </Border>
+
+        <GridSplitter Grid.Row="3" ResizeDirection="Rows" HorizontalAlignment="Stretch" Background="Transparent" />
+
+        <Border Grid.Row="4" BorderBrush="#DDD" BorderThickness="1" CornerRadius="4">
+          <Grid RowDefinitions="Auto,*">
+            <TextBlock Grid.Row="0" Text="Edit metadata" Margin="8,6,8,2" FontWeight="SemiBold" />
+            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+              <StackPanel Spacing="4" Margin="4">
+                <Grid ColumnDefinitions="80,*,*,Auto,Auto,Auto">
+                  <TextBlock Grid.Column="0" Text="GPS:" VerticalAlignment="Center" />
+                  <TextBox Grid.Column="1" x:Name="GpsLatBox" Watermark="Latitude" Margin="0,0,4,0" />
+                  <TextBox Grid.Column="2" x:Name="GpsLonBox" Watermark="Longitude" Margin="0,0,4,0" />
+                  <TextBox Grid.Column="3" x:Name="GpsAltBox" Watermark="Alt (m)" Width="80" />
+                  <Button Grid.Column="4" Content="🗺" Width="28" Margin="4,0,0,0" Click="OnPickOnMapClick"
+                          ToolTip.Tip="Pick these coordinates on a map" />
+                  <Button Grid.Column="5" Content="↑" Width="26" Margin="4,0,0,0" Click="OnFillElevationClick"
+                          ToolTip.Tip="Look up altitude from lat/lon via OpenTopoData" />
+                </Grid>
+                <Grid ColumnDefinitions="80,120,80,*">
+                  <TextBlock Grid.Column="0" Text="Direction:" VerticalAlignment="Center" />
+                  <TextBox Grid.Column="1" x:Name="DirectionBox" Watermark="0-360°" Margin="0,0,8,0" />
+                  <CheckBox Grid.Column="2" x:Name="DirectionMagneticCheck" Content="Magnetic" />
+                  <Button Grid.Column="3" Content="Triangulate from photo..." Click="OnTriangulateClick"
+                          HorizontalAlignment="Right"
+                          ToolTip.Tip="Click 2-3 landmarks in the photo, pin each on a map; heading + target (+ camera for 3 points) are computed automatically" />
+                </Grid>
+                <Grid ColumnDefinitions="80,*,*">
+                  <TextBlock Grid.Column="0" Text="Target:" VerticalAlignment="Center"
+                             ToolTip.Tip="GPS point the camera was aimed at (exif:GPSDestLatitude/Longitude)" />
+                  <TextBox Grid.Column="1" x:Name="TargetLatBox" Watermark="Target lat" Margin="0,0,4,0" />
+                  <TextBox Grid.Column="2" x:Name="TargetLonBox" Watermark="Target lon" />
+                </Grid>
+                <Grid ColumnDefinitions="80,*,Auto">
+                  <TextBlock Grid.Column="0" Text="Location:" VerticalAlignment="Center"
+                             ToolTip.Tip="Sub-location: neighborhood, venue, road (Iptc4xmpCore:Location)" />
+                  <TextBox Grid.Column="1" x:Name="LocationBox" Watermark="e.g. Times Square" />
+                  <Button Grid.Column="2" Content="Resolve from GPS" Margin="4,0,0,0" Click="OnResolveAddressClick"
+                          ToolTip.Tip="Reverse-geocode the GPS coordinates via OpenStreetMap and fill blank location fields" />
+                </Grid>
+                <Grid ColumnDefinitions="80,*,80,*">
+                  <TextBlock Grid.Column="0" Text="City:" VerticalAlignment="Center" />
+                  <TextBox Grid.Column="1" x:Name="CityBox" Margin="0,0,8,0" />
+                  <TextBlock Grid.Column="2" Text="State:" VerticalAlignment="Center" />
+                  <TextBox Grid.Column="3" x:Name="StateBox" />
+                </Grid>
+                <Grid ColumnDefinitions="80,*,80,*">
+                  <TextBlock Grid.Column="0" Text="Country:" VerticalAlignment="Center" />
+                  <TextBox Grid.Column="1" x:Name="CountryBox" Margin="0,0,8,0" />
+                  <TextBlock Grid.Column="2" Text="Code:" VerticalAlignment="Center"
+                             ToolTip.Tip="ISO 3166-1 alpha-2 country code (e.g. DE, US)" />
+                  <TextBox Grid.Column="3" x:Name="CountryCodeBox" />
+                </Grid>
+                <Grid ColumnDefinitions="80,120,80,*">
+                  <TextBlock Grid.Column="0" Text="Rating:" VerticalAlignment="Center" />
+                  <ComboBox Grid.Column="1" x:Name="RatingCombo" Margin="0,0,8,0" />
+                  <TextBlock Grid.Column="2" Text="Label:" VerticalAlignment="Center" />
+                  <ComboBox Grid.Column="3" x:Name="LabelCombo" />
+                </Grid>
+                <Grid ColumnDefinitions="80,*">
+                  <TextBlock Grid.Column="0" Text="Keywords:" VerticalAlignment="Center" />
+                  <TextBox Grid.Column="1" x:Name="KeywordsBox" Watermark="comma-separated" />
+                </Grid>
+                <Grid ColumnDefinitions="80,*">
+                  <TextBlock Grid.Column="0" Text="Title:" VerticalAlignment="Center" />
+                  <TextBox Grid.Column="1" x:Name="TitleBox" />
+                </Grid>
+                <Grid ColumnDefinitions="80,*">
+                  <TextBlock Grid.Column="0" Text="Caption:" VerticalAlignment="Center" />
+                  <TextBox Grid.Column="1" x:Name="CaptionBox" AcceptsReturn="True" TextWrapping="Wrap" Height="48" />
+                </Grid>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="6" Margin="0,4,0,0">
+                  <Button Content="Auto-Detect" Click="OnAutoDetectClick" />
+                  <Button Content="Revert" Click="OnRevertMetadataClick" />
+                  <Button Content="Apply to selection" Click="OnApplyToSelectionClick"
+                          ToolTip.Tip="Write the values in this panel to every selected file in the grid" />
+                  <Button Content="Save" Click="OnSaveMetadataClick" FontWeight="Bold"
+                          ToolTip.Tip="Write to the currently previewed file" />
+                </StackPanel>
+              </StackPanel>
+            </ScrollViewer>
+          </Grid>
+        </Border>
       </Grid>
     </Grid>
 
     <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="8,8,8,0" Spacing="6">
-      <Button Content="Scan Files"       Click="OnScanClick"         IsEnabled="{Binding !IsProcessing}" />
-      <Button Content="Run"  FontWeight="Bold" Click="OnRunClick"    IsEnabled="{Binding !IsProcessing}" />
-      <Button Content="Run on Directory" Click="OnRunDirectoryClick" IsEnabled="{Binding !IsProcessing}" />
+      <Button Content="Scan Files"       Click="OnScanClick"         IsEnabled="{Binding !IsProcessing}"
+              ToolTip.Tip="Populate the grid with files from the checked source paths" />
+      <Button Content="Run"  FontWeight="Bold" Click="OnRunClick"    IsEnabled="{Binding !IsProcessing}"
+              ToolTip.Tip="Organize the files currently listed in the grid by date" />
+      <Button Content="Run on Directory" Click="OnRunDirectoryClick" IsEnabled="{Binding !IsProcessing}"
+              ToolTip.Tip="Walk every checked source directly, no pre-scan required" />
       <Button Content="Cancel"           Click="OnCancelClick"       IsEnabled="{Binding IsProcessing}" />
       <CheckBox Content="Recursive (Run on Directory)" Margin="24,0,0,0"
                 IsChecked="{Binding Recursive, Mode=TwoWay}" />
