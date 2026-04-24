@@ -53,14 +53,55 @@ public sealed class FaceRecognitionService {
     // registry auto-match.
     var detectedWithEmbeddings = await this.EmbedMissingAsync(imageFile, detected, cancellationToken);
 
-    var named = detectedWithEmbeddings
-      .Select(d => NameFromRegistry(d, this._registry))
-      .ToList();
-
     // Preserve existing regions verbatim (including their Status) — detection
     // must never silently promote or demote a region the user has already
     // curated.
     var regions = existing.Regions.ToList();
+
+    // Greedy name assignment against the registry. For each detected face
+    // with an embedding, find the best-matching registered name and score.
+    // Then, sorted by score descending, claim names one at a time — each
+    // name lands on AT MOST one face per photo. Existing named regions
+    // (already-tagged faces) reserve their names up front so we never give
+    // the SAME name to a different face in the same photo. This is the core
+    // fix for the "I tagged one face, now three untagged faces share the
+    // name" bug: ArcFace cosine similarity between unrelated faces can drift
+    // above a single-reference threshold, and without dedup that spreads
+    // the same label across every face in the photo.
+    var claimedNames = new HashSet<string>(
+      regions
+        .Where(r => r.Category == RegionCategory.Person && !string.IsNullOrWhiteSpace(r.Label))
+        .Select(r => r.Label!),
+      StringComparer.OrdinalIgnoreCase);
+
+    var candidates = detectedWithEmbeddings
+      .Select((d, i) => (
+        Index: i,
+        Detection: d,
+        Match: (d.Embedding is { Length: > 0 } emb)
+          ? this._registry.FindBestMatch(emb)
+          : null
+      ))
+      .ToList();
+
+    var assignedNames = new Dictionary<int, string>();
+    foreach (var c in candidates
+      .Where(c => c.Match is not null)
+      .OrderByDescending(c => c.Match!.Value.Similarity)) {
+      var name = c.Match!.Value.Name;
+      if (claimedNames.Contains(name))
+        continue;  // another face (higher similarity or already-tagged) owns this name
+      assignedNames[c.Index] = name;
+      claimedNames.Add(name);
+    }
+
+    // Rebuild the named list using the greedy assignment (falling back to
+    // any detector-supplied name for faces with no embedding match).
+    var named = detectedWithEmbeddings
+      .Select((d, i) => assignedNames.TryGetValue(i, out var greedyName)
+        ? d.Region with { PersonName = greedyName }
+        : d.Region)
+      .ToList();
 
     // Merge each new detection:
     //  - No overlap with an existing Person region → add as Proposed. Status
@@ -167,13 +208,21 @@ public sealed class FaceRecognitionService {
     var targetBox = faces[faceIndex].Box;
 
     // Rebuild the regions list: find the Person-category region whose box
-    // matches the target, rename it, leave everything else alone.
+    // matches the target and rename it. Any OTHER Person region that
+    // currently carries the same name gets stripped — enforcing the
+    // invariant that a single person never appears twice on the same photo.
     var updatedRegions = existing.Regions
-      .Select(r => (r.Category == RegionCategory.Person
+      .Select(r => {
+        var isTarget = r.Category == RegionCategory.Person
                     && r.Status == RegionStatus.Accepted
-                    && r.Box.Equals(targetBox))
-        ? r with { Label = name }
-        : r)
+                    && r.Box.Equals(targetBox);
+        if (isTarget)
+          return r with { Label = name };
+        if (r.Category == RegionCategory.Person
+            && string.Equals(r.Label, name, StringComparison.OrdinalIgnoreCase))
+          return r with { Label = null };
+        return r;
+      })
       .ToArray();
 
     var mergedKeywords = DetectionService.MergeKeywords(existing.Keywords, new[] { name });
@@ -292,16 +341,4 @@ public sealed class FaceRecognitionService {
     return result;
   }
 
-  private static FaceRegion NameFromRegistry(DetectedFace detected, PeopleRegistry registry) {
-    if (!string.IsNullOrEmpty(detected.Region.PersonName))
-      return detected.Region;
-
-    if (detected.Embedding is { } embedding) {
-      var match = registry.FindMatch(embedding);
-      if (match != null)
-        return detected.Region with { PersonName = match };
-    }
-
-    return detected.Region;
-  }
 }

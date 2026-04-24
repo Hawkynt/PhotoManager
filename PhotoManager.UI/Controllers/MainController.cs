@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using PhotoManager.Core.Enums;
 using PhotoManager.Core.Interfaces;
+using PhotoManager.Core.Metadata;
 using PhotoManager.Core.Models;
 using PhotoManager.Core.Services;
 using PhotoManager.UI.Models;
@@ -400,8 +401,18 @@ public class MainController(
 
       var targetPath = await fileOrganizer.GenerateTargetPath(fileToImport, mostProbableDate.Value, settings);
       return GetRelativeTargetPath(targetPath.FullName, filePath, outputPath);
+    } catch (MissingMethodException ex) {
+      // Surface the actual signature — this usually means a binary-version
+      // mismatch between two assemblies (e.g. MetadataExtractor being loaded
+      // from Costura vs. the runtimes/ folder). The signature pinpoints
+      // which method isn't binding at runtime.
+      return $"Error: binary mismatch — {ex.Message}";
+    } catch (TypeLoadException ex) {
+      return $"Error: type load — {ex.Message}";
+    } catch (FileLoadException ex) {
+      return $"Error: assembly load — {ex.FileName} ({ex.Message})";
     } catch (Exception ex) {
-      return $"Error: {ex.Message}";
+      return $"Error: {ex.GetType().Name}: {ex.Message}";
     }
   }
 
@@ -456,34 +467,48 @@ public class MainController(
     viewModel.StatusMessage = "Scanning files...";
 
     try {
-      var allFiles = new List<string>();
+      var extensions = await this.GetSupportedExtensionsAsync();
 
-      foreach (var (path, recursive) in sourcePaths) {
-        if (!path.Exists) continue;
-
-        var searchOption = recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
-        foreach (var extension in await this.GetSupportedExtensionsAsync()) {
-          var files = Directory.GetFiles(path.FullName, extension, searchOption);
-          allFiles.AddRange(files);
+      // Enumerating huge directory trees can block the UI for seconds on HDDs;
+      // push the walk to a background thread so the status message paints and
+      // the app stays responsive.
+      var allFiles = await Task.Run(() => {
+        var collected = new List<string>();
+        foreach (var (path, recursive) in sourcePaths) {
+          if (!path.Exists) continue;
+          var option = recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
+          foreach (var extension in extensions) {
+            try {
+              collected.AddRange(Directory.EnumerateFiles(path.FullName, extension, option));
+            } catch {
+              // Swallow permission errors etc. so one bad dir doesn't kill the scan.
+            }
+          }
         }
-      }
+        return collected;
+      });
 
       var fileItemsList = new List<FileItemModel>();
       foreach (var file in allFiles.Distinct()) {
         var fileInfo = new FileInfo(file);
         var sourcePath = GetRelativeSourcePath(file, sourcePaths);
 
-        fileItemsList.Add(new FileItemModel {
+        var item = new FileItemModel {
           FileName = fileInfo.Name,
           TargetLocation = "Calculating...",
           SourcePath = sourcePath,
-          FileInfo = fileInfo
-        });
+          FileInfo = fileInfo,
+        };
+        // Seed the search index with filename + source path so the search bar
+        // is useful the instant the scan finishes — before background XMP
+        // reads populate the full index.
+        item.SearchIndex = BuildInitialSearchIndex(item);
+        fileItemsList.Add(item);
       }
 
       var fileItems = new ObservableCollection<FileItemModel>(fileItemsList);
 
-      viewModel.StatusMessage = $"Found {fileItems.Count} files. Calculating target locations...";
+      viewModel.StatusMessage = $"Found {fileItems.Count} files. Indexing metadata...";
 
       _ = Task.Run(async () => await this.CalculateTargetLocationsAsync(fileItems));
 
@@ -493,6 +518,11 @@ public class MainController(
       viewModel.StatusMessage = $"Scan error: {ex.Message}";
       return new ObservableCollection<FileItemModel>();
     }
+  }
+
+  private static string BuildInitialSearchIndex(FileItemModel item) {
+    var path = item.FileInfo?.FullName ?? string.Empty;
+    return (item.FileName + " " + item.SourcePath + " " + path).ToLowerInvariant();
   }
 
   private async Task<string[]> GetSupportedExtensionsAsync()
@@ -530,6 +560,7 @@ public class MainController(
       var progressLock = new object();
 
       var semaphore = new SemaphoreSlim(Environment.ProcessorCount * 2);
+      var reader = new MetadataReader();
 
       await Parallel.ForEachAsync(
         fileItems.Select((item, index) => new { Item = item, Index = index }),
@@ -547,13 +578,27 @@ public class MainController(
 
             itemWithIndex.Item.TargetLocation = targetLocation;
 
+            // Populate the search index alongside the target calc so the
+            // user can find files by keyword/person/location/etc. without a
+            // second pass over the library.
+            if (itemWithIndex.Item.FileInfo is { } fi && fi.Exists) {
+              try {
+                var metadata = await reader.ReadAsync(fi, ct);
+                itemWithIndex.Item.SearchIndex = BuildFullSearchIndex(itemWithIndex.Item, metadata);
+              } catch {
+                // Bad metadata on one file shouldn't invalidate the whole index.
+              }
+            }
+
             lock (progressLock) {
               processed++;
               var updateInterval = totalFiles > 1000 ? 50 : 10;
               if (processed % updateInterval == 0 || processed == totalFiles) {
                 var progressPercent = (int)((double)processed / totalFiles * 100);
                 _ = Task.Run(() => {
-                  viewModel.StatusMessage = $"Calculating targets: {processed}/{totalFiles} ({progressPercent}%)";
+                  viewModel.StatusMessage = processed == totalFiles
+                    ? $"Ready. {totalFiles} files indexed."
+                    : $"Indexing {processed}/{totalFiles} ({progressPercent}%)";
                 });
               }
             }
@@ -563,12 +608,42 @@ public class MainController(
         }
       );
 
-      viewModel.StatusMessage = $"Ready. {fileItems.Count} files found.";
+      viewModel.StatusMessage = $"Ready. {fileItems.Count} files indexed.";
 
     } catch (OperationCanceledException) {
       viewModel.StatusMessage = "Target calculation cancelled.";
     } catch (Exception ex) {
       viewModel.StatusMessage = $"Target calculation error: {ex.Message}";
     }
+  }
+
+  /// <summary>
+  /// Flatten every searchable field into a single lower-cased string so the
+  /// main-window search bar can do a cheap multi-token CONTAINS per row.
+  /// Includes filename, folder, keywords, region labels (people / objects /
+  /// etc.), all location fields, title, caption, creator.
+  /// </summary>
+  private static string BuildFullSearchIndex(FileItemModel item, FullMetadata metadata) {
+    var parts = new List<string> {
+      item.FileName,
+      item.SourcePath,
+      item.FileInfo?.FullName ?? string.Empty,
+      metadata.Title ?? string.Empty,
+      metadata.Caption ?? string.Empty,
+      metadata.Location ?? string.Empty,
+      metadata.City ?? string.Empty,
+      metadata.State ?? string.Empty,
+      metadata.Country ?? string.Empty,
+      metadata.CountryCode ?? string.Empty,
+      metadata.Creator ?? string.Empty,
+      metadata.Headline ?? string.Empty,
+    };
+    parts.AddRange(metadata.Keywords);
+    parts.AddRange(metadata.PersonsShown);
+    foreach (var region in metadata.Regions)
+      if (region.Label is { Length: > 0 } l)
+        parts.Add(l);
+
+    return string.Join(' ', parts.Where(p => !string.IsNullOrWhiteSpace(p))).ToLowerInvariant();
   }
 }

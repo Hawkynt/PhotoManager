@@ -47,16 +47,32 @@ public class FaceClusterIndexTests {
   }
 
   [Test]
-  public void Build_ClosePair_ClustersTogether() {
+  public void Build_ClosePair_ButDifferentNames_StaySeparate() {
+    // Similarity is irrelevant — the only thing that merges faces is an
+    // identical non-blank name. Two faces with near-identical embeddings
+    // but different labels must stay in different clusters.
     var a = Unit(1, 0, 0);
-    var b = Unit(0.99f, 0.1f, 0);  // cosine ~0.995 — well above threshold
+    var b = Unit(0.99f, 0.1f, 0);
+    var faces = new[] { Face("a.jpg", a, "Alice"), Face("b.jpg", b, "Bob") };
+
+    var index = FaceClusterIndex.Build(faces);
+
+    Assert.That(index.Clusters, Has.Count.EqualTo(2));
+  }
+
+  [Test]
+  public void Build_ClosePair_BothUnnamed_BecomeTwoSingletons() {
+    // Unnamed faces NEVER merge, regardless of embedding similarity —
+    // the user must explicitly name them first.
+    var a = Unit(1, 0, 0);
+    var b = Unit(0.99f, 0.1f, 0);
     var faces = new[] { Face("a.jpg", a), Face("b.jpg", b) };
 
     var index = FaceClusterIndex.Build(faces);
 
     Assert.Multiple(() => {
-      Assert.That(index.Clusters, Has.Count.EqualTo(1));
-      Assert.That(index.Clusters[0].Count, Is.EqualTo(2));
+      Assert.That(index.Clusters, Has.Count.EqualTo(2));
+      Assert.That(index.Clusters.All(c => c.Count == 1), Is.True);
     });
   }
 
@@ -71,6 +87,24 @@ public class FaceClusterIndexTests {
     var index = FaceClusterIndex.Build(faces);
 
     Assert.That(index.Clusters, Has.Count.EqualTo(3));
+  }
+
+  [Test]
+  public void Build_NoGrouping_EveryFaceIsSingleton_EvenWithMatchingNames() {
+    // groupByName=false disables bucketing entirely — the user gets one
+    // tile per face, even when names already match.
+    var faces = new[] {
+      Face("a.jpg", Unit(1, 0, 0), "Alice"),
+      Face("b.jpg", Unit(0, 1, 0), "Alice"),
+      Face("c.jpg", Unit(0, 0, 1))
+    };
+
+    var index = FaceClusterIndex.Build(faces, groupByName: false);
+
+    Assert.Multiple(() => {
+      Assert.That(index.Clusters, Has.Count.EqualTo(3));
+      Assert.That(index.Clusters.All(c => c.Count == 1), Is.True);
+    });
   }
 
   [Test]
@@ -108,9 +142,10 @@ public class FaceClusterIndexTests {
 
   [Test]
   public void ApplyName_ReturnsMembersWithUpdatedLabel_WithoutMutatingOriginal() {
+    // Use two faces with the same name so they end up in one cluster.
     var faces = new[] {
-      Face("a.jpg", Unit(1, 0, 0)),
-      Face("b.jpg", Unit(0.99f, 0.1f, 0))
+      Face("a.jpg", Unit(1, 0, 0), "Bob"),
+      Face("b.jpg", Unit(0.99f, 0.1f, 0), "Bob")
     };
     var index = FaceClusterIndex.Build(faces);
     var cluster = index.Clusters.Single();
@@ -121,15 +156,18 @@ public class FaceClusterIndexTests {
       Assert.That(renamed, Has.Count.EqualTo(2));
       Assert.That(renamed, Is.All.Matches<ScannedFace>(f => f.Name == "Alice"));
       // original members unchanged — records are immutable
-      Assert.That(cluster.Members, Is.All.Matches<ScannedFace>(f => f.Name is null));
+      Assert.That(cluster.Members, Is.All.Matches<ScannedFace>(f => f.Name == "Bob"));
     });
   }
 
   [Test]
   public void Build_MismatchedDimensions_DoNotCluster() {
+    // Both unnamed → two singletons regardless of dimension. (No similarity
+    // logic exists any more, so this mostly documents that embeddings do
+    // not influence cluster membership at all.)
     var faces = new[] {
       Face("a.jpg", Unit(1, 0, 0)),
-      Face("b.jpg", Unit(1, 0, 0, 0, 0))  // 5-D vs 3-D
+      Face("b.jpg", Unit(1, 0, 0, 0, 0))
     };
 
     var index = FaceClusterIndex.Build(faces);

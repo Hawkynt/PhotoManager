@@ -100,13 +100,30 @@ public sealed class NominatimReverseGeocoder : IReverseGeocoder, IDisposable {
 
     // Nominatim's address keys vary by place type; fall back through the
     // plausible options so cities / towns / villages all surface.
-    var location = FirstNonEmpty(a.Road, a.Pedestrian, a.Path, a.Neighbourhood, a.Suburb);
+    var street = FirstNonEmpty(a.Road, a.Pedestrian, a.Path, a.Neighbourhood, a.Suburb);
+    // Append the house number when available so the Location field reads
+    // "Hauptstraße 42" instead of just "Hauptstraße". Order follows the
+    // country's convention — US/UK/CA/AU/NZ/IE put the number first
+    // ("123 Main Street"); everywhere else uses street-then-number. For
+    // unknown countries we default to street-first since that's the more
+    // common pattern worldwide.
+    var location = ComposeStreetWithNumber(street, a.HouseNumber, a.CountryCode);
     var city = FirstNonEmpty(a.City, a.Town, a.Village, a.Hamlet, a.Municipality);
     var state = FirstNonEmpty(a.State, a.Region, a.County);
     var country = a.Country;
     var countryCode = string.IsNullOrEmpty(a.CountryCode) ? null : a.CountryCode.ToUpperInvariant();
 
     return new GeocodingResult(location, city, state, country, countryCode);
+  }
+
+  private static string? ComposeStreetWithNumber(string? street, string? houseNumber, string? countryCode) {
+    if (string.IsNullOrWhiteSpace(street))
+      return null;
+    if (string.IsNullOrWhiteSpace(houseNumber))
+      return street;
+
+    var isNumberFirst = countryCode?.ToUpperInvariant() is "US" or "GB" or "CA" or "AU" or "NZ" or "IE";
+    return isNumberFirst ? $"{houseNumber} {street}" : $"{street} {houseNumber}";
   }
 
   private static string? FirstNonEmpty(params string?[] candidates) {
@@ -161,6 +178,7 @@ public sealed class NominatimReverseGeocoder : IReverseGeocoder, IDisposable {
   }
 
   internal sealed class NominatimAddress {
+    [JsonPropertyName("house_number")] public string? HouseNumber { get; set; }
     [JsonPropertyName("road")] public string? Road { get; set; }
     [JsonPropertyName("pedestrian")] public string? Pedestrian { get; set; }
     [JsonPropertyName("path")] public string? Path { get; set; }

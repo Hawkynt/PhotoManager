@@ -54,8 +54,24 @@ public sealed class PeopleRegistry {
   /// cosine similarity against <paramref name="embedding"/>, provided that
   /// similarity meets <paramref name="minSimilarity"/>. Returns null if no
   /// registered person is close enough.
+  ///
+  /// The default threshold (<c>0.65</c>) is deliberately strict for
+  /// single-reference matching. Lower thresholds like 0.55 start spreading
+  /// names to different people in the same photo because ArcFace cosine
+  /// similarity between unrelated faces can drift above 0.55 under matched
+  /// lighting/pose. Callers who want looser matching can override, or
+  /// populate multiple references per person via <see cref="AddReference"/>.
   /// </summary>
-  public string? FindMatch(float[] embedding, float minSimilarity = 0.55f) {
+  public string? FindMatch(float[] embedding, float minSimilarity = 0.65f)
+    => this.FindBestMatch(embedding, minSimilarity)?.Name;
+
+  /// <summary>
+  /// Same match as <see cref="FindMatch"/> but also returns the similarity
+  /// score. Callers that need to rank multiple detections against each
+  /// other (e.g. to pick the best face for a name when several match) use
+  /// this overload.
+  /// </summary>
+  public (string Name, float Similarity)? FindBestMatch(float[] embedding, float minSimilarity = 0.65f) {
     ArgumentNullException.ThrowIfNull(embedding);
 
     string? best = null;
@@ -71,7 +87,7 @@ public sealed class PeopleRegistry {
       }
     }
 
-    return best;
+    return best is null ? null : (best, bestSimilarity);
   }
 
   public void Save() {

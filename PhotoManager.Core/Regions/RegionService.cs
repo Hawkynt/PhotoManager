@@ -99,8 +99,19 @@ public sealed class RegionService {
     var md = await this._reader.ReadAsync(imageFile, cancellationToken);
     ValidateIndex(index, md.Regions.Count);
 
+    // Enforce "one person per photo" — if any OTHER Person region in this
+    // photo already carries the same name, strip it so the label lives on
+    // exactly one face. The latest tag wins; the previous owner becomes
+    // unnamed so the user can re-tag it if they want.
     var updated = md.Regions
-      .Select((r, i) => i == index ? r with { Label = newLabel } : r)
+      .Select((r, i) => {
+        if (i == index)
+          return r with { Label = newLabel };
+        if (r.Category == RegionCategory.Person
+            && string.Equals(r.Label, newLabel, StringComparison.OrdinalIgnoreCase))
+          return r with { Label = null };
+        return r;
+      })
       .ToArray();
 
     // Promote the new label into dc:subject keywords so library search picks

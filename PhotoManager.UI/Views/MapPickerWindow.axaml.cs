@@ -31,7 +31,7 @@ public partial class MapPickerWindow : Window {
 
   private GpsCoordinate? _cameraCoordinate;
   private GpsCoordinate? _targetCoordinate;
-  private PickMode _mode = PickMode.Camera;
+  private readonly PickMode _mode;
   private readonly double _coneHalfAngleDeg;
   private readonly double? _directionHint;
 
@@ -48,12 +48,18 @@ public partial class MapPickerWindow : Window {
     GpsCoordinate? initialCamera = null,
     GpsCoordinate? initialTarget = null,
     double coneHalfAngleDeg = 22.5,
-    double? initialDirectionDegrees = null
+    double? initialDirectionDegrees = null,
+    bool startInTargetMode = false
   ) {
     this.InitializeComponent();
 
     this._coneHalfAngleDeg = coneHalfAngleDeg;
     this._directionHint = initialDirectionDegrees;
+    this._mode = startInTargetMode ? PickMode.Target : PickMode.Camera;
+
+    this.Title = this._mode == PickMode.Target ? "Set target on map" : "Set GPS location on map";
+    if (this.FindControl<TextBlock>("ModeHeader") is { } header)
+      header.Text = this._mode == PickMode.Target ? "Drop the target (subject) pin" : "Drop the camera position pin";
 
     this._cameraPinLayer = new MemoryLayer {
       Name = "Camera",
@@ -117,16 +123,15 @@ public partial class MapPickerWindow : Window {
 
   public Result? PickedResult { get; private set; }
 
-  public sealed record Result(GpsCoordinate Camera, GpsCoordinate? Target, double? BearingDegrees);
+  /// <summary>
+  /// Outcome of the picker. <see cref="Camera"/> and <see cref="Target"/> are
+  /// both nullable because each dialog instance edits exactly one of them
+  /// (chosen by the caller) and leaves the other untouched — so the field
+  /// that wasn't edited simply stays null when there was no initial value.
+  /// </summary>
+  public sealed record Result(GpsCoordinate? Camera, GpsCoordinate? Target, double? BearingDegrees);
 
   private enum PickMode { Camera, Target }
-
-  private void OnPickModeChanged(object? sender, RoutedEventArgs e) {
-    if (this.FindControl<RadioButton>("TargetModeRadio")?.IsChecked == true)
-      this._mode = PickMode.Target;
-    else
-      this._mode = PickMode.Camera;
-  }
 
   private void OnMapPointerPressed(object? sender, PointerPressedEventArgs e) {
     if (sender is not MapControl mc)
@@ -302,21 +307,20 @@ public partial class MapPickerWindow : Window {
   }
 
   private void UpdateOkState() {
+    // OK enables on whatever the dialog was opened to pick — the "other" pin
+    // stays whatever the caller handed in and isn't required.
     if (this.FindControl<Button>("OkButton") is { } ok)
-      ok.IsEnabled = this._cameraCoordinate is not null;
+      ok.IsEnabled = this._mode == PickMode.Camera
+        ? this._cameraCoordinate is not null
+        : this._targetCoordinate is not null;
   }
 
   private void OnOkClick(object? sender, RoutedEventArgs e) {
-    if (this._cameraCoordinate is not { } cam) {
-      this.Close(null);
-      return;
-    }
-
     double? bearing = null;
-    if (this._targetCoordinate is { } tgt)
+    if (this._cameraCoordinate is { } cam && this._targetCoordinate is { } tgt)
       bearing = GreatCircle.BearingDegrees(cam, tgt);
 
-    this.PickedResult = new Result(cam, this._targetCoordinate, bearing);
+    this.PickedResult = new Result(this._cameraCoordinate, this._targetCoordinate, bearing);
     this.Close(this.PickedResult);
   }
 
@@ -334,7 +338,7 @@ public partial class MapPickerWindow : Window {
   ) {
     var reference = camera ?? target;
     if (reference is { IsValid: true } c)
-      return (c.Longitude, c.Latitude, 20);
+      return (c.Longitude, c.Latitude, 2);  // street-level — user can nudge the pin immediately
 
     return (10.0, 50.0, 10000);
   }

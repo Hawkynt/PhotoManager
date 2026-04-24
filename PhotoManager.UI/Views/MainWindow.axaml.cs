@@ -51,6 +51,19 @@ public partial class MainWindow : Window {
   private Avalonia.Point? _dragStart;
   private Rectangle? _activeDragRect;
 
+  // Mini-map layers. Created once and reused so edits swap features instead
+  // of rebuilding the map on every refresh.
+  private Mapsui.Layers.MemoryLayer? _miniMapCameraLayer;
+  private Mapsui.Layers.MemoryLayer? _miniMapTargetLayer;
+  private Mapsui.Layers.MemoryLayer? _miniMapBeamLayer;
+
+  // Cache of what the region overlay last rendered so we can skip redundant
+  // layout-driven rebuilds. Critical guard: LayoutUpdated fires after our
+  // own Children.Clear/Add, which would otherwise cascade into an infinite
+  // loop and crash on images with regions.
+  private object? _lastRenderedMetadataRef;
+  private double _lastRenderBoundsSignature = double.NaN;
+
   public MainWindow() : this(null!, null!) { }
 
   public MainWindow(MainController controller, AboutController aboutController) {
@@ -73,30 +86,30 @@ public partial class MainWindow : Window {
       tree.ItemsSource = controller.SourceTreeRoots;
 
     this.InitializeEditorOptions();
+    this.InitializeMiniMap();
 
-    // Redraw the region overlay whenever either the Image's OR the Canvas's
-    // rendered bounds change. Both are siblings in the same Grid cell so
-    // they typically resize together, but subscribing to both makes the
-    // overlay immune to layout races during splitter drags.
-    var redrawOverlay = new Avalonia.Reactive.AnonymousObserver<Avalonia.Rect>(_ => {
+    // Redraw the region overlay whenever layout updates. LayoutUpdated is
+    // fired after every arrange pass on the associated control, so it
+    // reliably catches splitter drags / window resizes where BoundsProperty
+    // changes can fire unevenly between the Image and the Canvas.
+    void RedrawOverlay(object? _, EventArgs __) {
       if (this._currentMetadata is { } md)
         this.RenderRegionOverlay(md);
-    });
-
-    if (this.FindControl<Image>("PreviewImage") is { } preview) {
-      preview.GetObservable(Avalonia.Layout.Layoutable.BoundsProperty).Subscribe(redrawOverlay);
     }
 
+    if (this.FindControl<Image>("PreviewImage") is { } preview)
+      preview.LayoutUpdated += RedrawOverlay;
+
     // Hook up click-drag on the overlay canvas for manual region creation.
-    // The canvas is always hit-testable now so rectangles can receive clicks
-    // (used for the "click box → scroll thumbnail bar" behavior); draw-box
-    // mode is handled by checking _isDrawingRegion inside the handler.
+    // The canvas's Background="Transparent" (set in XAML) makes the empty
+    // image area hit-testable, which is what allows Draw-Box to receive
+    // presses at all.
     if (this.FindControl<Canvas>("RegionOverlay") is { } overlay) {
       overlay.IsHitTestVisible = true;
       overlay.PointerPressed += this.OnOverlayPointerPressed;
       overlay.PointerMoved += this.OnOverlayPointerMoved;
       overlay.PointerReleased += this.OnOverlayPointerReleased;
-      overlay.GetObservable(Avalonia.Layout.Layoutable.BoundsProperty).Subscribe(redrawOverlay);
+      overlay.LayoutUpdated += RedrawOverlay;
     }
 
     this.Opened += this.OnWindowOpened;
@@ -114,8 +127,191 @@ public partial class MainWindow : Window {
     }
   }
 
-  private async void OnWindowOpened(object? sender, EventArgs e)
-    => await this._controller.LoadSettingsAsync();
+  /// <summary>
+  /// Wire up the Edit-metadata mini-map: OSM tile layer + three feature
+  /// layers (camera pin, target pin, direction beam). Hook TextChanged on
+  /// the GPS / target / direction boxes so the map tracks edits live.
+  /// </summary>
+  private void InitializeMiniMap() {
+    if (this.FindControl<Mapsui.UI.Avalonia.MapControl>("MiniMapControl") is not { } mc)
+      return;
+
+    this._miniMapCameraLayer = new Mapsui.Layers.MemoryLayer {
+      Name = "Camera",
+      Style = new Mapsui.Styles.SymbolStyle {
+        SymbolScale = 0.6,
+        Fill = new Mapsui.Styles.Brush(Mapsui.Styles.Color.FromArgb(230, 46, 134, 222)),
+        Outline = new Mapsui.Styles.Pen(Mapsui.Styles.Color.White, 2)
+      }
+    };
+    this._miniMapTargetLayer = new Mapsui.Layers.MemoryLayer {
+      Name = "Target",
+      Style = new Mapsui.Styles.SymbolStyle {
+        SymbolScale = 0.55,
+        Fill = new Mapsui.Styles.Brush(Mapsui.Styles.Color.FromArgb(230, 231, 76, 60)),
+        Outline = new Mapsui.Styles.Pen(Mapsui.Styles.Color.White, 2)
+      }
+    };
+    this._miniMapBeamLayer = new Mapsui.Layers.MemoryLayer {
+      Name = "Beam",
+      Style = new Mapsui.Styles.VectorStyle {
+        Fill = new Mapsui.Styles.Brush(Mapsui.Styles.Color.FromArgb(60, 46, 134, 222)),
+        Line = new Mapsui.Styles.Pen(Mapsui.Styles.Color.FromArgb(220, 46, 134, 222), 2)
+      }
+    };
+
+    mc.Map.Layers.Add(Mapsui.Tiling.OpenStreetMap.CreateTileLayer("PhotoManager"));
+    mc.Map.Layers.Add(this._miniMapBeamLayer);
+    mc.Map.Layers.Add(this._miniMapCameraLayer);
+    mc.Map.Layers.Add(this._miniMapTargetLayer);
+
+    // Sensible initial view over Europe so the first render isn't a grey slab.
+    var (mx, my) = Mapsui.Projections.SphericalMercator.FromLonLat(10.0, 50.0);
+    mc.Map.Home = n => n.CenterOnAndZoomTo(new Mapsui.MPoint(mx, my), 10000);
+
+    foreach (var name in new[] { "GpsLatBox", "GpsLonBox", "TargetLatBox", "TargetLonBox", "DirectionBox" }) {
+      if (this.FindControl<TextBox>(name) is { } tb)
+        tb.TextChanged += (_, _) => this.RefreshMiniMap();
+    }
+  }
+
+  /// <summary>
+  /// Re-project the current text-box values onto the mini-map. Parses GPS,
+  /// Target, and Direction from the editable fields so live edits show up;
+  /// skips the pin/beam when values are missing or invalid. When
+  /// <paramref name="forceCenter"/> is true, recenters + zooms in to
+  /// street-level regardless of the current zoom — used after picker /
+  /// triangulation / geocode / elevation actions so the user sees the
+  /// effect of their choice. Idle text-edit refreshes leave the view alone
+  /// unless currently showing the wide default.
+  /// </summary>
+  private void RefreshMiniMap(bool forceCenter = false) {
+    if (this.FindControl<Mapsui.UI.Avalonia.MapControl>("MiniMapControl") is not { } mc)
+      return;
+    if (this._miniMapCameraLayer is null || this._miniMapTargetLayer is null || this._miniMapBeamLayer is null)
+      return;
+
+    var camera = TryParseCoordinate(this.FindControl<TextBox>("GpsLatBox")?.Text, this.FindControl<TextBox>("GpsLonBox")?.Text);
+    var target = TryParseCoordinate(this.FindControl<TextBox>("TargetLatBox")?.Text, this.FindControl<TextBox>("TargetLonBox")?.Text);
+    var direction = TryParseDouble(this.FindControl<TextBox>("DirectionBox")?.Text);
+
+    this._miniMapCameraLayer.Features = camera is { } cam
+      ? new[] { new Mapsui.Nts.GeometryFeature { Geometry = ToMercatorPoint(cam) } }
+      : Array.Empty<Mapsui.IFeature>();
+
+    this._miniMapTargetLayer.Features = target is { } tgt
+      ? new[] { new Mapsui.Nts.GeometryFeature { Geometry = ToMercatorPoint(tgt) } }
+      : Array.Empty<Mapsui.IFeature>();
+
+    this._miniMapBeamLayer.Features = BuildBeamFeatures(camera, target, direction);
+
+    // Target resolution of 2 is street-level detail so the user actually
+    // sees the pin landing on the right block, not just in the right city.
+    // Gate auto-center on "camera is set" when forceCenter=true — the
+    // caller explicitly requested a recenter after an action and the user
+    // only cares once the camera position is known.
+    var focus = camera ?? target;
+    var shouldCenter = forceCenter
+      ? camera is { IsValid: true }
+      : focus is { IsValid: true } && mc.Map.Navigator.Viewport.Resolution > 50;
+    if (shouldCenter && focus is { IsValid: true } f) {
+      var (mx, my) = Mapsui.Projections.SphericalMercator.FromLonLat(f.Longitude, f.Latitude);
+      mc.Map.Navigator.CenterOnAndZoomTo(new Mapsui.MPoint(mx, my), 2);
+    }
+
+    mc.RefreshGraphics();
+  }
+
+  private static Mapsui.IFeature[] BuildBeamFeatures(GpsCoordinate? camera, GpsCoordinate? target, double? directionDegrees) {
+    if (camera is not { IsValid: true } cam)
+      return Array.Empty<Mapsui.IFeature>();
+
+    double bearing;
+    double range;
+    GpsCoordinate endpoint;
+
+    if (target is { IsValid: true } tgt) {
+      bearing = PhotoManager.Core.Geocoding.GreatCircle.BearingDegrees(cam, tgt);
+      range = PhotoManager.Core.Geocoding.GreatCircle.DistanceMeters(cam, tgt);
+      endpoint = tgt;
+    } else if (directionDegrees is { } dd) {
+      bearing = dd;
+      range = 500;
+      endpoint = PhotoManager.Core.Geocoding.GreatCircle.Destination(cam, bearing, range);
+    } else {
+      return Array.Empty<Mapsui.IFeature>();
+    }
+
+    const double coneHalfAngleDeg = 22.5;
+    var leftEdge = PhotoManager.Core.Geocoding.GreatCircle.Destination(cam, bearing - coneHalfAngleDeg, range);
+    var rightEdge = PhotoManager.Core.Geocoding.GreatCircle.Destination(cam, bearing + coneHalfAngleDeg, range);
+
+    var camPt = ToMercatorCoord(cam);
+    var endPt = ToMercatorCoord(endpoint);
+    var leftPt = ToMercatorCoord(leftEdge);
+    var rightPt = ToMercatorCoord(rightEdge);
+
+    var cone = new NetTopologySuite.Geometries.Polygon(
+      new NetTopologySuite.Geometries.LinearRing(new[] { camPt, leftPt, endPt, rightPt, camPt })
+    );
+    var centreLine = new NetTopologySuite.Geometries.LineString(new[] { camPt, endPt });
+
+    return new Mapsui.IFeature[] {
+      new Mapsui.Nts.GeometryFeature { Geometry = cone },
+      new Mapsui.Nts.GeometryFeature { Geometry = centreLine }
+    };
+  }
+
+  private static NetTopologySuite.Geometries.Point ToMercatorPoint(GpsCoordinate c) {
+    var (mx, my) = Mapsui.Projections.SphericalMercator.FromLonLat(c.Longitude, c.Latitude);
+    return new NetTopologySuite.Geometries.Point(mx, my);
+  }
+
+  private static NetTopologySuite.Geometries.Coordinate ToMercatorCoord(GpsCoordinate c) {
+    var (mx, my) = Mapsui.Projections.SphericalMercator.FromLonLat(c.Longitude, c.Latitude);
+    return new NetTopologySuite.Geometries.Coordinate(mx, my);
+  }
+
+  private static GpsCoordinate? TryParseCoordinate(string? lat, string? lon) {
+    if (!TryParseDouble(lat).HasValue || !TryParseDouble(lon).HasValue)
+      return null;
+    var coord = new GpsCoordinate(TryParseDouble(lat)!.Value, TryParseDouble(lon)!.Value);
+    return coord.IsValid ? coord : null;
+  }
+
+  private static double? TryParseDouble(string? text) {
+    if (string.IsNullOrWhiteSpace(text))
+      return null;
+    // Accept both "." and "," as decimal separators so the boxes work for
+    // users with locale-localized inputs without hunting for the right key.
+    var normalized = text.Trim().Replace(',', '.');
+    return double.TryParse(normalized, System.Globalization.NumberStyles.Float,
+      System.Globalization.CultureInfo.InvariantCulture, out var value)
+      ? value
+      : null;
+  }
+
+  private async void OnWindowOpened(object? sender, EventArgs e) {
+    await this._controller.LoadSettingsAsync();
+
+    // Restoring a session with saved checked source paths should land the
+    // user on a populated grid — otherwise every launch requires a manual
+    // Scan click before anything else (face gallery, search, edit) works.
+    if (this._controller.GetCheckedSourcePaths().Count > 0)
+      await this.ScanCheckedSourcesAsync();
+  }
+
+  private async Task ScanCheckedSourcesAsync() {
+    var grid = this.FindControl<DataGrid>("FilesGrid");
+    if (grid != null)
+      grid.ItemsSource = null;
+
+    var items = await this._controller.ScanCheckedSourcesAsync();
+    this._currentFileItems = items;
+
+    if (grid != null)
+      grid.ItemsSource = items;
+  }
 
   private async void OnBrowseDestinationClick(object? sender, RoutedEventArgs e)
     => await this._controller.SelectDestinationDirectoryAsync();
@@ -141,16 +337,58 @@ public partial class MainWindow : Window {
     return node.IsRoot ? node : null;
   }
 
-  private async void OnScanClick(object? sender, RoutedEventArgs e) {
-    var grid = this.FindControl<DataGrid>("FilesGrid");
-    if (grid != null)
-      grid.ItemsSource = null;
+  private async void OnScanClick(object? sender, RoutedEventArgs e) => await this.ScanCheckedSourcesAsync();
 
-    var items = await this._controller.ScanCheckedSourcesAsync();
-    this._currentFileItems = items;
+  private void OnSearchTextChanged(object? sender, TextChangedEventArgs e) => this.ApplySearchFilter();
 
-    if (grid != null)
-      grid.ItemsSource = items;
+  private void OnClearSearchClick(object? sender, RoutedEventArgs e) {
+    if (this.FindControl<TextBox>("SearchBox") is { } box)
+      box.Text = string.Empty;
+    this.ApplySearchFilter();
+  }
+
+  /// <summary>
+  /// Re-filter the grid against the current search box contents. Space splits
+  /// the input into AND tokens; each token must be a substring of some row's
+  /// <see cref="FileItemModel.SearchIndex"/>. No disk IO — the index is built
+  /// in the background during scan.
+  /// </summary>
+  private void ApplySearchFilter() {
+    if (this.FindControl<DataGrid>("FilesGrid") is not { } grid)
+      return;
+    if (this._currentFileItems is null)
+      return;
+
+    var query = this.FindControl<TextBox>("SearchBox")?.Text;
+    var tokens = (query ?? string.Empty)
+      .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+      .Select(t => t.ToLowerInvariant())
+      .ToArray();
+
+    if (tokens.Length == 0) {
+      grid.ItemsSource = this._currentFileItems;
+      return;
+    }
+
+    var filtered = new ObservableCollection<FileItemModel>(
+      this._currentFileItems.Where(item => MatchesAllTokens(item, tokens))
+    );
+    grid.ItemsSource = filtered;
+  }
+
+  private static bool MatchesAllTokens(FileItemModel item, string[] tokensLower) {
+    // SearchIndex is already lower-cased by the indexer; combining it with
+    // the filename and source path defends against a search-before-index
+    // race — filter still hits something sensible even if the background
+    // metadata read hasn't finished yet.
+    var hay = item.SearchIndex;
+    if (hay.Length == 0)
+      hay = (item.FileName + " " + item.SourcePath).ToLowerInvariant();
+
+    foreach (var token in tokensLower)
+      if (!hay.Contains(token, StringComparison.Ordinal))
+        return false;
+    return true;
   }
 
   private async void OnRunClick(object? sender, RoutedEventArgs e) {
@@ -177,8 +415,15 @@ public partial class MainWindow : Window {
   }
 
   private async void OnOpenFaceGalleryClick(object? sender, RoutedEventArgs e) {
-    var seedFolder = this.SeedFolderFromTree();
-    var window = seedFolder == null ? new FaceGalleryWindow() : new FaceGalleryWindow(seedFolder);
+    // The face gallery always runs against the currently-scanned file list.
+    // Empty list = empty gallery with a hint to scan in the main window.
+    var scanned = this._currentFileItems?
+      .Select(i => i.FileInfo)
+      .Where(f => f != null && f.Exists)
+      .Cast<FileInfo>()
+      .ToList() ?? new List<FileInfo>();
+
+    var window = new FaceGalleryWindow(scanned);
     await window.ShowDialog(this);
   }
 
@@ -201,6 +446,16 @@ public partial class MainWindow : Window {
       return;
     }
 
+    await this.ShowPropertiesDialogAsync(target);
+  }
+
+  private async void OnShowPropertiesForCurrentFileClick(object? sender, RoutedEventArgs e) {
+    if (this._currentFile is not { Exists: true } file)
+      return;
+    await this.ShowPropertiesDialogAsync(file);
+  }
+
+  private async Task ShowPropertiesDialogAsync(FileInfo target) {
     var props = new PropertiesWindow(target);
     var saved = await props.ShowDialog<bool>(this);
     if (saved && this._currentFile is { } current
@@ -260,8 +515,18 @@ public partial class MainWindow : Window {
     .FirstOrDefault(p => !string.IsNullOrWhiteSpace(p) && Directory.Exists(p));
 
   private async void OnFileSelectionChanged(object? sender, SelectionChangedEventArgs e) {
-    if (sender is not DataGrid grid || grid.SelectedItem is not FileItemModel { FileInfo.Exists: true } fileItem)
+    if (sender is not DataGrid grid)
       return;
+
+    // Selection gone entirely (user cleared or filtered the grid): wipe the
+    // current-file state and flip the edit gate off so Save/Apply/Draw etc.
+    // can't fire against a stale _currentFile.
+    if (grid.SelectedItem is not FileItemModel { FileInfo.Exists: true } fileItem) {
+      this._currentFile = null;
+      this._currentMetadata = null;
+      this._controller.ViewModel.HasSelectedFile = false;
+      return;
+    }
 
     this._previewCts?.Cancel();
     this._previewCts = new CancellationTokenSource();
@@ -272,6 +537,10 @@ public partial class MainWindow : Window {
       return;
 
     await this.UpdateMetadataAsync(fileItem.FileInfo!, token);
+    if (token.IsCancellationRequested)
+      return;
+
+    this._controller.ViewModel.HasSelectedFile = true;
   }
 
   private async Task UpdatePreviewAsync(FileInfo file, CancellationToken token) {
@@ -287,33 +556,9 @@ public partial class MainWindow : Window {
   }
 
   private async Task UpdateMetadataAsync(FileInfo file, CancellationToken token) {
-    var list = this.FindControl<ListBox>("MetadataList");
-    if (list == null)
-      return;
-
     var fileToImport = new FileToImport(file);
 
-    DateTime? exifOriginal = null;
-    DateTime? exifModified = null;
-    DateTime? gps = null;
-    DateTime? filename = null;
-
-    try {
-      await foreach (var d in fileToImport.GetExifSubIfdDateAsync()) { exifOriginal = d; break; }
-      await foreach (var d in fileToImport.GetExifIfd0DateAsync())   { exifModified = d; break; }
-      await foreach (var d in fileToImport.GetGpsDateAsync())        { gps = d; break; }
-
-      var parser = new DateTimeParser();
-      var settings = new ImportSettings();
-      await foreach (var d in parser.ParseDateFromFileName(fileToImport, settings)) { filename = d; break; }
-    } catch {
-      // Ignore metadata extraction errors — the grid just shows "Not found"
-    }
-
-    if (token.IsCancellationRequested)
-      return;
-
-    var (_, winning) = await this._controller.GetMostLogicalDateWithSourceAsync(fileToImport);
+    var (winningDate, winningSource) = await this._controller.GetMostLogicalDateWithSourceAsync(fileToImport);
     if (token.IsCancellationRequested)
       return;
 
@@ -329,27 +574,7 @@ public partial class MainWindow : Window {
     this._currentFile = file;
     this._currentMetadata = md;
 
-    var rows = new List<MetadataRow> {
-      Row("File Name",     file.Name, DateTimeSource.Unknown, winning),
-      Row("File Path",     file.FullName, DateTimeSource.Unknown, winning),
-      Row("File Size",     FormatFileSize(file.Length), DateTimeSource.Unknown, winning),
-      Row("Date Created",  file.CreationTime.ToString(UiDateFormat), DateTimeSource.FileCreatedAt, winning),
-      Row("Date Modified", file.LastWriteTime.ToString(UiDateFormat), DateTimeSource.FileModifiedAt, winning),
-      Row("EXIF Original", exifOriginal?.ToString(UiDateFormat) ?? Strings.Metadata_NotFound, DateTimeSource.ExifSubIfd, winning),
-      Row("EXIF Modified", exifModified?.ToString(UiDateFormat) ?? Strings.Metadata_NotFound, DateTimeSource.ExifIfd0, winning),
-      Row("GPS Date",      gps?.ToString(UiDateFormat) ?? Strings.Metadata_NotFound, DateTimeSource.Gps, winning),
-      Row("Filename Date", filename?.ToString(UiDateFormat) ?? Strings.Metadata_NotDetected, DateTimeSource.FileName, winning),
-      new MetadataRow("GPS",         FormatGpsCoordinate(md.Gps),       false, false),
-      new MetadataRow("Rating",      md.Rating?.ToString() ?? "—",      false, false),
-      new MetadataRow("Color Label", md.ColorLabel ?? "—",              false, false),
-      new MetadataRow("Keywords",    md.Keywords.Count == 0 ? "—" : string.Join(", ", md.Keywords), false, false),
-      new MetadataRow("Title",       md.Title ?? "—",                   false, false),
-      new MetadataRow("Caption",     md.Caption ?? "—",                 false, false),
-    };
-
-    list.ItemsSource = rows;
-    this.ApplyMetadataTinting(list, rows);
-    this.SyncEditorFromMetadata(md);
+    this.SyncEditorFromMetadata(md, file, winningDate, winningSource);
     this.RefreshRegionsUi(md);
   }
 
@@ -410,9 +635,26 @@ public partial class MainWindow : Window {
     if (canvas == null)
       return;
 
-    canvas.Children.Clear();
+    // Don't rebuild the overlay while the user is mid-drag — Children.Clear
+    // would wipe the preview rectangle they're drawing.
+    if (this._isDrawingRegion && this._activeDragRect != null)
+      return;
+
     if (!this.TryGetImageRenderBounds(out var offsetX, out var offsetY, out var renderedW, out var renderedH))
       return;
+
+    // Signature-based early-out: if the bounds haven't changed AND we're
+    // rendering the exact same FullMetadata object we already drew, there's
+    // nothing to do. LayoutUpdated fires once per frame during layout
+    // passes and our own Children mutations re-trigger it, so without this
+    // guard we recurse into a stack overflow on images with regions.
+    var signature = offsetX * 31 + offsetY * 97 + renderedW * 179 + renderedH * 257 + md.Regions.Count * 1009;
+    if (ReferenceEquals(md, this._lastRenderedMetadataRef) && signature == this._lastRenderBoundsSignature)
+      return;
+    this._lastRenderedMetadataRef = md;
+    this._lastRenderBoundsSignature = signature;
+
+    canvas.Children.Clear();
 
     for (var regionIndex = 0; regionIndex < md.Regions.Count; regionIndex++) {
       var region = md.Regions[regionIndex];
@@ -482,9 +724,10 @@ public partial class MainWindow : Window {
 
     // If the click landed on one of the region rectangles (carries an int
     // region index in its Tag), scroll the thumbnail list to that region.
-    // This takes precedence over draw-mode — otherwise the user couldn't
-    // click an existing box while drawing new ones.
-    if (e.Source is Control { Tag: int regionIndex }) {
+    // Skipped while in draw-mode so the user can start a new box on top of
+    // an existing one — the toggle switches the gesture from "select" to
+    // "draw" and the existing box shouldn't hijack the press.
+    if (!this._isDrawingRegion && e.Source is Control { Tag: int regionIndex }) {
       this.ScrollRegionIntoView(regionIndex);
       return;
     }
@@ -568,11 +811,28 @@ public partial class MainWindow : Window {
     var nw = (float)Math.Clamp(w / renderedW, 0, 1 - nx);
     var nh = (float)Math.Clamp(h / renderedH, 0, 1 - ny);
 
+    // Always leave draw mode right away so the user isn't stuck capturing
+    // every mouse click while the category dialog is up.
+    if (this.FindControl<ToggleButton>("DrawRegionToggle") is { } toggle)
+      toggle.IsChecked = false;
+    canvas.Children.Remove(rect);
+
+    // Ask the user what's in the box. Cancelling drops the drawn region
+    // entirely — we commit nothing unless they pick a category.
+    var picker = new RegionCategoryPickerWindow();
+    var pick = await picker.ShowDialog<RegionCategoryPickerWindow.Result?>(this);
+    if (pick is null)
+      return;
+
+    // Label present + user confirmed the category → store as Accepted so
+    // the region contributes to keywords right away. Unlabelled boxes stay
+    // Proposed so they're visually distinct as "not tagged yet".
+    var status = string.IsNullOrWhiteSpace(pick.Label) ? RegionStatus.Proposed : RegionStatus.Accepted;
     var region = new TaggedRegion(
       new NormalizedBoundingBox(nx, ny, nw, nh),
-      RegionCategory.Other,
-      Label: null,
-      Status: RegionStatus.Proposed,
+      pick.Category,
+      Label: pick.Label,
+      Status: status,
       Source: TaggedRegion.ManualSource
     );
 
@@ -582,11 +842,6 @@ public partial class MainWindow : Window {
     } catch (Exception ex) {
       this._controller.ViewModel.StatusMessage = $"Draw box failed: {ex.Message}";
     }
-
-    // Leave draw mode off after each box so the user isn't stuck capturing
-    // every mouse click — they can toggle back on for the next one.
-    if (this.FindControl<ToggleButton>("DrawRegionToggle") is { } toggle)
-      toggle.IsChecked = false;
   }
 
   private void ResetDragState() {
@@ -735,11 +990,18 @@ public partial class MainWindow : Window {
     try {
       // Write the relabeled region (or null label if the user cleared it),
       // accepting the region at the same time — tagging implies confirmation.
-      var updated = md.Regions.Select((r, i) =>
-        i == index
-          ? r with { Label = result.Name, Status = RegionStatus.Accepted }
-          : r
-      ).ToArray();
+      // ALSO strip the new name from any OTHER Person region in this photo:
+      // one person can't appear twice on the same photo, so re-assigning
+      // a name moves it cleanly instead of spreading it.
+      var updated = md.Regions.Select((r, i) => {
+        if (i == index)
+          return r with { Label = result.Name, Status = RegionStatus.Accepted };
+        if (!string.IsNullOrWhiteSpace(result.Name)
+            && r.Category == RegionCategory.Person
+            && string.Equals(r.Label, result.Name, StringComparison.OrdinalIgnoreCase))
+          return r with { Label = null };
+        return r;
+      }).ToArray();
 
       // Promote the new label into dc:subject keywords so the photo turns up
       // in library search by that name/word too. Blank name (user cleared
@@ -787,46 +1049,6 @@ public partial class MainWindow : Window {
     await this.UpdateMetadataAsync(file, CancellationToken.None);
   }
 
-  private static string FormatGpsCoordinate(GpsCoordinate? gps) {
-    if (gps is not { } g)
-      return "—";
-
-    var inv = System.Globalization.CultureInfo.InvariantCulture;
-    return g.AltitudeMeters is { } alt
-      ? string.Create(inv, $"{g.Latitude:0.######}, {g.Longitude:0.######}, {alt:0.##}m")
-      : string.Create(inv, $"{g.Latitude:0.######}, {g.Longitude:0.######}");
-  }
-
-  private void ApplyMetadataTinting(ListBox list, IReadOnlyList<MetadataRow> rows) {
-    list.ContainerPrepared -= this.OnMetadataContainerPrepared;
-    list.ContainerPrepared += this.OnMetadataContainerPrepared;
-
-    for (var i = 0; i < list.ItemCount; i++) {
-      if (list.ContainerFromIndex(i) is ListBoxItem item)
-        ApplyRowClasses(item, rows[i]);
-    }
-  }
-
-  private void OnMetadataContainerPrepared(object? sender, ContainerPreparedEventArgs e) {
-    if (e.Container is ListBoxItem item && item.DataContext is MetadataRow row)
-      ApplyRowClasses(item, row);
-  }
-
-  private static void ApplyRowClasses(ListBoxItem item, MetadataRow row) {
-    item.Classes.Remove("winner");
-    item.Classes.Remove("missing");
-    if (row.IsWinner)
-      item.Classes.Add("winner");
-    else if (row.IsMissing)
-      item.Classes.Add("missing");
-  }
-
-  private static MetadataRow Row(string name, string value, DateTimeSource source, DateTimeSource winning) {
-    var missing = value == Strings.Metadata_NotFound || value == Strings.Metadata_NotDetected;
-    var isWinner = source != DateTimeSource.Unknown && source == winning;
-    return new MetadataRow(name, value, isWinner, missing);
-  }
-
   private static string FormatFileSize(long bytes) {
     string[] sizes = [Strings.FileSize_Bytes, Strings.FileSize_Kilobytes, Strings.FileSize_Megabytes, Strings.FileSize_Gigabytes];
     double len = bytes;
@@ -838,8 +1060,59 @@ public partial class MainWindow : Window {
     return $"{len:0.##} {sizes[order]}";
   }
 
-  private void SyncEditorFromMetadata(FullMetadata md) {
+  /// <summary>
+  /// Legacy overload used by Revert — rebuild the editor against the
+  /// currently-loaded file, preserving the date source/hint we already
+  /// computed last time. When there is no _currentFile we don't have a
+  /// useful source, so the hint field just clears.
+  /// </summary>
+  private void SyncEditorFromMetadata(FullMetadata md)
+    => this.SyncEditorFromMetadata(md, this._currentFile, winningDate: null, winningSource: DateTimeSource.Unknown);
+
+  private void SyncEditorFromMetadata(FullMetadata md, FileInfo? file, DateTime? winningDate, DateTimeSource winningSource) {
     var inv = System.Globalization.CultureInfo.InvariantCulture;
+
+    // Filename, path, size — read-only labels + the rename-on-save box at
+    // the top of the editor.
+    if (this.FindControl<TextBox>("FileNameBox") is { } nameBox)
+      nameBox.Text = file?.Name ?? string.Empty;
+    if (this.FindControl<TextBlock>("PathText") is { } pathText) {
+      pathText.Text = file?.FullName ?? string.Empty;
+      ToolTip.SetTip(pathText, file?.FullName);
+    }
+    if (this.FindControl<TextBlock>("SizeText") is { } sizeText)
+      sizeText.Text = file is { Exists: true } ? FormatFileSize(file.Length) : string.Empty;
+
+    // Filesystem timestamps. Local time is friendlier than UTC for the UI.
+    if (this.FindControl<TextBlock>("CreatedText") is { } createdText)
+      createdText.Text = file is { Exists: true } ? file.CreationTime.ToString(UiDateFormat) : string.Empty;
+    if (this.FindControl<TextBlock>("ModifiedText") is { } modifiedText)
+      modifiedText.Text = file is { Exists: true } ? file.LastWriteTime.ToString(UiDateFormat) : string.Empty;
+    if (this.FindControl<TextBlock>("AccessedText") is { } accessedText)
+      accessedText.Text = file is { Exists: true } ? file.LastAccessTime.ToString(UiDateFormat) : string.Empty;
+
+    // Capture date: XMP DateCreated wins; otherwise whichever source the
+    // importer selected as most logical for the file. The hint string tells
+    // the user where the picker's seed value came from so they know whether
+    // to overwrite it.
+    var captureDate = md.DateCreated ?? winningDate;
+    if (this.FindControl<DatePicker>("CaptureDatePicker") is { } dateBox)
+      dateBox.SelectedDate = captureDate is { } d ? new DateTimeOffset(DateTime.SpecifyKind(d.Date, DateTimeKind.Unspecified)) : null;
+    if (this.FindControl<TimePicker>("CaptureTimePicker") is { } timeBox)
+      timeBox.SelectedTime = captureDate is { } t ? t.TimeOfDay : null;
+    if (this.FindControl<TextBlock>("CaptureDateHint") is { } hint) {
+      hint.Text = md.DateCreated != null
+        ? "(from XMP)"
+        : winningSource switch {
+          DateTimeSource.ExifSubIfd => "(from EXIF Original)",
+          DateTimeSource.ExifIfd0 => "(from EXIF Modified)",
+          DateTimeSource.Gps => "(from GPS)",
+          DateTimeSource.FileName => "(from filename)",
+          DateTimeSource.FileModifiedAt => "(from file mtime)",
+          DateTimeSource.FileCreatedAt => "(from file ctime)",
+          _ => string.Empty,
+        };
+    }
 
     if (this.FindControl<TextBox>("GpsLatBox") is { } latBox)
       latBox.Text = md.Gps?.Latitude.ToString("0.######", inv) ?? string.Empty;
@@ -889,6 +1162,10 @@ public partial class MainWindow : Window {
       titleBox.Text = md.Title ?? string.Empty;
     if (this.FindControl<TextBox>("CaptionBox") is { } captionBox)
       captionBox.Text = md.Caption ?? string.Empty;
+    if (this.FindControl<TextBox>("CreatorBox") is { } creatorBox)
+      creatorBox.Text = md.Creator ?? string.Empty;
+    if (this.FindControl<TextBox>("CopyrightBox") is { } copyrightBox)
+      copyrightBox.Text = md.Copyright ?? string.Empty;
   }
 
   private void OnRevertMetadataClick(object? sender, RoutedEventArgs e) {
@@ -896,22 +1173,32 @@ public partial class MainWindow : Window {
       this.SyncEditorFromMetadata(md);
   }
 
-  private async void OnPickOnMapClick(object? sender, RoutedEventArgs e) {
+  private async void OnPickOnMapClick(object? sender, RoutedEventArgs e) => await this.OpenMapPickerAsync(startInTargetMode: false);
+
+  private async void OnPickTargetOnMapClick(object? sender, RoutedEventArgs e) => await this.OpenMapPickerAsync(startInTargetMode: true);
+
+  private async Task OpenMapPickerAsync(bool startInTargetMode) {
     var picker = new MapPickerWindow(
       this._currentMetadata?.Gps,
       this._currentMetadata?.TargetGps,
-      initialDirectionDegrees: this._currentMetadata?.ImageDirection?.Degrees);
+      initialDirectionDegrees: this._currentMetadata?.ImageDirection?.Degrees,
+      startInTargetMode: startInTargetMode);
     var result = await picker.ShowDialog<MapPickerWindow.Result?>(this);
     if (result is null)
       return;
 
     var inv = System.Globalization.CultureInfo.InvariantCulture;
-    if (this.FindControl<TextBox>("GpsLatBox") is { } lat)
-      lat.Text = result.Camera.Latitude.ToString("0.######", inv);
-    if (this.FindControl<TextBox>("GpsLonBox") is { } lon)
-      lon.Text = result.Camera.Longitude.ToString("0.######", inv);
-    if (result.Camera.AltitudeMeters is { } alt && this.FindControl<TextBox>("GpsAltBox") is { } altBox)
-      altBox.Text = alt.ToString("0.##", inv);
+
+    // Only the pin the picker was opened for actually changed. Null the
+    // other side — MainWindow must not stomp fields the picker didn't edit.
+    if (result.Camera is { } camera) {
+      if (this.FindControl<TextBox>("GpsLatBox") is { } lat)
+        lat.Text = camera.Latitude.ToString("0.######", inv);
+      if (this.FindControl<TextBox>("GpsLonBox") is { } lon)
+        lon.Text = camera.Longitude.ToString("0.######", inv);
+      if (camera.AltitudeMeters is { } alt && this.FindControl<TextBox>("GpsAltBox") is { } altBox)
+        altBox.Text = alt.ToString("0.##", inv);
+    }
 
     if (result.Target is { } target) {
       if (this.FindControl<TextBox>("TargetLatBox") is { } tgtLat)
@@ -922,6 +1209,8 @@ public partial class MainWindow : Window {
 
     if (result.BearingDegrees is { } bearing && this.FindControl<TextBox>("DirectionBox") is { } dirBox)
       dirBox.Text = bearing.ToString("0.##", inv);
+
+    this.RefreshMiniMap(forceCenter: true);
   }
 
   private async void OnTriangulateClick(object? sender, RoutedEventArgs e) {
@@ -971,6 +1260,8 @@ public partial class MainWindow : Window {
     this._controller.ViewModel.StatusMessage = result.ResectedCamera is not null
       ? $"Resected camera + heading {result.HeadingDegrees:0.##}°. Click Save Sidecar to commit."
       : $"Triangulated heading {result.HeadingDegrees:0.##}°. Click Save Sidecar to commit.";
+
+    this.RefreshMiniMap(forceCenter: true);
   }
 
   private async void OnAutoDetectClick(object? sender, RoutedEventArgs e) {
@@ -1003,6 +1294,20 @@ public partial class MainWindow : Window {
     if (this._currentFile is not { } file || !file.Exists)
       return;
 
+    // File rename first. If the target already exists we abort everything —
+    // silently overwriting someone else's file would be catastrophic, and
+    // the user should pick a new name rather than having Save randomly
+    // succeed/fail based on directory contents.
+    var newName = this.FindControl<TextBox>("FileNameBox")?.Text?.Trim();
+    if (!string.IsNullOrWhiteSpace(newName)
+        && !string.Equals(newName, file.Name, StringComparison.Ordinal)) {
+      var renamed = this.TryRenameCurrentFile(file, newName);
+      if (renamed is null)
+        return;
+      file = renamed;
+      this._currentFile = renamed;
+    }
+
     var edit = this.BuildEditFromUi();
     try {
       await this._metadataWriter.ApplyAsync(file, edit);
@@ -1012,6 +1317,53 @@ public partial class MainWindow : Window {
     } catch (Exception ex) {
       this._controller.ViewModel.StatusMessage = $"Failed to save: {ex.Message}";
     }
+  }
+
+  /// <summary>
+  /// Attempt to rename <paramref name="file"/> to <paramref name="newName"/>.
+  /// Refuses the operation if the new name contains invalid characters or a
+  /// file with that name already exists in the same directory — silent
+  /// overwrite is unacceptable. Returns the renamed FileInfo on success, or
+  /// null if the rename was rejected (status bar already updated with
+  /// explanation).
+  /// </summary>
+  private FileInfo? TryRenameCurrentFile(FileInfo file, string newName) {
+    if (newName.IndexOfAny(System.IO.Path.GetInvalidFileNameChars()) >= 0) {
+      this._controller.ViewModel.StatusMessage = $"Invalid characters in filename \"{newName}\".";
+      return null;
+    }
+
+    var directory = file.Directory;
+    if (directory is null) {
+      this._controller.ViewModel.StatusMessage = "Can't determine target directory for rename.";
+      return null;
+    }
+
+    var target = new FileInfo(System.IO.Path.Combine(directory.FullName, newName));
+    if (target.Exists && !string.Equals(target.FullName, file.FullName, StringComparison.OrdinalIgnoreCase)) {
+      this._controller.ViewModel.StatusMessage = $"\"{newName}\" already exists — pick a different name.";
+      return null;
+    }
+
+    try {
+      file.MoveTo(target.FullName);
+    } catch (Exception ex) {
+      this._controller.ViewModel.StatusMessage = $"Rename failed: {ex.Message}";
+      return null;
+    }
+
+    // Mirror the rename in the grid so the UI doesn't point at a ghost path.
+    if (this._currentFileItems is { } items) {
+      foreach (var item in items) {
+        if (item.FileInfo is { } fi && string.Equals(fi.FullName, file.FullName, StringComparison.OrdinalIgnoreCase)) {
+          item.FileInfo = target;
+          item.FileName = target.Name;
+          break;
+        }
+      }
+    }
+
+    return target;
   }
 
   private async void OnApplyToSelectionClick(object? sender, RoutedEventArgs e) {
@@ -1065,8 +1417,27 @@ public partial class MainWindow : Window {
       ColorLabel     = ReadLabelFromEditor(),
       Keywords       = ReadKeywordsFromEditor(),
       Title          = ReadTextFromEditor("TitleBox"),
-      Caption        = ReadTextFromEditor("CaptionBox")
+      Caption        = ReadTextFromEditor("CaptionBox"),
+      Creator        = ReadTextFromEditor("CreatorBox"),
+      Copyright      = ReadTextFromEditor("CopyrightBox"),
+      DateCreated    = this.ReadCaptureDateFromEditor()
     };
+  }
+
+  private Optional<DateTime?> ReadCaptureDateFromEditor() {
+    var dateBox = this.FindControl<DatePicker>("CaptureDatePicker");
+    var timeBox = this.FindControl<TimePicker>("CaptureTimePicker");
+    var date = dateBox?.SelectedDate;
+    var time = timeBox?.SelectedTime;
+
+    // No date set → don't touch the field (leave as-is in the sidecar).
+    if (date is null)
+      return default;
+
+    // Date without a time defaults to midnight — better than refusing to
+    // write because the time picker is empty.
+    var combined = date.Value.DateTime.Date + (time ?? TimeSpan.Zero);
+    return Optional<DateTime?>.Set(DateTime.SpecifyKind(combined, DateTimeKind.Unspecified));
   }
 
   private Optional<GpsCoordinate?> ReadGpsFromEditor(System.Globalization.CultureInfo inv) {
@@ -1142,6 +1513,7 @@ public partial class MainWindow : Window {
       if (this.FindControl<TextBox>("GpsAltBox") is { } altBox)
         altBox.Text = meters.Value.ToString("0.#", inv);
       this._controller.ViewModel.StatusMessage = $"Altitude: {meters.Value:0.#} m. Click Save to commit.";
+      this.RefreshMiniMap(forceCenter: true);
     } catch (Exception ex) {
       this._controller.ViewModel.StatusMessage = $"Altitude lookup failed: {ex.Message}";
     }
@@ -1175,6 +1547,7 @@ public partial class MainWindow : Window {
 
       this._controller.ViewModel.StatusMessage =
         $"Resolved: {string.Join(", ", new[] { result.Location, result.City, result.State, result.Country }.Where(s => !string.IsNullOrEmpty(s)))}";
+      this.RefreshMiniMap(forceCenter: true);
     } catch (Exception ex) {
       this._controller.ViewModel.StatusMessage = $"Resolve failed: {ex.Message}";
     }

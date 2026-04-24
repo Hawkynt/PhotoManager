@@ -26,6 +26,17 @@ public class FileItemModel : INotifyPropertyChanged {
   [Browsable(false)]
   public FileInfo? FileInfo { get; set; }
 
+  /// <summary>
+  /// Lower-cased concatenation of every searchable field for this file
+  /// (filename, folder, keywords, people, locations, title, caption…). The
+  /// MainWindow search bar does substring contains against this string, so
+  /// a single cheap string-scan per row powers the multi-token AND search
+  /// without re-reading XMP per keystroke. Populated by the background
+  /// metadata-reading pass after the scan.
+  /// </summary>
+  [Browsable(false)]
+  public string SearchIndex { get; set; } = string.Empty;
+
   public event PropertyChangedEventHandler? PropertyChanged;
 
   private void SetProperty<T>(ref T field, T value, [CallerMemberName] string? propertyName = null) {

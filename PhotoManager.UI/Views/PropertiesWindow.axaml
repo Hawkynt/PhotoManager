@@ -111,6 +111,24 @@
             <TimePicker Grid.Column="2" x:Name="TimeCreatedPicker" ClockIdentifier="24HourClock" />
             <Button Grid.Column="3" Content="Clear" Click="OnClearDateClick" Margin="8,0,0,0" />
           </Grid>
+
+          <Separator Margin="0,8" />
+
+          <TextBlock Text="Filesystem timestamps" FontWeight="SemiBold" />
+          <TextBlock Opacity="0.75" TextWrapping="Wrap"
+                     Text="Read-only. These come from the file on disk, not from EXIF/IPTC/XMP. PhotoManager's metadata writer preserves Modified so saves don't corrupt sort-by-date workflows." />
+          <Grid ColumnDefinitions="140,*">
+            <TextBlock Grid.Column="0" Text="File created:" VerticalAlignment="Center" />
+            <TextBlock Grid.Column="1" x:Name="FileCreatedText" Opacity="0.75" FontFamily="Consolas" FontSize="11" VerticalAlignment="Center" />
+          </Grid>
+          <Grid ColumnDefinitions="140,*">
+            <TextBlock Grid.Column="0" Text="File modified:" VerticalAlignment="Center" />
+            <TextBlock Grid.Column="1" x:Name="FileModifiedText" Opacity="0.75" FontFamily="Consolas" FontSize="11" VerticalAlignment="Center" />
+          </Grid>
+          <Grid ColumnDefinitions="140,*">
+            <TextBlock Grid.Column="0" Text="File accessed:" VerticalAlignment="Center" />
+            <TextBlock Grid.Column="1" x:Name="FileAccessedText" Opacity="0.75" FontFamily="Consolas" FontSize="11" VerticalAlignment="Center" />
+          </Grid>
         </StackPanel>
       </TabItem>
 

@@ -33,83 +33,56 @@ public sealed class FaceClusterIndex {
   }
 
   /// <summary>
-  /// Build an index from the scanned faces. Faces with embeddings get
-  /// clustered via cosine similarity + same-name seeding; faces without
-  /// embeddings become singleton clusters (one face each) so the gallery
-  /// still shows them — users without the ArcFace model still benefit from
-  /// thumbnails + tagging, just without automatic grouping. Named faces
-  /// get merged first so a photo tagged "Alice" pulls nearby unnamed
-  /// embedded crops into Alice's cluster.
+  /// Build an index from the scanned faces. Two modes:
+  /// <list type="bullet">
+  ///   <item><description><paramref name="groupByName"/> = true (default):
+  ///   faces that share the EXACT same non-blank name merge into one
+  ///   cluster. Unnamed faces stay as singletons. Two faces that happen to
+  ///   have similar embeddings but different names NEVER merge — the
+  ///   previous similarity-based path could silently join unrelated faces,
+  ///   especially when embeddings picked up shared lighting / pose from a
+  ///   single photo.</description></item>
+  ///   <item><description><paramref name="groupByName"/> = false: every
+  ///   face is its own cluster. Useful when the user wants to review each
+  ///   face individually before any auto-grouping.</description></item>
+  /// </list>
   /// </summary>
-  public static FaceClusterIndex Build(IReadOnlyList<ScannedFace> faces, float similarityThreshold = 0.55f) {
+  public static FaceClusterIndex Build(IReadOnlyList<ScannedFace> faces, bool groupByName = true) {
     ArgumentNullException.ThrowIfNull(faces);
 
-    var embedded = faces.Where(f => f.HasEmbedding).ToList();
-    var unembedded = faces.Where(f => !f.HasEmbedding).ToList();
+    if (faces.Count == 0)
+      return new FaceClusterIndex(0f, Array.Empty<FaceCluster>());
 
-    if (embedded.Count == 0 && unembedded.Count == 0)
-      return new FaceClusterIndex(similarityThreshold, Array.Empty<FaceCluster>());
+    if (!groupByName)
+      return new FaceClusterIndex(0f, BuildSingletons(faces));
 
-    if (embedded.Count == 0)
-      return new FaceClusterIndex(similarityThreshold, BuildSingletons(unembedded));
-
-    // Parent pointers for union-find; parent[i] == i means i is a root.
-    var parent = new int[embedded.Count];
-    for (var i = 0; i < parent.Length; i++)
-      parent[i] = i;
-
-    // Seed: force every pair of same-named faces into the same cluster.
-    // That way a user who's already named some photos carries the name
-    // onto every embedded face that lands in the same component.
-    for (var i = 0; i < embedded.Count; i++) {
-      if (string.IsNullOrWhiteSpace(embedded[i].Name))
+    // Name-keyed buckets. Unnamed faces bypass the bucket and become
+    // singletons so they surface one tile per face for explicit tagging.
+    var buckets = new Dictionary<string, List<ScannedFace>>(StringComparer.OrdinalIgnoreCase);
+    var unnamed = new List<ScannedFace>();
+    foreach (var face in faces) {
+      if (string.IsNullOrWhiteSpace(face.Name)) {
+        unnamed.Add(face);
         continue;
-      for (var j = i + 1; j < embedded.Count; j++) {
-        if (string.Equals(embedded[i].Name, embedded[j].Name, StringComparison.OrdinalIgnoreCase))
-          Union(parent, i, j);
       }
-    }
-
-    // Similarity-driven merges: O(n²), acceptable for a single library scan.
-    for (var i = 0; i < embedded.Count; i++) {
-      var a = embedded[i].Embedding!;
-      for (var j = i + 1; j < embedded.Count; j++) {
-        if (Find(parent, i) == Find(parent, j))
-          continue;
-        var b = embedded[j].Embedding!;
-        if (a.Length != b.Length)
-          continue;  // mismatched models — don't cluster across
-        var sim = PeopleRegistry.CosineSimilarity(a, b);
-        if (sim >= similarityThreshold)
-          Union(parent, i, j);
-      }
-    }
-
-    var groups = new Dictionary<int, List<ScannedFace>>();
-    for (var i = 0; i < embedded.Count; i++) {
-      var root = Find(parent, i);
-      if (!groups.TryGetValue(root, out var list)) {
+      if (!buckets.TryGetValue(face.Name!, out var list)) {
         list = new List<ScannedFace>();
-        groups[root] = list;
+        buckets[face.Name!] = list;
       }
-      list.Add(embedded[i]);
+      list.Add(face);
     }
 
-    // Stable ordering: named clusters first (alphabetical), then unknown
-    // clusters by descending size so the biggest blob to label floats up.
-    var clusters = groups
-      .Select(kv => (Members: (IReadOnlyList<ScannedFace>)kv.Value,
-                     Label: kv.Value.Select(m => m.Name).FirstOrDefault(n => !string.IsNullOrWhiteSpace(n))))
-      .OrderByDescending(t => !string.IsNullOrWhiteSpace(t.Label))
-      .ThenBy(t => t.Label, StringComparer.OrdinalIgnoreCase)
-      .ThenByDescending(t => t.Members.Count)
-      .Select((t, ix) => new FaceCluster(ix + 1, t.Members))
-      .ToList();
+    // Named clusters alphabetical (so "Alice" lands before "Bob"), then
+    // unnamed singletons appended. IDs are stable and sequential so the
+    // gallery displays deterministic order across scans.
+    var clusters = new List<FaceCluster>();
+    var nextId = 1;
+    foreach (var kv in buckets.OrderBy(b => b.Key, StringComparer.OrdinalIgnoreCase))
+      clusters.Add(new FaceCluster(nextId++, kv.Value));
+    foreach (var face in unnamed)
+      clusters.Add(new FaceCluster(nextId++, new[] { face }));
 
-    // Append singletons for faces without embeddings so they still appear.
-    clusters.AddRange(BuildSingletons(unembedded, startId: clusters.Count + 1));
-
-    return new FaceClusterIndex(similarityThreshold, clusters);
+    return new FaceClusterIndex(0f, clusters);
   }
 
   private static IReadOnlyList<FaceCluster> BuildSingletons(IReadOnlyList<ScannedFace> faces, int startId = 1) {

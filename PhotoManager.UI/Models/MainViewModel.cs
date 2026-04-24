@@ -15,6 +15,7 @@ public class MainViewModel : INotifyPropertyChanged {
   private DuplicateHandling _duplicateHandling = DuplicateHandling.Smart;
   private bool _recursive = true;
   private bool _preserveOriginals = false;
+  private bool _hasSelectedFile;
   private List<TreeViewPathData> _treeViewPaths = new();
 
   public string SourceDirectory {
@@ -60,6 +61,17 @@ public class MainViewModel : INotifyPropertyChanged {
   public bool PreserveOriginals {
     get => this._preserveOriginals;
     set => this.SetProperty(this.OnPropertyChanged, ref this._preserveOriginals, value);
+  }
+
+  /// <summary>
+  /// True iff a file row is currently selected in the grid and its metadata
+  /// has been loaded. Bound by edit-related buttons and inputs on the main
+  /// window so the user can't click Save or Triangulate when there's nothing
+  /// to save against.
+  /// </summary>
+  public bool HasSelectedFile {
+    get => this._hasSelectedFile;
+    set => this.SetProperty(this.OnPropertyChanged, ref this._hasSelectedFile, value);
   }
 
   public List<TreeViewPathData> TreeViewPaths {

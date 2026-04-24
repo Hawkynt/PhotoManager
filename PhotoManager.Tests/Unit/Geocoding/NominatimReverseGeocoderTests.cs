@@ -95,6 +95,58 @@ public class NominatimReverseGeocoderTests {
   }
 
   [Test]
+  public void Map_HouseNumberWithGermanCountry_AppendsNumberAfterStreet() {
+    var payload = new NominatimResponse {
+      Address = new NominatimAddress {
+        HouseNumber = "42",
+        Road = "Hauptstraße",
+        City = "Berlin",
+        Country = "Germany",
+        CountryCode = "de"
+      }
+    };
+
+    var result = Map(payload);
+    Assert.That(result.Location, Is.EqualTo("Hauptstraße 42"),
+      "European convention puts the house number after the street name");
+  }
+
+  [Test]
+  public void Map_HouseNumberWithUsCountry_PutsNumberFirst() {
+    var payload = new NominatimResponse {
+      Address = new NominatimAddress {
+        HouseNumber = "1600",
+        Road = "Pennsylvania Avenue NW",
+        City = "Washington",
+        Country = "United States",
+        CountryCode = "us"
+      }
+    };
+
+    var result = Map(payload);
+    Assert.That(result.Location, Is.EqualTo("1600 Pennsylvania Avenue NW"),
+      "US/UK convention puts the number before the street");
+  }
+
+  [Test]
+  public void Map_HouseNumberWithoutStreet_DropsTheNumber() {
+    // A number alone is meaningless, so if there's nothing to attach it to
+    // we drop it rather than surfacing "42" as a Location.
+    var payload = new NominatimResponse {
+      Address = new NominatimAddress {
+        HouseNumber = "42",
+        Suburb = null,
+        City = "Berlin",
+        Country = "Germany",
+        CountryCode = "de"
+      }
+    };
+
+    var result = Map(payload);
+    Assert.That(result.Location, Is.Null);
+  }
+
+  [Test]
   public void GeocodingResult_HasAny_FalseWhenEverythingNull() {
     var empty = new GeocodingResult(null, null, null, null, null);
     Assert.That(empty.HasAny, Is.False);

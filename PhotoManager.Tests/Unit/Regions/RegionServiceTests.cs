@@ -106,6 +106,33 @@ public class RegionServiceTests {
   }
 
   [Test]
+  public async Task Relabel_SameNameAsAnotherPersonRegion_StripsTheOther() {
+    var file = this.CreateFakeImage();
+
+    // Two Person regions, one already tagged "Alice".
+    await this._service.AppendAsync(file, new[] {
+      new TaggedRegion(new NormalizedBoundingBox(0.1f, 0.1f, 0.1f, 0.1f),
+        RegionCategory.Person, "Alice", RegionStatus.Accepted, TaggedRegion.FaceDetectorSource),
+      new TaggedRegion(new NormalizedBoundingBox(0.5f, 0.5f, 0.1f, 0.1f),
+        RegionCategory.Person, "Bob", RegionStatus.Accepted, TaggedRegion.FaceDetectorSource)
+    });
+
+    // User renames Bob → Alice. Invariant: only ONE Alice per photo, so
+    // the first one loses its name.
+    await this._service.RelabelAsync(file, 1, "Alice");
+
+    var md = await new MetadataReader().ReadAsync(file);
+    var aliceRegions = md.Regions.Where(r => r.Label == "Alice").ToList();
+    Assert.Multiple(() => {
+      Assert.That(aliceRegions, Has.Count.EqualTo(1),
+        "a person can't appear twice on the same photo — latest tag wins");
+      // The relabeled region (index 1) keeps the name, the old Alice is stripped.
+      Assert.That(md.Regions[1].Label, Is.EqualTo("Alice"));
+      Assert.That(md.Regions[0].Label, Is.Null.Or.Empty);
+    });
+  }
+
+  [Test]
   public async Task Relabel_PromotesNewLabelToKeywords() {
     var file = this.CreateFakeImage();
 

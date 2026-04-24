@@ -57,11 +57,41 @@ public sealed class LibraryFaceScanner {
       .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
     var option = recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
+    var candidates = root
+      .EnumerateFiles("*", option)
+      .Where(f => extensions.Contains(f.Extension));
+
+    return await this.ScanFilesInternalAsync(candidates, onlyEmbedded, progress, cancellationToken);
+  }
+
+  /// <summary>
+  /// Scans an explicit list of files rather than walking a folder — used when
+  /// the caller (e.g. the main window) already has a file grid populated and
+  /// wants to reuse that selection instead of re-enumerating the tree.
+  /// Extensions are NOT filtered here; the caller is expected to hand over
+  /// already-filtered files.
+  /// </summary>
+  public Task<IReadOnlyList<ScannedFace>> ScanFilesAsync(
+    IEnumerable<FileInfo> files,
+    bool onlyEmbedded = false,
+    IProgress<FileInfo>? progress = null,
+    CancellationToken cancellationToken = default
+  ) {
+    ArgumentNullException.ThrowIfNull(files);
+    return this.ScanFilesInternalAsync(files, onlyEmbedded, progress, cancellationToken);
+  }
+
+  private async Task<IReadOnlyList<ScannedFace>> ScanFilesInternalAsync(
+    IEnumerable<FileInfo> files,
+    bool onlyEmbedded,
+    IProgress<FileInfo>? progress,
+    CancellationToken cancellationToken
+  ) {
     var results = new List<ScannedFace>();
 
-    foreach (var file in root.EnumerateFiles("*", option)) {
+    foreach (var file in files) {
       cancellationToken.ThrowIfCancellationRequested();
-      if (!extensions.Contains(file.Extension))
+      if (!file.Exists)
         continue;
 
       progress?.Report(file);

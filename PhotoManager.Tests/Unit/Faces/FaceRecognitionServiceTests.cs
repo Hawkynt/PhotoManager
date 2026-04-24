@@ -251,6 +251,107 @@ public class FaceRecognitionServiceTests {
     }
   }
 
+  /// <summary>
+  /// Stub that returns a caller-supplied set of faces — used for the
+  /// anti-spread test below where a photo has several faces at once.
+  /// </summary>
+  private sealed class StubDetectorMulti : IFaceDetector {
+    private readonly IReadOnlyList<DetectedFace> _faces;
+    public StubDetectorMulti(params DetectedFace[] faces) { this._faces = faces; }
+    public Task<IReadOnlyList<DetectedFace>> DetectAsync(FileInfo imageFile, CancellationToken cancellationToken = default)
+      => Task.FromResult(this._faces);
+  }
+
+  /// <summary>
+  /// Bug regression: a registry with ONE reference for Alice used to spread
+  /// the "Alice" label to every face in a photo whose embedding landed above
+  /// the loose 0.55 cosine threshold. Now: only the best-matching face
+  /// claims the name; siblings stay unnamed (so the user can tag them
+  /// explicitly).
+  /// </summary>
+  [Test]
+  public async Task DetectAndWrite_MultipleFaces_NameLandsOnAtMostOneFace() {
+    var file = this.CreateFakeImage();
+    var writer = new XmpSidecarWriter();
+    var reader = new MetadataReader();
+
+    var registry = new PeopleRegistry(this._registryFile);
+    registry.AddReference("Alice", new[] { 1.0f, 0.0f, 0.0f });
+
+    // Three faces. Face0 is the TRUE Alice (cosine ~0.99). Face1/Face2 are
+    // "lookalikes" — their embeddings score above the old 0.55 threshold
+    // against Alice's reference but below Face0's similarity. Before the
+    // dedup fix, all three would have been labeled "Alice".
+    var detector = new StubDetectorMulti(
+      new DetectedFace(new FaceRegion(new NormalizedBoundingBox(0.10f, 0.10f, 0.10f, 0.10f)),
+        Confidence: 0.95f, Embedding: new[] { 0.99f, 0.1f, 0.0f }),
+      new DetectedFace(new FaceRegion(new NormalizedBoundingBox(0.30f, 0.10f, 0.10f, 0.10f)),
+        Confidence: 0.90f, Embedding: new[] { 0.78f, 0.62f, 0.0f }),
+      new DetectedFace(new FaceRegion(new NormalizedBoundingBox(0.50f, 0.10f, 0.10f, 0.10f)),
+        Confidence: 0.90f, Embedding: new[] { 0.75f, 0.66f, 0.0f })
+    );
+
+    var service = new FaceRecognitionService(detector, reader, writer, registry);
+    await service.DetectAndWriteAsync(file);
+
+    var final = await reader.ReadAsync(file);
+    var named = final.Regions
+      .Where(r => r.Category == RegionCategory.Person && !string.IsNullOrWhiteSpace(r.Label))
+      .ToList();
+
+    Assert.Multiple(() => {
+      Assert.That(named, Has.Count.EqualTo(1),
+        "only the best-matching face should claim the name — not all three");
+      Assert.That(named[0].Label, Is.EqualTo("Alice"));
+      // The other two landed as unnamed Proposed regions for the user to tag.
+      var personRegions = final.Regions.Where(r => r.Category == RegionCategory.Person).ToList();
+      Assert.That(personRegions, Has.Count.EqualTo(3));
+      Assert.That(personRegions.Count(r => string.IsNullOrWhiteSpace(r.Label)), Is.EqualTo(2));
+    });
+  }
+
+  /// <summary>
+  /// Sibling to the test above: a face that overlaps an existing tagged
+  /// region must not "steal" the name a greedy registry match would claim.
+  /// User tags always win; detection never re-uses that name within the
+  /// same photo.
+  /// </summary>
+  [Test]
+  public async Task DetectAndWrite_ExistingTaggedName_IsNeverReassigned() {
+    var file = this.CreateFakeImage();
+    var writer = new XmpSidecarWriter();
+    var reader = new MetadataReader();
+
+    var registry = new PeopleRegistry(this._registryFile);
+    registry.AddReference("Alice", new[] { 1.0f, 0.0f, 0.0f });
+
+    // Seed: a face already tagged as "Alice" by the user.
+    await writer.ApplyAsync(file, new MetadataEdit {
+      Regions = Optional<IReadOnlyList<TaggedRegion>>.Set(new[] {
+        new TaggedRegion(new NormalizedBoundingBox(0.10f, 0.10f, 0.10f, 0.10f),
+          RegionCategory.Person, Label: "Alice", Status: RegionStatus.Accepted)
+      })
+    });
+
+    // Detection finds a DIFFERENT face whose embedding also matches Alice
+    // in the registry (single reference, borderline similarity).
+    var detector = new StubDetectorMulti(
+      new DetectedFace(new FaceRegion(new NormalizedBoundingBox(0.60f, 0.60f, 0.10f, 0.10f)),
+        Confidence: 0.9f, Embedding: new[] { 0.9f, 0.3f, 0.0f })
+    );
+
+    var service = new FaceRecognitionService(detector, reader, writer, registry);
+    await service.DetectAndWriteAsync(file);
+
+    var final = await reader.ReadAsync(file);
+    var aliceRegions = final.Regions
+      .Where(r => r.Category == RegionCategory.Person && r.Label == "Alice")
+      .ToList();
+
+    Assert.That(aliceRegions, Has.Count.EqualTo(1),
+      "the pre-existing tagged Alice region must still be the ONLY Alice in the photo");
+  }
+
   [Test]
   public void TagFaceAsync_IndexOutOfRange_Throws() {
     var file = this.CreateFakeImage();

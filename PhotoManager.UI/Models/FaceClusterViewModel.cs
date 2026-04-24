@@ -69,6 +69,7 @@ public sealed class FaceClusterViewModel : INotifyPropertyChanged {
 
 public sealed class FaceMemberThumbnailViewModel : INotifyPropertyChanged {
   private Bitmap? _thumbnail;
+  private bool _isSelected;
 
   public FaceMemberThumbnailViewModel(ScannedFace face) {
     this.Face = face;
@@ -83,6 +84,16 @@ public sealed class FaceMemberThumbnailViewModel : INotifyPropertyChanged {
       if (ReferenceEquals(this._thumbnail, value))
         return;
       this._thumbnail = value;
+      this.OnPropertyChanged();
+    }
+  }
+
+  public bool IsSelected {
+    get => this._isSelected;
+    set {
+      if (this._isSelected == value)
+        return;
+      this._isSelected = value;
       this.OnPropertyChanged();
     }
   }

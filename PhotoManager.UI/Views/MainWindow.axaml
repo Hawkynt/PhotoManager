@@ -4,23 +4,13 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:vm="using:PhotoManager.UI.Models"
         xmlns:models="using:PhotoManager.UI.Models"
+        xmlns:mapsui="using:Mapsui.UI.Avalonia"
         mc:Ignorable="d" d:DesignWidth="1280" d:DesignHeight="800"
         x:Class="PhotoManager.UI.Views.MainWindow"
         x:DataType="vm:MainViewModel"
         Title="Photo Manager"
         Width="1280" Height="800"
         MinWidth="900" MinHeight="560">
-  <Window.Styles>
-    <Style Selector="ListBoxItem.winner">
-      <Setter Property="Background" Value="#CCF2CC" />
-      <Setter Property="Foreground" Value="#054905" />
-    </Style>
-    <Style Selector="ListBoxItem.missing">
-      <Setter Property="Background" Value="#FFD6CC" />
-      <Setter Property="Foreground" Value="#7a1a0e" />
-    </Style>
-  </Window.Styles>
-
   <Grid RowDefinitions="Auto,*,Auto,Auto">
     <Menu Grid.Row="0">
       <MenuItem Header="_File">
@@ -34,7 +24,8 @@
         <Separator />
         <MenuItem Header="Geotag from _GPX..." Click="OnOpenGpxClick" />
         <MenuItem Header="_Face gallery..." Click="OnOpenFaceGalleryClick" />
-        <MenuItem Header="_Develop image..." Click="OnOpenDevelopClick" InputGesture="Ctrl+E" />
+        <MenuItem Header="_Develop image..." Click="OnOpenDevelopClick" InputGesture="Ctrl+E"
+                  IsEnabled="{Binding HasSelectedFile}" />
         <Separator />
         <MenuItem Header="_Download detection models..." Click="OnOpenModelsDialogClick" />
       </MenuItem>
@@ -74,7 +65,7 @@
       <!-- Center pane: settings (top) + preview (middle) + file grid (bottom),
            with a sizable splitter between preview and grid so the user can
            spend most vertical space on whichever they care about. -->
-      <Grid Grid.Column="2" RowDefinitions="Auto,2*,4,*" Margin="0,8,0,0">
+      <Grid Grid.Column="2" RowDefinitions="Auto,2*,4,Auto,*" Margin="0,8,0,0">
         <StackPanel Grid.Row="0" Spacing="6" Margin="0,0,0,6">
           <Grid ColumnDefinitions="120,*,Auto">
             <TextBlock Grid.Column="0" Text="Output:" VerticalAlignment="Center" />
@@ -101,15 +92,32 @@
                    Stretch="Uniform"
                    StretchDirection="DownOnly"
                    DoubleTapped="OnPreviewDoubleTapped" />
+            <!-- Background="Transparent" is essential: without a brush the
+                 Canvas is only hittable on its rectangle children, so pointer
+                 presses on empty image area fall through to the Image (which
+                 doesn't handle them) and Draw-Box never starts. -->
             <Canvas x:Name="RegionOverlay"
-                    HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
+                    HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                    Background="Transparent" />
           </Grid>
         </Border>
 
         <GridSplitter Grid.Row="2" ResizeDirection="Rows" Background="Transparent"
                       HorizontalAlignment="Stretch" />
 
-        <DataGrid Grid.Row="3" x:Name="FilesGrid"
+        <!-- Live filter over the grid. Space-separates into AND tokens; each
+             token CONTAINS-matches against the file's index string (built in
+             the background after scan). -->
+        <Grid Grid.Row="3" ColumnDefinitions="Auto,*,Auto" Margin="0,4,0,4">
+          <TextBlock Grid.Column="0" Text="🔍" VerticalAlignment="Center" Margin="2,0,6,0" FontSize="14" />
+          <TextBox Grid.Column="1" x:Name="SearchBox" TextChanged="OnSearchTextChanged"
+                   Watermark="Filter: filename, folder, keyword, person, location… (space = AND)"
+                   ToolTip.Tip="Each space-separated token must match somewhere. 'alice berlin' finds photos tagged Alice in Berlin." />
+          <Button Grid.Column="2" Content="✕" Width="28" Margin="4,0,0,0" Click="OnClearSearchClick"
+                  ToolTip.Tip="Clear filter" />
+        </Grid>
+
+        <DataGrid Grid.Row="4" x:Name="FilesGrid"
                   AutoGenerateColumns="False"
                   CanUserResizeColumns="True"
                   GridLinesVisibility="Horizontal"
@@ -134,39 +142,18 @@
 
       <GridSplitter Grid.Column="3" Background="Transparent" />
 
-      <!-- Right pane: metadata / regions / edit, each in its own resizable
-           section. GridSplitters sit between so the user can grow whichever
-           section they're working in. Sections each start with a visible
-           header; there's no hidden-by-default accordion now — a collapsed
-           section = drag the splitter all the way down. -->
-      <Grid Grid.Column="4" Margin="0,8,8,0" RowDefinitions="*,4,*,4,*">
-        <Border Grid.Row="0" BorderBrush="#DDD" BorderThickness="1" CornerRadius="4">
-          <Grid RowDefinitions="Auto,*">
-            <TextBlock Grid.Row="0" Text="Metadata" Margin="8,6,8,2" FontWeight="SemiBold" />
-            <ListBox Grid.Row="1" x:Name="MetadataList" Padding="0" BorderThickness="0">
-              <ListBox.ItemContainerTheme>
-                <ControlTheme TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}">
-                  <Setter Property="Padding" Value="8,3" />
-                </ControlTheme>
-              </ListBox.ItemContainerTheme>
-              <ListBox.ItemTemplate>
-                <DataTemplate DataType="models:MetadataRow">
-                  <Grid ColumnDefinitions="140,*">
-                    <TextBlock Grid.Column="0" Text="{CompiledBinding Name}" FontWeight="SemiBold" />
-                    <TextBlock Grid.Column="1" Text="{CompiledBinding Value}" TextWrapping="Wrap" />
-                  </Grid>
-                </DataTemplate>
-              </ListBox.ItemTemplate>
-            </ListBox>
-          </Grid>
-        </Border>
-
-        <GridSplitter Grid.Row="1" ResizeDirection="Rows" HorizontalAlignment="Stretch" Background="Transparent" />
-
+      <!-- Right pane: metadata on top (everything editable), regions below.
+           The previous split across three boxes (read-only metadata / regions /
+           edit metadata) has been fused into two: "Metadata" now owns every
+           file attribute including file name, capture date, GPS, keywords etc;
+           "Regions" stays on its own so users can grow whichever section they
+           care about right now. -->
+      <Grid Grid.Column="4" Margin="0,8,8,0" RowDefinitions="2*,4,*">
         <Border Grid.Row="2" BorderBrush="#DDD" BorderThickness="1" CornerRadius="4">
           <Grid RowDefinitions="Auto,Auto,*">
             <TextBlock Grid.Row="0" Text="Regions" Margin="8,6,8,2" FontWeight="SemiBold" />
-            <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="6" Margin="4,0,4,4">
+            <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="6" Margin="4,0,4,4"
+                        IsEnabled="{Binding HasSelectedFile}">
               <Button Content="Propose (YOLO)" Click="OnProposeRegionsClick"
                       ToolTip.Tip="Run the object detector and add proposed regions to review" />
               <Button Content="Detect Faces" Click="OnDetectFacesClick"
@@ -220,30 +207,100 @@
           </Grid>
         </Border>
 
-        <GridSplitter Grid.Row="3" ResizeDirection="Rows" HorizontalAlignment="Stretch" Background="Transparent" />
+        <GridSplitter Grid.Row="1" ResizeDirection="Rows" HorizontalAlignment="Stretch" Background="Transparent" />
 
-        <Border Grid.Row="4" BorderBrush="#DDD" BorderThickness="1" CornerRadius="4">
-          <Grid RowDefinitions="Auto,*">
-            <TextBlock Grid.Row="0" Text="Edit metadata" Margin="8,6,8,2" FontWeight="SemiBold" />
-            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
-              <StackPanel Spacing="4" Margin="4">
-                <Grid ColumnDefinitions="80,*,*,Auto,Auto,Auto">
+        <Border Grid.Row="0" BorderBrush="#DDD" BorderThickness="1" CornerRadius="4">
+          <Grid RowDefinitions="Auto,Auto,*">
+            <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="8,6,8,2">
+              <TextBlock Grid.Column="0" Text="Metadata" FontWeight="SemiBold" />
+              <Button Grid.Column="1" Content="All properties…" Padding="6,2" FontSize="11"
+                      Click="OnShowPropertiesForCurrentFileClick"
+                      IsEnabled="{Binding HasSelectedFile}"
+                      ToolTip.Tip="Open the full Properties dialog — edit every IPTC / XMP / EXIF tag the library supports" />
+            </Grid>
+
+            <!-- Mini-map + stacked icon buttons. The map shows camera pin (blue),
+                 target pin (red) and a direction cone if the metadata provides
+                 any of those. Buttons are icon-only with tooltips for space. -->
+            <Grid Grid.Row="1" ColumnDefinitions="*,Auto" Margin="4,0,4,4" Height="180"
+                  IsEnabled="{Binding HasSelectedFile}">
+              <Border Grid.Column="0" BorderBrush="#DDD" BorderThickness="1" CornerRadius="2">
+                <mapsui:MapControl x:Name="MiniMapControl" />
+              </Border>
+              <StackPanel Grid.Column="1" Orientation="Vertical" Spacing="4" Margin="6,0,0,0">
+                <Button Content="📍" Width="32" Height="32" Padding="0" Click="OnPickOnMapClick"
+                        HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                        ToolTip.Tip="Set GPS location on a map" />
+                <Button Content="🎯" Width="32" Height="32" Padding="0" Click="OnPickTargetOnMapClick"
+                        HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                        ToolTip.Tip="Set target (subject) coordinates on a map" />
+                <Button Content="📐" Width="32" Height="32" Padding="0" Click="OnTriangulateClick"
+                        HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                        ToolTip.Tip="Triangulate from photo — click 2-3 landmarks to compute heading, target and (optionally) camera position" />
+                <Button Content="🏘" Width="32" Height="32" Padding="0" Click="OnResolveAddressClick"
+                        HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                        ToolTip.Tip="Retrieve location from GPS (reverse-geocode to city/state/country)" />
+                <Button Content="⛰" Width="32" Height="32" Padding="0" Click="OnFillElevationClick"
+                        HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                        ToolTip.Tip="Retrieve height (look up altitude from GPS)" />
+              </StackPanel>
+            </Grid>
+
+            <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
+              <StackPanel Spacing="4" Margin="4" IsEnabled="{Binding HasSelectedFile}">
+                <!-- File identity + read-only facts. Changing the Name box
+                     renames the file on Save (with collision protection). -->
+                <Grid ColumnDefinitions="80,*">
+                  <TextBlock Grid.Column="0" Text="Name:" VerticalAlignment="Center"
+                             ToolTip.Tip="Renames the file on disk when you click Save" />
+                  <TextBox Grid.Column="1" x:Name="FileNameBox" />
+                </Grid>
+                <Grid ColumnDefinitions="80,*">
+                  <TextBlock Grid.Column="0" Text="Path:" VerticalAlignment="Center" />
+                  <TextBlock Grid.Column="1" x:Name="PathText" FontFamily="Consolas" FontSize="11"
+                             Opacity="0.75" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                </Grid>
+                <Grid ColumnDefinitions="80,*">
+                  <TextBlock Grid.Column="0" Text="Size:" VerticalAlignment="Center" />
+                  <TextBlock Grid.Column="1" x:Name="SizeText" Opacity="0.75" VerticalAlignment="Center" />
+                </Grid>
+                <!-- Filesystem timestamps. Read-only here; editing them is
+                     uncommon and destructive (atime bumps on every read) so
+                     the Properties dialog handles any advanced edits. -->
+                <Grid ColumnDefinitions="80,*">
+                  <TextBlock Grid.Column="0" Text="Created:" VerticalAlignment="Center" />
+                  <TextBlock Grid.Column="1" x:Name="CreatedText" Opacity="0.75" FontSize="11" VerticalAlignment="Center" />
+                </Grid>
+                <Grid ColumnDefinitions="80,*">
+                  <TextBlock Grid.Column="0" Text="Modified:" VerticalAlignment="Center" />
+                  <TextBlock Grid.Column="1" x:Name="ModifiedText" Opacity="0.75" FontSize="11" VerticalAlignment="Center" />
+                </Grid>
+                <Grid ColumnDefinitions="80,*">
+                  <TextBlock Grid.Column="0" Text="Accessed:" VerticalAlignment="Center" />
+                  <TextBlock Grid.Column="1" x:Name="AccessedText" Opacity="0.75" FontSize="11" VerticalAlignment="Center" />
+                </Grid>
+                <!-- Capture date: XMP DateCreated / EXIF DateTimeOriginal.
+                     Picker = editable; hint shows which source seeded it so
+                     the user sees where it came from (EXIF vs filename vs
+                     file mtime). -->
+                <Grid ColumnDefinitions="80,Auto,Auto,*">
+                  <TextBlock Grid.Column="0" Text="Captured:" VerticalAlignment="Center"
+                             ToolTip.Tip="XMP photoshop:DateCreated / EXIF DateTimeOriginal" />
+                  <DatePicker Grid.Column="1" x:Name="CaptureDatePicker" Margin="0,0,4,0" />
+                  <TimePicker Grid.Column="2" x:Name="CaptureTimePicker" ClockIdentifier="24HourClock" />
+                  <TextBlock Grid.Column="3" x:Name="CaptureDateHint" VerticalAlignment="Center"
+                             FontSize="11" Opacity="0.6" Margin="8,0,0,0" />
+                </Grid>
+                <Grid ColumnDefinitions="80,*,*,Auto">
                   <TextBlock Grid.Column="0" Text="GPS:" VerticalAlignment="Center" />
                   <TextBox Grid.Column="1" x:Name="GpsLatBox" Watermark="Latitude" Margin="0,0,4,0" />
                   <TextBox Grid.Column="2" x:Name="GpsLonBox" Watermark="Longitude" Margin="0,0,4,0" />
                   <TextBox Grid.Column="3" x:Name="GpsAltBox" Watermark="Alt (m)" Width="80" />
-                  <Button Grid.Column="4" Content="🗺" Width="28" Margin="4,0,0,0" Click="OnPickOnMapClick"
-                          ToolTip.Tip="Pick these coordinates on a map" />
-                  <Button Grid.Column="5" Content="↑" Width="26" Margin="4,0,0,0" Click="OnFillElevationClick"
-                          ToolTip.Tip="Look up altitude from lat/lon via OpenTopoData" />
                 </Grid>
                 <Grid ColumnDefinitions="80,120,80,*">
                   <TextBlock Grid.Column="0" Text="Direction:" VerticalAlignment="Center" />
                   <TextBox Grid.Column="1" x:Name="DirectionBox" Watermark="0-360°" Margin="0,0,8,0" />
                   <CheckBox Grid.Column="2" x:Name="DirectionMagneticCheck" Content="Magnetic" />
-                  <Button Grid.Column="3" Content="Triangulate from photo..." Click="OnTriangulateClick"
-                          HorizontalAlignment="Right"
-                          ToolTip.Tip="Click 2-3 landmarks in the photo, pin each on a map; heading + target (+ camera for 3 points) are computed automatically" />
                 </Grid>
                 <Grid ColumnDefinitions="80,*,*">
                   <TextBlock Grid.Column="0" Text="Target:" VerticalAlignment="Center"
@@ -251,12 +308,10 @@
                   <TextBox Grid.Column="1" x:Name="TargetLatBox" Watermark="Target lat" Margin="0,0,4,0" />
                   <TextBox Grid.Column="2" x:Name="TargetLonBox" Watermark="Target lon" />
                 </Grid>
-                <Grid ColumnDefinitions="80,*,Auto">
+                <Grid ColumnDefinitions="80,*">
                   <TextBlock Grid.Column="0" Text="Location:" VerticalAlignment="Center"
                              ToolTip.Tip="Sub-location: neighborhood, venue, road (Iptc4xmpCore:Location)" />
                   <TextBox Grid.Column="1" x:Name="LocationBox" Watermark="e.g. Times Square" />
-                  <Button Grid.Column="2" Content="Resolve from GPS" Margin="4,0,0,0" Click="OnResolveAddressClick"
-                          ToolTip.Tip="Reverse-geocode the GPS coordinates via OpenStreetMap and fill blank location fields" />
                 </Grid>
                 <Grid ColumnDefinitions="80,*,80,*">
                   <TextBlock Grid.Column="0" Text="City:" VerticalAlignment="Center" />
@@ -288,6 +343,16 @@
                 <Grid ColumnDefinitions="80,*">
                   <TextBlock Grid.Column="0" Text="Caption:" VerticalAlignment="Center" />
                   <TextBox Grid.Column="1" x:Name="CaptionBox" AcceptsReturn="True" TextWrapping="Wrap" Height="48" />
+                </Grid>
+                <Grid ColumnDefinitions="80,*">
+                  <TextBlock Grid.Column="0" Text="Creator:" VerticalAlignment="Center"
+                             ToolTip.Tip="Photographer / author — dc:creator, IPTC By-line, EXIF Artist" />
+                  <TextBox Grid.Column="1" x:Name="CreatorBox" />
+                </Grid>
+                <Grid ColumnDefinitions="80,*">
+                  <TextBlock Grid.Column="0" Text="Copyright:" VerticalAlignment="Center"
+                             ToolTip.Tip="Copyright notice — dc:rights, IPTC Copyright, EXIF Copyright" />
+                  <TextBox Grid.Column="1" x:Name="CopyrightBox" Watermark="© 2026 Your Name" />
                 </Grid>
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="6" Margin="0,4,0,0">
                   <Button Content="Auto-Detect" Click="OnAutoDetectClick" />

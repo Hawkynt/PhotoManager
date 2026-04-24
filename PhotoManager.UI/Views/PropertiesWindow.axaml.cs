@@ -185,6 +185,15 @@ public partial class PropertiesWindow : Window {
         timePicker.SelectedTime = null;
     }
 
+    // Filesystem timestamps — read-only info alongside the capture-date picker.
+    const string ts = "yyyy-MM-dd HH:mm:ss";
+    if (this.FindControl<TextBlock>("FileCreatedText") is { } fc)
+      fc.Text = this._file.Exists ? this._file.CreationTime.ToString(ts, inv) : string.Empty;
+    if (this.FindControl<TextBlock>("FileModifiedText") is { } fm)
+      fm.Text = this._file.Exists ? this._file.LastWriteTime.ToString(ts, inv) : string.Empty;
+    if (this.FindControl<TextBlock>("FileAccessedText") is { } fa)
+      fa.Text = this._file.Exists ? this._file.LastAccessTime.ToString(ts, inv) : string.Empty;
+
     if (this.FindControl<TextBox>("LocationBox") is { } loc)    loc.Text = md.Location ?? string.Empty;
     if (this.FindControl<TextBox>("CityBox")     is { } city)   city.Text = md.City ?? string.Empty;
     if (this.FindControl<TextBox>("StateBox")    is { } st)     st.Text   = md.State ?? string.Empty;
@@ -340,8 +349,10 @@ public partial class PropertiesWindow : Window {
       return;
 
     var inv = CultureInfo.InvariantCulture;
-    if (this.FindControl<TextBox>("GpsLatBox") is { } lat) lat.Text = result.Camera.Latitude.ToString("0.######", inv);
-    if (this.FindControl<TextBox>("GpsLonBox") is { } lon) lon.Text = result.Camera.Longitude.ToString("0.######", inv);
+    if (result.Camera is { } camera) {
+      if (this.FindControl<TextBox>("GpsLatBox") is { } lat) lat.Text = camera.Latitude.ToString("0.######", inv);
+      if (this.FindControl<TextBox>("GpsLonBox") is { } lon) lon.Text = camera.Longitude.ToString("0.######", inv);
+    }
 
     if (includeTarget && result.Target is { } target) {
       if (this.FindControl<TextBox>("TargetLatBox") is { } tlat) tlat.Text = target.Latitude.ToString("0.######", inv);

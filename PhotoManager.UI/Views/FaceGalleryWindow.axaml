@@ -12,29 +12,35 @@
   <Grid RowDefinitions="Auto,Auto,*,Auto" Margin="12">
     <StackPanel Grid.Row="0" Spacing="4" Margin="0,0,0,8">
       <TextBlock Text="Face gallery" FontSize="16" FontWeight="SemiBold" />
-      <TextBlock x:Name="IntroText" Opacity="0.75" TextWrapping="Wrap"
-                 Text="Scan a folder to collect every tagged face. Photos tagged with embeddings (ArcFace/MobileFaceNet) get clustered into suggested groups — name a cluster to propagate the name onto every photo it contains. Merge clusters that actually belong to the same person; split later from the main window by relabeling a specific face." />
+      <TextBlock Opacity="0.75" TextWrapping="Wrap"
+                 Text="Every tagged face in your currently scanned library. Faces with embeddings (ArcFace/MobileFaceNet) can be grouped by name — name a cluster and it propagates to every photo it contains. Merge clusters that belong to the same person; double-click a tile to unmerge faces that don't." />
     </StackPanel>
 
-    <Grid Grid.Row="1" ColumnDefinitions="Auto,*,Auto,Auto,Auto" Margin="0,0,0,8">
-      <TextBlock Grid.Column="0" Text="Folder:" VerticalAlignment="Center" Margin="0,0,6,0" />
-      <TextBox Grid.Column="1" x:Name="FolderBox" Watermark="Path to library root" />
-      <Button Grid.Column="2" Content="Browse..." Margin="6,0,0,0" Click="OnBrowseClick" />
-      <Button Grid.Column="3" Content="Scan" Margin="6,0,0,0" Click="OnScanClick" FontWeight="Bold" />
-      <CheckBox Grid.Column="4" x:Name="RecursiveBox" Content="Recursive" IsChecked="True" Margin="12,0,0,0" VerticalAlignment="Center" />
+    <Grid Grid.Row="1" ColumnDefinitions="*,Auto" Margin="0,0,0,8">
+      <TextBlock Grid.Column="0" VerticalAlignment="Center" Opacity="0.75"
+                 Text="Using the main window's scanned file list." />
+      <CheckBox Grid.Column="1" x:Name="GroupByNameBox" Content="Group by name" IsChecked="True" VerticalAlignment="Center"
+                ToolTip.Tip="When checked, faces sharing the exact same name merge into one cluster; unnamed faces are kept separate. When unchecked, every face is its own tile."
+                Checked="OnGroupByNameChanged" Unchecked="OnGroupByNameChanged" />
     </Grid>
 
     <Border Grid.Row="2" BorderBrush="#DDD" BorderThickness="1" CornerRadius="4">
-      <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+      <!-- Disable horizontal scroll so the WrapPanel inherits the viewport's
+           width as its bound and wraps tiles onto new rows instead of
+           extending indefinitely to the right. Vertical scrollbar handles
+           overflow downward. -->
+      <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
         <ItemsControl x:Name="ClustersList" Padding="6">
           <ItemsControl.ItemsPanel>
             <ItemsPanelTemplate>
-              <WrapPanel />
+              <WrapPanel Orientation="Horizontal" />
             </ItemsPanelTemplate>
           </ItemsControl.ItemsPanel>
           <ItemsControl.ItemTemplate>
             <DataTemplate DataType="models:FaceClusterViewModel">
-              <Border Width="220" Margin="4" BorderBrush="#BBB" BorderThickness="1" CornerRadius="4" Background="White">
+              <Border Width="220" Margin="4" BorderBrush="#BBB" BorderThickness="1" CornerRadius="4" Background="White"
+                      DoubleTapped="OnClusterDoubleTapped" Tag="{CompiledBinding}"
+                      ToolTip.Tip="Double-click to inspect every face in this group and unmerge faces that don't belong.">
                 <StackPanel>
                   <Border Height="160" Background="#F7F7F7">
                     <Image Source="{CompiledBinding Thumbnail}" Stretch="Uniform" />

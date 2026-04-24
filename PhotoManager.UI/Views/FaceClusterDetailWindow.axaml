@@ -1,0 +1,55 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:models="using:PhotoManager.UI.Models"
+        mc:Ignorable="d" d:DesignWidth="900" d:DesignHeight="600"
+        x:Class="PhotoManager.UI.Views.FaceClusterDetailWindow"
+        Width="900" Height="600"
+        MinWidth="600" MinHeight="420"
+        WindowStartupLocation="CenterOwner"
+        Title="Cluster detail">
+  <Grid RowDefinitions="Auto,*,Auto" Margin="12">
+    <StackPanel Grid.Row="0" Spacing="4" Margin="0,0,0,8">
+      <TextBlock x:Name="HeaderText" FontSize="16" FontWeight="SemiBold" />
+      <TextBlock Opacity="0.75" TextWrapping="Wrap"
+                 Text="Every face that this cluster represents. Tick the faces that don't actually belong to the same person, then click 'Unmerge selected' to clear their name — they split back out into separate tiles in the gallery." />
+    </StackPanel>
+
+    <Border Grid.Row="1" BorderBrush="#DDD" BorderThickness="1" CornerRadius="4">
+      <!-- Same WrapPanel + disabled horizontal scroll trick as the main
+           gallery, so member thumbnails wrap onto new rows instead of
+           stretching horizontally forever. -->
+      <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+        <ItemsControl x:Name="MembersList" Padding="6">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+              <WrapPanel Orientation="Horizontal" />
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate DataType="models:FaceMemberThumbnailViewModel">
+              <Border Width="170" Margin="4" BorderBrush="#BBB" BorderThickness="1" CornerRadius="4" Background="White">
+                <StackPanel>
+                  <Border Height="140" Background="#F7F7F7">
+                    <Image Source="{CompiledBinding Thumbnail}" Stretch="Uniform" />
+                  </Border>
+                  <StackPanel Margin="8" Spacing="4">
+                    <TextBlock Text="{CompiledBinding FileName}" FontSize="11" TextTrimming="CharacterEllipsis" ToolTip.Tip="{CompiledBinding FileName}" />
+                    <CheckBox Content="unmerge" IsChecked="{CompiledBinding IsSelected, Mode=TwoWay}" FontSize="11" />
+                  </StackPanel>
+                </StackPanel>
+              </Border>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </ScrollViewer>
+    </Border>
+
+    <Grid Grid.Row="2" ColumnDefinitions="*,Auto,Auto" Margin="0,8,0,0">
+      <TextBlock Grid.Column="0" x:Name="StatusText" VerticalAlignment="Center" Opacity="0.75" />
+      <Button Grid.Column="1" Content="Unmerge selected" Click="OnUnmergeClick" />
+      <Button Grid.Column="2" Content="Close" Margin="6,0,0,0" Click="OnCloseClick" IsCancel="True" IsDefault="True" />
+    </Grid>
+  </Grid>
+</Window>
