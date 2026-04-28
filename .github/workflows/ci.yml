@@ -24,6 +24,19 @@ jobs:
         with:
           dotnet-version: '8.x'
 
+      # PhotoManager.Core has a sibling-repo ProjectReference to
+      # ..\..\CompressionWorkbench\FileFormat.JpegArchive\... so the runner
+      # needs that repo cloned next to the PhotoManager checkout. Default
+      # GITHUB_WORKSPACE is .../work/PhotoManager/PhotoManager, so cloning
+      # to ../CompressionWorkbench lands it at the path the csproj expects.
+      - name: Clone sibling CompressionWorkbench
+        shell: bash
+        run: git clone --depth=1 https://github.com/Hawkynt/CompressionWorkbench.git "$GITHUB_WORKSPACE/../CompressionWorkbench"
+
+      - name: Clone sibling PNGCrushCS (RAW readers)
+        shell: bash
+        run: git clone --depth=1 https://github.com/Hawkynt/PNGCrushCS.git "$GITHUB_WORKSPACE/../PNGCrushCS"
+
       - name: Stamp versions into csprojs
         shell: bash
         run: perl .github/workflows/scripts/version.pl --stamp
@@ -34,10 +47,8 @@ jobs:
       - name: Build
         run: dotnet build PhotoManager.sln --configuration Release --no-restore
 
-      # CLAUDE.md documents the known-failing two-digit-year parse test. Filter
-      # it out so CI reflects real regressions, not the pre-existing quirk.
       - name: Test
-        run: dotnet test PhotoManager.Tests/PhotoManager.Tests.csproj --configuration Release --no-build --filter "FullyQualifiedName!~ParseDateFromFileName_TwoDigitYear_CorrectCentury" --logger "trx;LogFileName=tests.trx"
+        run: dotnet test PhotoManager.Tests/PhotoManager.Tests.csproj --configuration Release --no-build --logger "trx;LogFileName=tests.trx"
 
       - uses: actions/upload-artifact@v4
         if: always()
@@ -55,11 +66,19 @@ jobs:
         with:
           dotnet-version: '8.x'
 
+      - name: Clone sibling CompressionWorkbench
+        shell: bash
+        run: git clone --depth=1 https://github.com/Hawkynt/CompressionWorkbench.git "$GITHUB_WORKSPACE/../CompressionWorkbench"
+
+      - name: Clone sibling PNGCrushCS (RAW readers)
+        shell: bash
+        run: git clone --depth=1 https://github.com/Hawkynt/PNGCrushCS.git "$GITHUB_WORKSPACE/../PNGCrushCS"
+
       - name: Stamp versions
         run: perl .github/workflows/scripts/version.pl --stamp
 
       - name: Test with coverage
-        run: dotnet test PhotoManager.Tests/PhotoManager.Tests.csproj --configuration Release --filter "FullyQualifiedName!~ParseDateFromFileName_TwoDigitYear_CorrectCentury" --collect:"XPlat Code Coverage" --results-directory ./coverage
+        run: dotnet test PhotoManager.Tests/PhotoManager.Tests.csproj --configuration Release --collect:"XPlat Code Coverage" --results-directory ./coverage
 
       - name: Generate coverage report
         run: |

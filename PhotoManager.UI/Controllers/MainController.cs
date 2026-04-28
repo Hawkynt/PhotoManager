@@ -340,11 +340,26 @@ public class MainController(
     viewModel.Recursive = settings.Recursive;
     viewModel.PreserveOriginals = settings.PreserveOriginals;
     viewModel.TreeViewPaths = settings.TreeViewPaths;
+    viewModel.SavedSearches = settings.SavedSearches;
     this.RebuildSourceTreeFromSettings();
   }
 
   public Task<ObservableCollection<FileItemModel>> ScanCheckedSourcesAsync()
     => this.ScanSourceFilesAsync(this.GetCheckedSourcePaths());
+
+  /// <summary>
+  /// Recursive scan of the destination directory. Treats the target as one
+  /// big "source" with recursive=true, so the rest of the pipeline reuses
+  /// the same indexing / target-path / filter logic.
+  /// </summary>
+  public Task<ObservableCollection<FileItemModel>> ScanTargetDirectoryAsync() {
+    var dest = (viewModel.DestinationDirectory ?? string.Empty).Trim();
+    if (string.IsNullOrEmpty(dest) || !Directory.Exists(dest)) {
+      viewModel.StatusMessage = "Destination directory not set or missing.";
+      return Task.FromResult(new ObservableCollection<FileItemModel>());
+    }
+    return this.ScanSourceFilesAsync(new[] { (new DirectoryInfo(dest), Recursive: true) });
+  }
 
   public async Task SaveSettingsAsync() {
     var settings = new UserSettingsData {
@@ -353,7 +368,8 @@ public class MainController(
       DuplicateHandling = viewModel.DuplicateHandling,
       Recursive = viewModel.Recursive,
       PreserveOriginals = viewModel.PreserveOriginals,
-      TreeViewPaths = viewModel.TreeViewPaths
+      TreeViewPaths = viewModel.TreeViewPaths,
+      SavedSearches = viewModel.SavedSearches
     };
 
     await settingsService.SaveAsync(settings);
@@ -585,6 +601,8 @@ public class MainController(
               try {
                 var metadata = await reader.ReadAsync(fi, ct);
                 itemWithIndex.Item.SearchIndex = BuildFullSearchIndex(itemWithIndex.Item, metadata);
+                itemWithIndex.Item.Rating = metadata.Rating;
+                itemWithIndex.Item.ColorLabel = metadata.ColorLabel;
               } catch {
                 // Bad metadata on one file shouldn't invalidate the whole index.
               }
@@ -615,6 +633,21 @@ public class MainController(
     } catch (Exception ex) {
       viewModel.StatusMessage = $"Target calculation error: {ex.Message}";
     }
+  }
+
+  /// <summary>
+  /// Re-snapshot a single FileItemModel against fresh metadata. Used after
+  /// any metadata write (Save / Apply / region accept / etc.) so the
+  /// in-memory rating + label + search index don't lag behind the file on
+  /// disk — otherwise rating chips and the search bar would still see the
+  /// pre-edit state.
+  /// </summary>
+  public void RefreshFileIndex(FileItemModel item, FullMetadata metadata) {
+    if (item == null)
+      return;
+    item.SearchIndex = BuildFullSearchIndex(item, metadata);
+    item.Rating = metadata.Rating;
+    item.ColorLabel = metadata.ColorLabel;
   }
 
   /// <summary>

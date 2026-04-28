@@ -37,6 +37,14 @@ public class FileItemModel : INotifyPropertyChanged {
   [Browsable(false)]
   public string SearchIndex { get; set; } = string.Empty;
 
+  /// <summary>XMP rating in the range -1 (rejected) … 5 (best). Null = unrated. Populated alongside SearchIndex.</summary>
+  [Browsable(false)]
+  public int? Rating { get; set; }
+
+  /// <summary>Adobe-style color label ("Red", "Yellow", "Green", "Blue", "Purple", or null).</summary>
+  [Browsable(false)]
+  public string? ColorLabel { get; set; }
+
   public event PropertyChangedEventHandler? PropertyChanged;
 
   private void SetProperty<T>(ref T field, T value, [CallerMemberName] string? propertyName = null) {

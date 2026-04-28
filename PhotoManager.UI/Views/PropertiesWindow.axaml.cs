@@ -2,8 +2,10 @@ using System.Globalization;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using PhotoManager.Core.Geocoding;
 using PhotoManager.Core.Metadata;
+using PhotoManager.UI.Services;
 
 namespace PhotoManager.UI.Views;
 
@@ -23,6 +25,8 @@ public partial class PropertiesWindow : Window {
   private DispatcherTimer? _gpsLookupTimer;
   private (double Lat, double Lon)? _lastLookedUp;
   private bool _suppressGpsLookup;
+  private readonly DirtyTracker _dirtyTracker = new();
+  private bool _dirtyRegistered;
 
   public PropertiesWindow() {
     this.InitializeComponent();
@@ -157,6 +161,61 @@ public partial class PropertiesWindow : Window {
     } finally {
       this._suppressGpsLookup = false;
     }
+
+    // Snapshot the freshly-loaded values as the clean baseline so any
+    // subsequent user edit paints light-blue until Save / Revert.
+    this.EnsureDirtyTrackerRegistered();
+    this._dirtyTracker.SetClean();
+  }
+
+  private void EnsureDirtyTrackerRegistered() {
+    if (this._dirtyRegistered)
+      return;
+    this._dirtyRegistered = true;
+
+    // Listing every named input explicitly is tedious but reliable across
+    // tab-selection states (visual-tree traversal would miss controls in
+    // unrealized tabs).
+    foreach (var name in new[] {
+      "TitleBox", "HeadlineBox", "CaptionBox", "KeywordsBox",
+      "CreatorXmpBox", "CreatorIptcBox", "CreditBox", "SourceBox",
+      "CopyrightXmpBox", "CopyrightIptcBox", "RightsUsageBox", "InstructionsBox",
+      "AltTextBox", "ExtendedDescBox", "DescriptionWriterBox",
+      "CreatorJobTitleBox", "ContactAddressBox", "ContactCityBox", "ContactStateBox",
+      "ContactPostalBox", "ContactCountryBox", "ContactPhoneBox", "ContactEmailBox", "ContactWebsiteBox",
+      "LocationBox", "CityBox", "StateBox", "CountryBox", "CountryCodeBox",
+      "GpsLatBox", "GpsLonBox", "GpsAltBox",
+      "WorldRegionCreatedBox", "LocationCreatedIdBox",
+      "LocShownSublocationBox", "LocShownCityBox", "LocShownStateBox",
+      "LocShownCountryBox", "LocShownCountryCodeBox", "LocShownWorldRegionBox",
+      "LocShownIdBox", "LocShownLatBox", "LocShownLonBox",
+      "DirectionBox", "TargetLatBox", "TargetLonBox",
+      "PersonsShownBox", "EventBox", "EventIdBox",
+      "ModelReleaseIdBox", "PropertyReleaseIdBox",
+      "LicensorNameBox", "LicensorIdBox",
+      "ImageSupplierNameBox", "ImageSupplierIdBox", "SupplierImageIdBox",
+      "CopyrightOwnerNameBox", "CopyrightOwnerIdBox",
+      "ArtworkTitleBox", "ArtworkCreatorBox", "ArtworkDateCreatedBox",
+      "ArtworkSourceBox", "ArtworkCopyrightBox",
+      "ProductNameBox", "ProductGtinBox", "ProductDescriptionBox",
+      "JobIdentifierBox", "WebStatementBox", "IptcRatingBox", "GenreBox",
+    }) {
+      if (this.FindControl<TextBox>(name) is { } tb)
+        this._dirtyTracker.Track(tb);
+    }
+
+    foreach (var name in new[] { "RatingCombo", "LabelCombo", "ModelReleaseStatusCombo",
+                                 "PropertyReleaseStatusCombo", "DataMiningCombo", "DigitalSourceCombo" }) {
+      if (this.FindControl<ComboBox>(name) is { } cb)
+        this._dirtyTracker.Track(cb);
+    }
+
+    if (this.FindControl<CheckBox>("DirectionMagneticCheck") is { } magCheck)
+      this._dirtyTracker.Track(magCheck);
+    if (this.FindControl<DatePicker>("DateCreatedPicker") is { } dp)
+      this._dirtyTracker.Track(dp);
+    if (this.FindControl<TimePicker>("TimeCreatedPicker") is { } tp)
+      this._dirtyTracker.Track(tp);
   }
 
   private void SyncFieldsFromMetadata(FullMetadata md) {
@@ -166,10 +225,15 @@ public partial class PropertiesWindow : Window {
     if (this.FindControl<TextBox>("HeadlineBox")     is { } h)   h.Text   = md.Headline ?? string.Empty;
     if (this.FindControl<TextBox>("CaptionBox")      is { } cap) cap.Text = md.Caption ?? string.Empty;
     if (this.FindControl<TextBox>("KeywordsBox")     is { } kw)  kw.Text  = md.Keywords.Count == 0 ? string.Empty : string.Join(", ", md.Keywords);
-    if (this.FindControl<TextBox>("CreatorBox")      is { } cr)  cr.Text  = md.Creator ?? string.Empty;
+    // Per-source for Creator / Copyright: show each container's actual
+    // value. Fall back to the unified value when a container hasn't been
+    // populated yet (common on fresh files).
+    if (this.FindControl<TextBox>("CreatorXmpBox")   is { } crx) crx.Text = md.CreatorXmp   ?? md.Creator   ?? string.Empty;
+    if (this.FindControl<TextBox>("CreatorIptcBox")  is { } cri) cri.Text = md.CreatorIptc  ?? md.Creator   ?? string.Empty;
     if (this.FindControl<TextBox>("CreditBox")       is { } cd)  cd.Text  = md.Credit ?? string.Empty;
     if (this.FindControl<TextBox>("SourceBox")       is { } sr)  sr.Text  = md.Source ?? string.Empty;
-    if (this.FindControl<TextBox>("CopyrightBox")    is { } cp)  cp.Text  = md.Copyright ?? string.Empty;
+    if (this.FindControl<TextBox>("CopyrightXmpBox") is { } cpx) cpx.Text = md.CopyrightXmp  ?? md.Copyright ?? string.Empty;
+    if (this.FindControl<TextBox>("CopyrightIptcBox") is { } cpi) cpi.Text = md.CopyrightIptc ?? md.Copyright ?? string.Empty;
     if (this.FindControl<TextBox>("RightsUsageBox")  is { } ru)  ru.Text  = md.RightsUsage ?? string.Empty;
     if (this.FindControl<TextBox>("InstructionsBox") is { } ins) ins.Text = md.Instructions ?? string.Empty;
 
@@ -332,7 +396,12 @@ public partial class PropertiesWindow : Window {
   }
 
   private void OnCancelClick(object? sender, RoutedEventArgs e) => this.Close(false);
-  private void OnRevertClick(object? sender, RoutedEventArgs e) => this.SyncFieldsFromMetadata(this._loaded);
+
+  private void OnRevertClick(object? sender, RoutedEventArgs e) {
+    this.SyncFieldsFromMetadata(this._loaded);
+    // Values are back to the loaded state; drop any dirty highlighting.
+    this._dirtyTracker.SetClean();
+  }
 
   private async void OnPickCameraOnMapClick(object? sender, RoutedEventArgs e)
     => await this.LaunchMapPickerAsync(includeTarget: false);
@@ -549,8 +618,13 @@ public partial class PropertiesWindow : Window {
       Keywords     = ReadKeywords(),
       Title        = ReadText("TitleBox"),
       Caption      = ReadText("CaptionBox"),
-      Creator      = ReadText("CreatorBox"),
-      Copyright    = ReadText("CopyrightBox"),
+      // Per-source: each box writes its own container. The unified Creator
+      // / Copyright edits stay unset here so they don't overwrite the
+      // per-source intent.
+      CreatorXmp    = ReadText("CreatorXmpBox"),
+      CreatorIptc   = ReadText("CreatorIptcBox"),
+      CopyrightXmp  = ReadText("CopyrightXmpBox"),
+      CopyrightIptc = ReadText("CopyrightIptcBox"),
       Headline     = ReadText("HeadlineBox"),
       Credit       = ReadText("CreditBox"),
       Source       = ReadText("SourceBox"),

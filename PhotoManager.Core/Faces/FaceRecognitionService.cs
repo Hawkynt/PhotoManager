@@ -39,12 +39,49 @@ public sealed class FaceRecognitionService {
     this._iouMergeThreshold = iouMergeThreshold;
   }
 
+  /// <summary>
+  /// Outcome of a face-detection pass that hasn't been written to disk yet.
+  /// Lets callers preview the merged region/keyword set before committing
+  /// (e.g. defer the file write to the editor's Save button).
+  /// </summary>
+  public sealed record DetectionResult(
+    IReadOnlyList<TaggedRegion> Regions,
+    IReadOnlyList<string> Keywords,
+    IReadOnlyList<FaceRegion> Faces);
+
+  /// <summary>
+  /// Detect + reconcile + name-assign without touching the file. Returns
+  /// the merged regions + keywords ready to feed into a MetadataEdit. Use
+  /// <see cref="DetectAndWriteAsync"/> when you do want the file written
+  /// straight away.
+  /// </summary>
+  public async Task<DetectionResult> DetectAsync(
+    FileInfo imageFile,
+    CancellationToken cancellationToken = default
+  ) {
+    ArgumentNullException.ThrowIfNull(imageFile);
+    return await this.ComputeMergedAsync(imageFile, cancellationToken);
+  }
+
   public async Task<IReadOnlyList<FaceRegion>> DetectAndWriteAsync(
     FileInfo imageFile,
     CancellationToken cancellationToken = default
   ) {
     ArgumentNullException.ThrowIfNull(imageFile);
+    var result = await this.ComputeMergedAsync(imageFile, cancellationToken);
 
+    await this._writer.ApplyAsync(imageFile, new MetadataEdit {
+      Regions = Optional<IReadOnlyList<TaggedRegion>>.Set(result.Regions),
+      Keywords = Optional<IReadOnlyList<string>>.Set(result.Keywords)
+    }, cancellationToken);
+
+    return result.Faces;
+  }
+
+  private async Task<DetectionResult> ComputeMergedAsync(
+    FileInfo imageFile,
+    CancellationToken cancellationToken
+  ) {
     var existing = await this._reader.ReadAsync(imageFile, cancellationToken);
     var detected = await this._detector.DetectAsync(imageFile, cancellationToken);
 
@@ -173,15 +210,12 @@ public sealed class FaceRecognitionService {
 
     var mergedKeywords = DetectionService.MergeKeywords(existing.Keywords, acceptedPersonLabels);
 
-    await this._writer.ApplyAsync(imageFile, new MetadataEdit {
-      Regions = Optional<IReadOnlyList<TaggedRegion>>.Set(regions.ToArray()),
-      Keywords = Optional<IReadOnlyList<string>>.Set(mergedKeywords)
-    }, cancellationToken);
-
-    return regions
+    var faces = regions
       .Where(r => r.Category == RegionCategory.Person)
       .Select(r => new FaceRegion(r.Box, r.Label))
       .ToList();
+
+    return new DetectionResult(regions.ToArray(), mergedKeywords, faces);
   }
 
   /// <summary>

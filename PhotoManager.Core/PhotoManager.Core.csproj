@@ -28,11 +28,15 @@
     <PackageReference Include="SixLabors.ImageSharp" Version="3.1.11" />
   </ItemGroup>
 
-  <!-- Cross-workspace reference to the shared JPEG metadata library. Works
-       because both repos live side-by-side under the same parent directory.
-       Break if the layout moves. -->
+  <!-- Cross-workspace references to the shared format libraries. Both
+       repos live side-by-side under the same parent directory; layout
+       moves break this. CompressionWorkbench supplies the JPEG metadata
+       surgery; PNGCrushCS adds RAW container readers (CR2/NEF/ARW/...
+       and DNG) that feed the develop pipeline. -->
   <ItemGroup>
     <ProjectReference Include="..\..\CompressionWorkbench\FileFormat.JpegArchive\FileFormat.JpegArchive.csproj" />
+    <ProjectReference Include="..\..\PNGCrushCS\FileFormat.CameraRaw\FileFormat.CameraRaw.csproj" />
+    <ProjectReference Include="..\..\PNGCrushCS\FileFormat.Dng\FileFormat.Dng.csproj" />
   </ItemGroup>
 
   <ItemGroup>

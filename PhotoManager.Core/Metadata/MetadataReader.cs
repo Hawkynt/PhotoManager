@@ -79,6 +79,10 @@ public sealed class MetadataReader : IMetadataReader {
       Keywords     = baseState.Keywords.Count > 0 ? baseState.Keywords : (iptc.Keywords ?? Array.Empty<string>()),
       Creator            = baseState.Creator            ?? iptc.ByLine,
       Copyright          = baseState.Copyright          ?? iptc.CopyrightNotice,
+      // Per-source variants: track the IPTC value distinctly so Properties
+      // can show / edit XMP and IPTC separately even when they disagree.
+      CreatorIptc        = iptc.ByLine,
+      CopyrightIptc      = iptc.CopyrightNotice,
       Headline           = baseState.Headline           ?? iptc.Headline,
       Credit             = baseState.Credit             ?? iptc.Credit,
       Source             = baseState.Source             ?? iptc.Source,
@@ -140,6 +144,12 @@ public sealed class MetadataReader : IMetadataReader {
     Caption        = sidecar.Caption        ?? exif.Caption,
     Creator        = sidecar.Creator        ?? exif.Creator,
     Copyright      = sidecar.Copyright      ?? exif.Copyright,
+    // Per-source: the sidecar/XMP values always come from dc:creator and
+    // dc:rights; the IPTC variants stayed on the underneath state.
+    CreatorXmp     = sidecar.Creator        ?? exif.CreatorXmp,
+    CreatorIptc    = exif.CreatorIptc,
+    CopyrightXmp   = sidecar.Copyright      ?? exif.CopyrightXmp,
+    CopyrightIptc  = exif.CopyrightIptc,
     Headline       = sidecar.Headline       ?? exif.Headline,
     Credit         = sidecar.Credit         ?? exif.Credit,
     Source         = sidecar.Source         ?? exif.Source,

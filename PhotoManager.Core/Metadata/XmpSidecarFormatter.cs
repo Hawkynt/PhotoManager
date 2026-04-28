@@ -112,14 +112,19 @@ public static class XmpSidecarFormatter {
     if (!string.IsNullOrEmpty(state.Caption))
       description.Add(BuildLangAlt(Dc + "description", state.Caption));
 
-    if (!string.IsNullOrEmpty(state.Creator)) {
+    // Per-source: the XMP-specific variant wins so Properties can diverge
+    // the XMP and IPTC sources intentionally. Falls back to the unified
+    // Creator for callers that don't populate per-source variants.
+    var xmpCreator = state.CreatorXmp ?? state.Creator;
+    if (!string.IsNullOrEmpty(xmpCreator)) {
       // dc:creator is an ordered list of strings — even for a single author.
-      var seq = new XElement(Rdf + "Seq", new XElement(Rdf + "li", state.Creator));
+      var seq = new XElement(Rdf + "Seq", new XElement(Rdf + "li", xmpCreator));
       description.Add(new XElement(Dc + "creator", seq));
     }
 
-    if (!string.IsNullOrEmpty(state.Copyright))
-      description.Add(BuildLangAlt(Dc + "rights", state.Copyright));
+    var xmpCopyright = state.CopyrightXmp ?? state.Copyright;
+    if (!string.IsNullOrEmpty(xmpCopyright))
+      description.Add(BuildLangAlt(Dc + "rights", xmpCopyright));
 
     if (!string.IsNullOrEmpty(state.Headline))
       description.Add(new XElement(Photoshop + "Headline", state.Headline));
@@ -387,6 +392,11 @@ public static class XmpSidecarFormatter {
       Caption = caption,
       Creator = creator,
       Copyright = copyright,
+      // XMP parse — these values always came from dc:creator / dc:rights so
+      // record them as the XMP-source variant. The IPTC variant is filled
+      // separately by the IPTC reader when an IPTC segment exists.
+      CreatorXmp = creator,
+      CopyrightXmp = copyright,
       Headline = headline,
       Credit = credit,
       Source = source,
@@ -958,8 +968,10 @@ public static class XmpSidecarFormatter {
     if (name.Namespace == Plus)
       return name.LocalName is "ModelReleaseStatus" or "ModelReleaseID"
         or "PropertyReleaseStatus" or "PropertyReleaseID" or "DataMining";
-    if (name.Namespace == Pm)
-      return true;
+    // Pm-namespaced elements at description level (currently just
+    // pm:developSettings, written by DevelopMetadataStore) are NOT owned
+    // by this formatter — let them flow through the foreign-preservation
+    // block so saves from the Properties dialog don't strip develop edits.
     return false;
   }
 

@@ -188,8 +188,11 @@ public sealed class CompositeMetadataWriter : IMetadataWriter {
       CountryCode = md.CountryCode,
       CountryName = md.Country,
       Keywords = md.Keywords.Count > 0 ? md.Keywords : null,
-      ByLine = md.Creator,
-      CopyrightNotice = md.Copyright,
+      // Per-source: use the IPTC-specific variant so diverged XMP/IPTC
+      // values aren't collapsed. Falls back to the unified value for
+      // readers/callers that don't populate per-source.
+      ByLine = md.CreatorIptc ?? md.Creator,
+      CopyrightNotice = md.CopyrightIptc ?? md.Copyright,
       Headline = md.Headline,
       Credit = md.Credit,
       Source = md.Source,
@@ -246,7 +249,24 @@ public sealed class CompositeMetadataWriter : IMetadataWriter {
     };
   }
 
-  private static FullMetadata ApplyPatch(FullMetadata current, MetadataEdit edit) => new() {
+  private static FullMetadata ApplyPatch(FullMetadata current, MetadataEdit edit) {
+    // Per-source resolution for Creator/Copyright. Per-source override wins;
+    // unified edit syncs both; otherwise keep whatever was already there.
+    // Pre-computing these before the `new()` keeps the field expressions
+    // short-circuited and readable.
+    var creatorXmp  = edit.CreatorXmp.HasValue  ? edit.CreatorXmp.Value  :
+                      edit.Creator.HasValue    ? edit.Creator.Value    : current.CreatorXmp;
+    var creatorIptc = edit.CreatorIptc.HasValue ? edit.CreatorIptc.Value :
+                      edit.Creator.HasValue    ? edit.Creator.Value    : current.CreatorIptc;
+    var copyrightXmp  = edit.CopyrightXmp.HasValue  ? edit.CopyrightXmp.Value  :
+                        edit.Copyright.HasValue    ? edit.Copyright.Value    : current.CopyrightXmp;
+    var copyrightIptc = edit.CopyrightIptc.HasValue ? edit.CopyrightIptc.Value :
+                        edit.Copyright.HasValue    ? edit.Copyright.Value    : current.CopyrightIptc;
+    // Unified view prefers XMP (mirrors the read-path precedence).
+    var creator   = creatorXmp   ?? creatorIptc;
+    var copyright = copyrightXmp ?? copyrightIptc;
+
+    return new FullMetadata {
     Gps            = edit.Gps.HasValue            ? edit.Gps.Value            : current.Gps,
     ImageDirection = edit.ImageDirection.HasValue ? edit.ImageDirection.Value : current.ImageDirection,
     TargetGps      = edit.TargetGps.HasValue      ? edit.TargetGps.Value      : current.TargetGps,
@@ -260,8 +280,12 @@ public sealed class CompositeMetadataWriter : IMetadataWriter {
     Keywords       = edit.Keywords.HasValue       ? edit.Keywords.Value ?? Array.Empty<string>() : current.Keywords,
     Title          = edit.Title.HasValue          ? edit.Title.Value          : current.Title,
     Caption        = edit.Caption.HasValue        ? edit.Caption.Value        : current.Caption,
-    Creator        = edit.Creator.HasValue        ? edit.Creator.Value        : current.Creator,
-    Copyright      = edit.Copyright.HasValue      ? edit.Copyright.Value      : current.Copyright,
+    Creator        = creator,
+    Copyright      = copyright,
+    CreatorXmp     = creatorXmp,
+    CreatorIptc    = creatorIptc,
+    CopyrightXmp   = copyrightXmp,
+    CopyrightIptc  = copyrightIptc,
     Headline       = edit.Headline.HasValue       ? edit.Headline.Value       : current.Headline,
     Credit         = edit.Credit.HasValue         ? edit.Credit.Value         : current.Credit,
     Source         = edit.Source.HasValue         ? edit.Source.Value         : current.Source,
@@ -323,5 +347,6 @@ public sealed class CompositeMetadataWriter : IMetadataWriter {
     ProductDescription                = edit.ProductDescription.HasValue                ? edit.ProductDescription.Value                : current.ProductDescription,
 
     Regions        = edit.Regions.HasValue        ? edit.Regions.Value ?? Array.Empty<Core.Regions.TaggedRegion>() : current.Regions
-  };
+    };
+  }
 }

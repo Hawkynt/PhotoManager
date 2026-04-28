@@ -11,6 +11,121 @@
         Title="Photo Manager"
         Width="1280" Height="800"
         MinWidth="900" MinHeight="560">
+  <Window.Styles>
+    <!-- Dirty-edit highlight: the DirtyTracker toggles ".dirty" on any
+         input whose value has changed since the last clean snapshot. -->
+    <Style Selector="TextBox.dirty">
+      <Setter Property="Background" Value="#DCE8F5" />
+    </Style>
+    <Style Selector="ComboBox.dirty">
+      <Setter Property="Background" Value="#DCE8F5" />
+    </Style>
+    <Style Selector="CheckBox.dirty">
+      <Setter Property="Background" Value="#DCE8F5" />
+    </Style>
+    <Style Selector="ToggleButton.dirty">
+      <Setter Property="Background" Value="#DCE8F5" />
+    </Style>
+
+    <!-- Star rating chips: gold star always; checked = filled gold pill so
+         a glance reveals the rating. Reject chip flips between red outline
+         and red fill. -->
+    <Style Selector="ToggleButton.star">
+      <Setter Property="Foreground" Value="#BFBFBF" />
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <Style Selector="ToggleButton.star:checked">
+      <Setter Property="Background" Value="#FFE08A" />
+      <Setter Property="Foreground" Value="#B8860B" />
+    </Style>
+    <!-- Defeat the Fluent default that re-tints background on hover/press
+         while checked, which was washing out the gold fill. -->
+    <Style Selector="ToggleButton.star:checked /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="#FFE08A" />
+      <Setter Property="Foreground" Value="#B8860B" />
+    </Style>
+
+    <Style Selector="ToggleButton.reject">
+      <Setter Property="Foreground" Value="#C0392B" />
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <Style Selector="ToggleButton.reject:checked">
+      <Setter Property="Background" Value="#C0392B" />
+      <Setter Property="Foreground" Value="White" />
+    </Style>
+    <Style Selector="ToggleButton.reject:checked /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="#C0392B" />
+      <Setter Property="Foreground" Value="White" />
+    </Style>
+
+    <!-- Color-label chips: when checked, fill with the label color, white
+         text — same look as Adobe DAMs for instant recognition. -->
+    <Style Selector="ToggleButton.label-red">
+      <Setter Property="Foreground" Value="#C0392B" />
+    </Style>
+    <Style Selector="ToggleButton.label-red:checked">
+      <Setter Property="Background" Value="#C0392B" />
+      <Setter Property="Foreground" Value="White" />
+    </Style>
+    <Style Selector="ToggleButton.label-red:checked /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="#C0392B" />
+      <Setter Property="Foreground" Value="White" />
+    </Style>
+
+    <Style Selector="ToggleButton.label-yellow">
+      <Setter Property="Foreground" Value="#B7950B" />
+    </Style>
+    <Style Selector="ToggleButton.label-yellow:checked">
+      <Setter Property="Background" Value="#F1C40F" />
+      <Setter Property="Foreground" Value="#5B4500" />
+    </Style>
+    <Style Selector="ToggleButton.label-yellow:checked /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="#F1C40F" />
+      <Setter Property="Foreground" Value="#5B4500" />
+    </Style>
+
+    <Style Selector="ToggleButton.label-green">
+      <Setter Property="Foreground" Value="#1E8449" />
+    </Style>
+    <Style Selector="ToggleButton.label-green:checked">
+      <Setter Property="Background" Value="#1E8449" />
+      <Setter Property="Foreground" Value="White" />
+    </Style>
+    <Style Selector="ToggleButton.label-green:checked /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="#1E8449" />
+      <Setter Property="Foreground" Value="White" />
+    </Style>
+
+    <Style Selector="ToggleButton.label-blue">
+      <Setter Property="Foreground" Value="#2471A3" />
+    </Style>
+    <Style Selector="ToggleButton.label-blue:checked">
+      <Setter Property="Background" Value="#2471A3" />
+      <Setter Property="Foreground" Value="White" />
+    </Style>
+    <Style Selector="ToggleButton.label-blue:checked /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="#2471A3" />
+      <Setter Property="Foreground" Value="White" />
+    </Style>
+
+    <Style Selector="ToggleButton.label-purple">
+      <Setter Property="Foreground" Value="#7D3C98" />
+    </Style>
+    <Style Selector="ToggleButton.label-purple:checked">
+      <Setter Property="Background" Value="#7D3C98" />
+      <Setter Property="Foreground" Value="White" />
+    </Style>
+    <Style Selector="ToggleButton.label-purple:checked /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="#7D3C98" />
+      <Setter Property="Foreground" Value="White" />
+    </Style>
+    <Style Selector="DatePicker.dirty">
+      <Setter Property="Background" Value="#DCE8F5" />
+    </Style>
+    <Style Selector="TimePicker.dirty">
+      <Setter Property="Background" Value="#DCE8F5" />
+    </Style>
+  </Window.Styles>
   <Grid RowDefinitions="Auto,*,Auto,Auto">
     <Menu Grid.Row="0">
       <MenuItem Header="_File">
@@ -23,6 +138,7 @@
         <MenuItem Header="_Search library..." Click="OnOpenSearchClick" InputGesture="Ctrl+F" />
         <Separator />
         <MenuItem Header="Geotag from _GPX..." Click="OnOpenGpxClick" />
+        <MenuItem Header="_World map..." Click="OnOpenWorldMapClick" />
         <MenuItem Header="_Face gallery..." Click="OnOpenFaceGalleryClick" />
         <MenuItem Header="_Develop image..." Click="OnOpenDevelopClick" InputGesture="Ctrl+E"
                   IsEnabled="{Binding HasSelectedFile}" />
@@ -37,9 +153,30 @@
     <Grid Grid.Row="1" ColumnDefinitions="280,4,*,4,360">
       <!-- Left pane: source tree -->
       <Border Grid.Column="0" Margin="8,8,0,0" BorderBrush="#DDD" BorderThickness="1" CornerRadius="4">
-        <Grid RowDefinitions="Auto,*">
-          <TextBlock Grid.Row="0" Text="Source Paths" Margin="8,6,8,2" FontWeight="SemiBold" />
-          <TreeView Grid.Row="1" x:Name="SourceTree" SelectionMode="Single" Padding="4">
+        <Grid RowDefinitions="Auto,Auto,*">
+          <!-- Toggle which directory tree the grid pulls from. "Sources" is
+               the default scan; "Target" walks the destination directory
+               recursively so the user can keep editing metadata after
+               files have been organised. -->
+          <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="6" Margin="8,6,8,2">
+            <RadioButton GroupName="BrowseMode" Content="Sources" IsChecked="True"
+                         Tag="Sources" Checked="OnBrowseModeChanged" />
+            <RadioButton GroupName="BrowseMode" Content="Target"
+                         Tag="Target" Checked="OnBrowseModeChanged"
+                         ToolTip.Tip="Walk the configured destination directory recursively" />
+          </StackPanel>
+          <TextBlock Grid.Row="1" Text="Source Paths" Margin="8,2,8,2" FontWeight="SemiBold"
+                     IsVisible="{Binding IsSourceMode}" />
+          <StackPanel Grid.Row="1" Margin="8,2,8,2" Spacing="2"
+                      IsVisible="{Binding IsTargetMode}">
+            <TextBlock Text="Target Directory" FontWeight="SemiBold" />
+            <TextBlock Text="{Binding DestinationDirectory}" FontFamily="Consolas" FontSize="11"
+                       Opacity="0.75" TextTrimming="CharacterEllipsis"
+                       ToolTip.Tip="{Binding DestinationDirectory}" />
+            <TextBlock Text="(walking recursively)" Opacity="0.55" FontStyle="Italic" FontSize="11" />
+          </StackPanel>
+          <TreeView Grid.Row="2" x:Name="SourceTree" SelectionMode="Single" Padding="4"
+                    IsVisible="{Binding IsSourceMode}">
             <TreeView.ContextMenu>
               <ContextMenu>
                 <MenuItem Header="Add Path..." Click="OnAddPathClick" />
@@ -65,7 +202,7 @@
       <!-- Center pane: settings (top) + preview (middle) + file grid (bottom),
            with a sizable splitter between preview and grid so the user can
            spend most vertical space on whichever they care about. -->
-      <Grid Grid.Column="2" RowDefinitions="Auto,2*,4,Auto,*" Margin="0,8,0,0">
+      <Grid Grid.Column="2" RowDefinitions="Auto,2*,4,Auto,Auto,*" Margin="0,8,0,0">
         <StackPanel Grid.Row="0" Spacing="6" Margin="0,0,0,6">
           <Grid ColumnDefinitions="120,*,Auto">
             <TextBlock Grid.Column="0" Text="Output:" VerticalAlignment="Center" />
@@ -108,16 +245,39 @@
         <!-- Live filter over the grid. Space-separates into AND tokens; each
              token CONTAINS-matches against the file's index string (built in
              the background after scan). -->
-        <Grid Grid.Row="3" ColumnDefinitions="Auto,*,Auto" Margin="0,4,0,4">
+        <Grid Grid.Row="3" ColumnDefinitions="Auto,*,Auto,Auto,Auto" Margin="0,4,0,2">
           <TextBlock Grid.Column="0" Text="🔍" VerticalAlignment="Center" Margin="2,0,6,0" FontSize="14" />
           <TextBox Grid.Column="1" x:Name="SearchBox" TextChanged="OnSearchTextChanged"
                    Watermark="Filter: filename, folder, keyword, person, location… (space = AND)"
                    ToolTip.Tip="Each space-separated token must match somewhere. 'alice berlin' finds photos tagged Alice in Berlin." />
           <Button Grid.Column="2" Content="✕" Width="28" Margin="4,0,0,0" Click="OnClearSearchClick"
                   ToolTip.Tip="Clear filter" />
+          <ComboBox Grid.Column="3" x:Name="SavedSearchesCombo" Width="180" Margin="6,0,0,0"
+                    PlaceholderText="(saved searches)"
+                    SelectionChanged="OnSavedSearchSelected"
+                    ToolTip.Tip="Pick a previously saved filter to re-apply" />
+          <Button Grid.Column="4" Content="Save…" Margin="4,0,0,0" Click="OnSaveSearchClick"
+                  ToolTip.Tip="Bookmark the current text + chip filter under a name" />
         </Grid>
 
-        <DataGrid Grid.Row="4" x:Name="FilesGrid"
+        <!-- Rating + color chips. Toggling them AND-combines with the search
+             text; e.g. ★≥3 + Red shows only 3-star+ red-labelled files. -->
+        <StackPanel Grid.Row="4" Orientation="Horizontal" Spacing="3" Margin="0,0,0,4">
+          <TextBlock Text="★" VerticalAlignment="Center" Margin="2,0,4,0" FontSize="13" />
+          <ToggleButton x:Name="StarFilter1" Content="≥1" Padding="6,2" FontSize="11" Click="OnStarFilterClick" Tag="1" />
+          <ToggleButton x:Name="StarFilter2" Content="≥2" Padding="6,2" FontSize="11" Click="OnStarFilterClick" Tag="2" />
+          <ToggleButton x:Name="StarFilter3" Content="≥3" Padding="6,2" FontSize="11" Click="OnStarFilterClick" Tag="3" />
+          <ToggleButton x:Name="StarFilter4" Content="≥4" Padding="6,2" FontSize="11" Click="OnStarFilterClick" Tag="4" />
+          <ToggleButton x:Name="StarFilter5" Content="5"  Padding="6,2" FontSize="11" Click="OnStarFilterClick" Tag="5" />
+          <Border Width="1" Background="#CCC" Margin="6,2,6,2" />
+          <ToggleButton x:Name="LabelRed"    Content="Red"    Padding="6,2" FontSize="11" Click="OnLabelFilterClick" Tag="Red"    Foreground="#C0392B" FontWeight="SemiBold" />
+          <ToggleButton x:Name="LabelYellow" Content="Yellow" Padding="6,2" FontSize="11" Click="OnLabelFilterClick" Tag="Yellow" Foreground="#B7950B" FontWeight="SemiBold" />
+          <ToggleButton x:Name="LabelGreen"  Content="Green"  Padding="6,2" FontSize="11" Click="OnLabelFilterClick" Tag="Green"  Foreground="#1E8449" FontWeight="SemiBold" />
+          <ToggleButton x:Name="LabelBlue"   Content="Blue"   Padding="6,2" FontSize="11" Click="OnLabelFilterClick" Tag="Blue"   Foreground="#2471A3" FontWeight="SemiBold" />
+          <ToggleButton x:Name="LabelPurple" Content="Purple" Padding="6,2" FontSize="11" Click="OnLabelFilterClick" Tag="Purple" Foreground="#7D3C98" FontWeight="SemiBold" />
+        </StackPanel>
+
+        <DataGrid Grid.Row="5" x:Name="FilesGrid"
                   AutoGenerateColumns="False"
                   CanUserResizeColumns="True"
                   GridLinesVisibility="Horizontal"
@@ -154,13 +314,13 @@
             <TextBlock Grid.Row="0" Text="Regions" Margin="8,6,8,2" FontWeight="SemiBold" />
             <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="6" Margin="4,0,4,4"
                         IsEnabled="{Binding HasSelectedFile}">
-              <Button Content="Propose (YOLO)" Click="OnProposeRegionsClick"
-                      ToolTip.Tip="Run the object detector and add proposed regions to review" />
-              <Button Content="Detect Faces" Click="OnDetectFacesClick"
-                      ToolTip.Tip="Run the face detector; if an ArcFace model is installed each face also gets an embedding" />
-              <ToggleButton x:Name="DrawRegionToggle" Content="Draw Box"
+              <Button Content="📦" FontSize="14" Width="34" Height="30" Padding="0" Click="OnProposeRegionsClick"
+                      ToolTip.Tip="Detect Objects — run the YOLO object detector and add the matches as proposed regions to review" />
+              <Button Content="👤" FontSize="14" Width="34" Height="30" Padding="0" Click="OnDetectFacesClick"
+                      ToolTip.Tip="Detect Faces — run the face detector; if an ArcFace model is installed each face also gets an embedding" />
+              <ToggleButton x:Name="DrawRegionToggle" Content="✏️" FontSize="14" Width="34" Height="30" Padding="0"
                             Checked="OnDrawRegionToggled" Unchecked="OnDrawRegionToggled"
-                            ToolTip.Tip="Click-drag on the preview to manually add a region" />
+                            ToolTip.Tip="Draw Rectangle — click-drag on the preview to manually add a region" />
               <TextBlock x:Name="RegionsSummary" VerticalAlignment="Center" Opacity="0.7" />
             </StackPanel>
             <ScrollViewer Grid.Row="2" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
@@ -250,10 +410,14 @@
               <StackPanel Spacing="4" Margin="4" IsEnabled="{Binding HasSelectedFile}">
                 <!-- File identity + read-only facts. Changing the Name box
                      renames the file on Save (with collision protection). -->
-                <Grid ColumnDefinitions="80,*">
+                <Grid ColumnDefinitions="80,*,Auto">
                   <TextBlock Grid.Column="0" Text="Name:" VerticalAlignment="Center"
-                             ToolTip.Tip="Renames the file on disk when you click Save" />
+                             ToolTip.Tip="Renames the file on disk when you click Save. Extension is locked — see the field on the right." />
                   <TextBox Grid.Column="1" x:Name="FileNameBox" />
+                  <TextBox Grid.Column="2" x:Name="FileExtensionBox"
+                           IsReadOnly="True" Width="56" Margin="4,0,0,0"
+                           Background="#F5F5F5" Foreground="#666"
+                           ToolTip.Tip="Extension is locked. Format-mismatch warnings surface in the status bar; rename in the OS file manager if you really need to change it." />
                 </Grid>
                 <Grid ColumnDefinitions="80,*">
                   <TextBlock Grid.Column="0" Text="Path:" VerticalAlignment="Center" />
@@ -264,20 +428,28 @@
                   <TextBlock Grid.Column="0" Text="Size:" VerticalAlignment="Center" />
                   <TextBlock Grid.Column="1" x:Name="SizeText" Opacity="0.75" VerticalAlignment="Center" />
                 </Grid>
-                <!-- Filesystem timestamps. Read-only here; editing them is
-                     uncommon and destructive (atime bumps on every read) so
-                     the Properties dialog handles any advanced edits. -->
-                <Grid ColumnDefinitions="80,*">
+                <!-- Filesystem timestamps. Editable; metadata-only saves
+                     keep these untouched (AtomicMetadataWrite restores
+                     them) so backup / sync tools don't see false-positive
+                     changes. The 📅 button at the right of each row stamps
+                     all three with the detected capture date. -->
+                <Grid ColumnDefinitions="80,Auto,Auto,Auto,*">
                   <TextBlock Grid.Column="0" Text="Created:" VerticalAlignment="Center" />
-                  <TextBlock Grid.Column="1" x:Name="CreatedText" Opacity="0.75" FontSize="11" VerticalAlignment="Center" />
+                  <DatePicker Grid.Column="1" x:Name="FileCreatedDate" Margin="0,0,4,0" />
+                  <TimePicker Grid.Column="2" x:Name="FileCreatedTime" ClockIdentifier="24HourClock" />
+                  <Button Grid.Column="3" Content="📅" Width="28" Padding="0" Margin="6,0,0,0"
+                          Click="OnApplyCaptureDateToFileTimestampsClick"
+                          ToolTip.Tip="Set Created, Modified and Accessed to the detected capture date" />
                 </Grid>
-                <Grid ColumnDefinitions="80,*">
+                <Grid ColumnDefinitions="80,Auto,Auto,*">
                   <TextBlock Grid.Column="0" Text="Modified:" VerticalAlignment="Center" />
-                  <TextBlock Grid.Column="1" x:Name="ModifiedText" Opacity="0.75" FontSize="11" VerticalAlignment="Center" />
+                  <DatePicker Grid.Column="1" x:Name="FileModifiedDate" Margin="0,0,4,0" />
+                  <TimePicker Grid.Column="2" x:Name="FileModifiedTime" ClockIdentifier="24HourClock" />
                 </Grid>
-                <Grid ColumnDefinitions="80,*">
+                <Grid ColumnDefinitions="80,Auto,Auto,*">
                   <TextBlock Grid.Column="0" Text="Accessed:" VerticalAlignment="Center" />
-                  <TextBlock Grid.Column="1" x:Name="AccessedText" Opacity="0.75" FontSize="11" VerticalAlignment="Center" />
+                  <DatePicker Grid.Column="1" x:Name="FileAccessedDate" Margin="0,0,4,0" />
+                  <TimePicker Grid.Column="2" x:Name="FileAccessedTime" ClockIdentifier="24HourClock" />
                 </Grid>
                 <!-- Capture date: XMP DateCreated / EXIF DateTimeOriginal.
                      Picker = editable; hint shows which source seeded it so
@@ -297,10 +469,12 @@
                   <TextBox Grid.Column="2" x:Name="GpsLonBox" Watermark="Longitude" Margin="0,0,4,0" />
                   <TextBox Grid.Column="3" x:Name="GpsAltBox" Watermark="Alt (m)" Width="80" />
                 </Grid>
-                <Grid ColumnDefinitions="80,120,80,*">
+                <Grid ColumnDefinitions="80,120,Auto,*">
                   <TextBlock Grid.Column="0" Text="Direction:" VerticalAlignment="Center" />
                   <TextBox Grid.Column="1" x:Name="DirectionBox" Watermark="0-360°" Margin="0,0,8,0" />
-                  <CheckBox Grid.Column="2" x:Name="DirectionMagneticCheck" Content="Magnetic" />
+                  <ToggleButton Grid.Column="2" x:Name="DirectionMagneticCheck"
+                                Content="🧲" Width="32" Height="28" Padding="0" FontSize="14"
+                                ToolTip.Tip="Toggle on if the direction value is a magnetic compass bearing rather than true north" />
                 </Grid>
                 <Grid ColumnDefinitions="80,*,*">
                   <TextBlock Grid.Column="0" Text="Target:" VerticalAlignment="Center"
@@ -326,11 +500,38 @@
                              ToolTip.Tip="ISO 3166-1 alpha-2 country code (e.g. DE, US)" />
                   <TextBox Grid.Column="3" x:Name="CountryCodeBox" />
                 </Grid>
-                <Grid ColumnDefinitions="80,120,80,*">
+                <!-- Picasa-style one-click rating: clicking a star sets the
+                     rating; clicking the same star again clears it. The
+                     ⊘ chip flags the photo as Rejected (XMP rating -1).
+                     The lower row is a single-pick color label. -->
+                <Grid ColumnDefinitions="80,*">
                   <TextBlock Grid.Column="0" Text="Rating:" VerticalAlignment="Center" />
-                  <ComboBox Grid.Column="1" x:Name="RatingCombo" Margin="0,0,8,0" />
-                  <TextBlock Grid.Column="2" Text="Label:" VerticalAlignment="Center" />
-                  <ComboBox Grid.Column="3" x:Name="LabelCombo" />
+                  <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="2">
+                    <ToggleButton x:Name="EditRatingReject" Content="⊘" Width="28" Padding="0" FontSize="14"
+                                  Classes="reject" Click="OnEditorRejectClick"
+                                  ToolTip.Tip="Mark as Rejected (XMP rating -1)" />
+                    <Border Width="6" />
+                    <ToggleButton x:Name="EditStar1" Content="★" Width="26" Padding="0" FontSize="14"
+                                  Classes="star" Click="OnEditorStarClick" Tag="1" />
+                    <ToggleButton x:Name="EditStar2" Content="★" Width="26" Padding="0" FontSize="14"
+                                  Classes="star" Click="OnEditorStarClick" Tag="2" />
+                    <ToggleButton x:Name="EditStar3" Content="★" Width="26" Padding="0" FontSize="14"
+                                  Classes="star" Click="OnEditorStarClick" Tag="3" />
+                    <ToggleButton x:Name="EditStar4" Content="★" Width="26" Padding="0" FontSize="14"
+                                  Classes="star" Click="OnEditorStarClick" Tag="4" />
+                    <ToggleButton x:Name="EditStar5" Content="★" Width="26" Padding="0" FontSize="14"
+                                  Classes="star" Click="OnEditorStarClick" Tag="5" />
+                  </StackPanel>
+                </Grid>
+                <Grid ColumnDefinitions="80,*">
+                  <TextBlock Grid.Column="0" Text="Label:" VerticalAlignment="Center" />
+                  <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="3">
+                    <ToggleButton x:Name="EditLabelRed"    Content="Red"    Padding="6,2" FontSize="11" FontWeight="SemiBold" Classes="label-red"    Click="OnEditorLabelClick" Tag="Red" />
+                    <ToggleButton x:Name="EditLabelYellow" Content="Yellow" Padding="6,2" FontSize="11" FontWeight="SemiBold" Classes="label-yellow" Click="OnEditorLabelClick" Tag="Yellow" />
+                    <ToggleButton x:Name="EditLabelGreen"  Content="Green"  Padding="6,2" FontSize="11" FontWeight="SemiBold" Classes="label-green"  Click="OnEditorLabelClick" Tag="Green" />
+                    <ToggleButton x:Name="EditLabelBlue"   Content="Blue"   Padding="6,2" FontSize="11" FontWeight="SemiBold" Classes="label-blue"   Click="OnEditorLabelClick" Tag="Blue" />
+                    <ToggleButton x:Name="EditLabelPurple" Content="Purple" Padding="6,2" FontSize="11" FontWeight="SemiBold" Classes="label-purple" Click="OnEditorLabelClick" Tag="Purple" />
+                  </StackPanel>
                 </Grid>
                 <Grid ColumnDefinitions="80,*">
                   <TextBlock Grid.Column="0" Text="Keywords:" VerticalAlignment="Center" />
@@ -355,12 +556,15 @@
                   <TextBox Grid.Column="1" x:Name="CopyrightBox" Watermark="© 2026 Your Name" />
                 </Grid>
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="6" Margin="0,4,0,0">
-                  <Button Content="Auto-Detect" Click="OnAutoDetectClick" />
-                  <Button Content="Revert" Click="OnRevertMetadataClick" />
-                  <Button Content="Apply to selection" Click="OnApplyToSelectionClick"
-                          ToolTip.Tip="Write the values in this panel to every selected file in the grid" />
-                  <Button Content="Save" Click="OnSaveMetadataClick" FontWeight="Bold"
-                          ToolTip.Tip="Write to the currently previewed file" />
+                  <Button Content="🔍" FontSize="14" Width="34" Height="30" Padding="0" Click="OnAutoDetectClick"
+                          ToolTip.Tip="Auto-detect — runs the YOLO object detector and adds matching keywords to this file" />
+                  <Button Content="↺" FontSize="14" Width="34" Height="30" Padding="0" Click="OnRevertMetadataClick"
+                          ToolTip.Tip="Revert — discard unsaved edits and reload the editor from the file on disk" />
+                  <Button Content="🗂" FontSize="14" Width="34" Height="30" Padding="0" Click="OnApplyToSelectionClick"
+                          ToolTip.Tip="Apply to selection — write the current editor values to every selected file in the grid" />
+                  <Button Content="💾" FontSize="16" Width="38" Height="30" Padding="0" FontWeight="Bold" Click="OnSaveMetadataClick"
+                          Background="#1976D2" Foreground="White"
+                          ToolTip.Tip="Save — write the current editor values to the previewed file" />
                 </StackPanel>
               </StackPanel>
             </ScrollViewer>
@@ -371,14 +575,20 @@
 
     <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="8,8,8,0" Spacing="6">
       <Button Content="Scan Files"       Click="OnScanClick"         IsEnabled="{Binding !IsProcessing}"
-              ToolTip.Tip="Populate the grid with files from the checked source paths" />
+              ToolTip.Tip="Populate the grid from the active browse mode (Sources tree or Target directory)" />
+      <!-- Run / Run-on-Directory only make sense when browsing the source
+           tree — they ORGANIZE files into the target. Hidden in Target
+           mode where the files are already organised. -->
       <Button Content="Run"  FontWeight="Bold" Click="OnRunClick"    IsEnabled="{Binding !IsProcessing}"
+              IsVisible="{Binding IsSourceMode}"
               ToolTip.Tip="Organize the files currently listed in the grid by date" />
       <Button Content="Run on Directory" Click="OnRunDirectoryClick" IsEnabled="{Binding !IsProcessing}"
+              IsVisible="{Binding IsSourceMode}"
               ToolTip.Tip="Walk every checked source directly, no pre-scan required" />
       <Button Content="Cancel"           Click="OnCancelClick"       IsEnabled="{Binding IsProcessing}" />
       <CheckBox Content="Recursive (Run on Directory)" Margin="24,0,0,0"
-                IsChecked="{Binding Recursive, Mode=TwoWay}" />
+                IsChecked="{Binding Recursive, Mode=TwoWay}"
+                IsVisible="{Binding IsSourceMode}" />
     </StackPanel>
 
     <Grid Grid.Row="3" ColumnDefinitions="*,Auto" Margin="8,6,8,8">

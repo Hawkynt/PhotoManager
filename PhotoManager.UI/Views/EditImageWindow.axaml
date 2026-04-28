@@ -2,6 +2,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:controls="using:PhotoManager.UI.Controls"
         mc:Ignorable="d" d:DesignWidth="1100" d:DesignHeight="720"
         x:Class="PhotoManager.UI.Views.EditImageWindow"
         Width="1100" Height="720"
@@ -9,73 +10,1032 @@
         WindowStartupLocation="CenterOwner"
         Title="Develop image">
   <Grid RowDefinitions="*,Auto" Margin="12">
-    <Grid Grid.Row="0" ColumnDefinitions="*,4,300">
+    <Grid Grid.Row="0" ColumnDefinitions="*,4,360">
       <Border Grid.Column="0" Background="#111" BorderBrush="#333" BorderThickness="1" CornerRadius="4">
-        <Image x:Name="PreviewImage" Stretch="Uniform" StretchDirection="DownOnly" />
+        <Grid>
+          <Image x:Name="PreviewImage" Stretch="Uniform" StretchDirection="DownOnly" />
+          <controls:MaskOverlayCanvas x:Name="MaskOverlay" IsVisible="False" IsHitTestVisible="False" />
+        </Grid>
       </Border>
 
       <GridSplitter Grid.Column="1" Background="Transparent" />
 
-      <StackPanel Grid.Column="2" Spacing="12" Margin="4,0,0,0">
-        <StackPanel Spacing="4">
-          <TextBlock Text="Rotation" FontWeight="SemiBold" />
-          <StackPanel Orientation="Horizontal" Spacing="6">
-            <Button Content="↶ 90°"  Click="OnRotateLeftClick" />
-            <Button Content="↷ 90°" Click="OnRotateRightClick" />
-            <Button Content="180°"  Click="OnRotate180Click" />
-            <Button Content="Reset" Click="OnResetRotationClick" />
+      <ScrollViewer Grid.Column="2" Margin="4,0,0,0" VerticalScrollBarVisibility="Auto"
+                    HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Spacing="10">
+          <!-- Templates: pick a saved preset, save the current state, or apply
+               the active settings to every selected file in the main grid. -->
+          <StackPanel Spacing="4">
+            <TextBlock Text="Template" FontWeight="SemiBold" />
+            <Grid ColumnDefinitions="*,Auto,Auto">
+              <ComboBox Grid.Column="0" x:Name="TemplateCombo" PlaceholderText="(no template)"
+                        SelectionChanged="OnTemplateSelected" />
+              <Button Grid.Column="1" Content="Save…" Margin="4,0,0,0" Click="OnSaveTemplateClick"
+                      ToolTip.Tip="Save the current sliders as a reusable template" />
+              <Button Grid.Column="2" Content="Apply to selection" Margin="4,0,0,0"
+                      Click="OnApplyToSelectionClick"
+                      ToolTip.Tip="Render every file selected in the main window with the active settings" />
+            </Grid>
           </StackPanel>
-        </StackPanel>
 
-        <StackPanel Spacing="4">
-          <StackPanel Orientation="Horizontal" Spacing="6">
-            <TextBlock Text="Exposure (EV)" FontWeight="SemiBold" />
-            <TextBlock x:Name="ExposureValue" Opacity="0.7" Text="0.0" />
+          <Border Height="1" Background="#DDD" />
+
+          <!-- Live RGB+Luma histogram of the developed preview. Read-only;
+               grows / shrinks with the right pane. -->
+          <StackPanel Spacing="4">
+            <TextBlock Text="Histogram" FontWeight="SemiBold" />
+            <Border BorderBrush="#444" BorderThickness="1" CornerRadius="2" Background="#1A1A1A" Height="80">
+              <Canvas x:Name="HistogramCanvas" />
+            </Border>
           </StackPanel>
-          <Slider x:Name="ExposureSlider" Minimum="-3" Maximum="3" TickFrequency="0.1" Value="0"
-                  ValueChanged="OnSettingsChanged" />
-        </StackPanel>
 
-        <StackPanel Spacing="4">
-          <StackPanel Orientation="Horizontal" Spacing="6">
-            <TextBlock Text="Contrast" FontWeight="SemiBold" />
-            <TextBlock x:Name="ContrastValue" Opacity="0.7" Text="0" />
+          <!-- One-click derivations from histogram + click samples. -->
+          <StackPanel Orientation="Horizontal" Spacing="4">
+            <Button Content="Auto Tone"  Click="OnAutoToneClick"
+                    ToolTip.Tip="Set Whites/Blacks/Shadows/Highlights from the histogram percentiles to recover blown / crushed extremes" />
+            <Button Content="Auto WB"    Click="OnAutoWhiteBalanceClick"
+                    ToolTip.Tip="Grey-world auto white balance" />
+            <Button Content="Auto RGB"   Click="OnAutoChannelStretchClick"
+                    ToolTip.Tip="Auto-stretch each R/G/B channel to its 99.5% percentile so every channel uses its full range" />
+            <Button Content="Reset auto" Click="OnResetAutoClick"
+                    ToolTip.Tip="Zero only the auto-derived sliders (whites, blacks, shadows, highlights, temperature, tint, RGB gains)" />
           </StackPanel>
-          <Slider x:Name="ContrastSlider" Minimum="-100" Maximum="100" Value="0"
-                  ValueChanged="OnSettingsChanged" />
-        </StackPanel>
 
-        <StackPanel Spacing="4">
-          <StackPanel Orientation="Horizontal" Spacing="6">
-            <TextBlock Text="Saturation" FontWeight="SemiBold" />
-            <TextBlock x:Name="SaturationValue" Opacity="0.7" Text="0" />
+          <!-- Geometry / page-detect auto buttons. Useful for scanned or
+               photographed paper documents — finds the dominant edge
+               direction and trims away whitespace. -->
+          <StackPanel Orientation="Horizontal" Spacing="4">
+            <Button Content="📏 Auto-level" Click="OnAutoLevelClick"
+                    ToolTip.Tip="Detect the dominant edge angle (Sobel-gradient histogram, ±15°) and rotate so horizontals are level. Great for tilted scans of pages or receipts." />
+            <Button Content="✂️ Auto-crop"  Click="OnAutoCropClick"
+                    ToolTip.Tip="Find the bounding box of non-blank content and crop to it. Strips whitespace from scans / photographed paper." />
+            <Button Content="🏛️ Upright"    Click="OnUprightAutoClick"
+                    ToolTip.Tip="Combined deskew + perspective hint. Today this matches Auto-level; full keystone auto-detect is a follow-up." />
           </StackPanel>
-          <Slider x:Name="SaturationSlider" Minimum="-100" Maximum="100" Value="0"
-                  ValueChanged="OnSettingsChanged" />
-        </StackPanel>
 
-        <StackPanel Spacing="4">
-          <StackPanel Orientation="Horizontal" Spacing="6">
-            <TextBlock Text="Temperature (warm/cool)" FontWeight="SemiBold" />
-            <TextBlock x:Name="TemperatureValue" Opacity="0.7" Text="0" />
+          <StackPanel Orientation="Horizontal" Spacing="4">
+            <ToggleButton x:Name="EyedropBlack" Content="⚫ Black"  Padding="6,2" Click="OnEyedropToggleClick" Tag="Black"
+                          ToolTip.Tip="Click a pixel that should be pure black" />
+            <ToggleButton x:Name="EyedropWhite" Content="⚪ White"  Padding="6,2" Click="OnEyedropToggleClick" Tag="White"
+                          ToolTip.Tip="Click a pixel that should be pure white" />
+            <ToggleButton x:Name="EyedropGrey"  Content="◐ Grey"   Padding="6,2" Click="OnEyedropToggleClick" Tag="Grey"
+                          ToolTip.Tip="Click a neutral grey reference to set white balance" />
           </StackPanel>
-          <Slider x:Name="TemperatureSlider" Minimum="-100" Maximum="100" Value="0"
-                  ValueChanged="OnSettingsChanged" />
+          <StackPanel Orientation="Horizontal" Spacing="4">
+            <ToggleButton x:Name="EyedropRed"   Content="🔴 R"  Padding="6,2" Click="OnEyedropToggleClick" Tag="Red"
+                          ToolTip.Tip="Click a pixel where the red channel should saturate" />
+            <ToggleButton x:Name="EyedropGreen" Content="🟢 G"  Padding="6,2" Click="OnEyedropToggleClick" Tag="Green"
+                          ToolTip.Tip="Click a pixel where the green channel should saturate" />
+            <ToggleButton x:Name="EyedropBlue"  Content="🔵 B"  Padding="6,2" Click="OnEyedropToggleClick" Tag="Blue"
+                          ToolTip.Tip="Click a pixel where the blue channel should saturate" />
+          </StackPanel>
+
+          <Border Height="1" Background="#DDD" />
+
+          <StackPanel Spacing="4">
+            <TextBlock Text="Rotation" FontWeight="SemiBold" />
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <Button Content="↶ 90°"  Click="OnRotateLeftClick" />
+              <Button Content="↷ 90°" Click="OnRotateRightClick" />
+              <Button Content="180°"  Click="OnRotate180Click" />
+              <Button Content="Reset" Click="OnResetRotationClick" />
+            </StackPanel>
+          </StackPanel>
+
+          <Border Height="1" Background="#DDD" />
+
+          <!-- Geometry: free-angle rotation + normalised crop rectangle.
+               Crop edges are 0..1 in the rotated image space; arbitrary
+               rotation runs first so crop offsets land on the rotated
+               output (matches what the user sees in the preview). -->
+          <StackPanel Spacing="4">
+            <TextBlock Text="Geometry (free angle + crop)" FontWeight="SemiBold" Opacity="0.85" />
+            <Grid ColumnDefinitions="120,*,40">
+              <TextBlock Grid.Column="0" Text="Angle (°)" />
+              <Slider Grid.Column="1" x:Name="CropAngleSlider" Minimum="-45" Maximum="45" TickFrequency="0.5" Value="0"
+                      ValueChanged="OnSettingsChanged" />
+              <TextBlock Grid.Column="2" x:Name="CropAngleValue" Opacity="0.7" TextAlignment="Right" Text="0.0" />
+            </Grid>
+            <Grid ColumnDefinitions="Auto,*,Auto,*" RowDefinitions="Auto,Auto,Auto">
+              <TextBlock Grid.Row="0" Grid.Column="0" Text="Left:"   Opacity="0.85" Margin="0,0,4,0" VerticalAlignment="Center" />
+              <NumericUpDown Grid.Row="0" Grid.Column="1" x:Name="CropLeftBox"   MinWidth="110" Minimum="0" Maximum="1" Increment="0.01" Value="0" FormatString="0.00"
+                             ValueChanged="OnCropEdgeChanged"
+                             ToolTip.Tip="Left crop edge in 0..1 of the rotated image." />
+              <TextBlock Grid.Row="0" Grid.Column="2" Text="Right:" Opacity="0.85" Margin="6,0,4,0" VerticalAlignment="Center" />
+              <NumericUpDown Grid.Row="0" Grid.Column="3" x:Name="CropRightBox"  MinWidth="110" Minimum="0" Maximum="1" Increment="0.01" Value="1" FormatString="0.00"
+                             ValueChanged="OnCropEdgeChanged" />
+              <TextBlock Grid.Row="1" Grid.Column="0" Text="Top:"   Opacity="0.85" Margin="0,2,4,0" VerticalAlignment="Center" />
+              <NumericUpDown Grid.Row="1" Grid.Column="1" x:Name="CropTopBox"    MinWidth="110" Minimum="0" Maximum="1" Increment="0.01" Value="0" FormatString="0.00"
+                             Margin="0,2,0,0" ValueChanged="OnCropEdgeChanged" />
+              <TextBlock Grid.Row="1" Grid.Column="2" Text="Bottom:" Opacity="0.85" Margin="6,2,4,0" VerticalAlignment="Center" />
+              <NumericUpDown Grid.Row="1" Grid.Column="3" x:Name="CropBottomBox" MinWidth="110" Minimum="0" Maximum="1" Increment="0.01" Value="1" FormatString="0.00"
+                             Margin="0,2,0,0" ValueChanged="OnCropEdgeChanged" />
+              <Button Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="4" Content="Reset crop &amp; angle"
+                      Click="OnResetCropClick" Padding="6,2" FontSize="11" Margin="0,4,0,0" HorizontalAlignment="Stretch"
+                      ToolTip.Tip="Reset the crop rectangle and free-angle to identity (no crop, no rotation)." />
+            </Grid>
+          </StackPanel>
+
+          <Border Height="1" Background="#DDD" />
+
+          <!-- Perspective: projective warp (keystone, scale, aspect,
+               translation, in-plane rotate). Bilinear-sampled. -->
+          <StackPanel Spacing="4">
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBlock Grid.Column="0" Text="Perspective" FontWeight="SemiBold" Opacity="0.85" VerticalAlignment="Center" />
+              <Button Grid.Column="1" Content="Reset" Padding="6,2" FontSize="11" Click="OnResetPerspectiveClick"
+                      ToolTip.Tip="Reset every perspective slider to identity (Scale 100, others 0)." />
+            </Grid>
+            <Grid ColumnDefinitions="120,*,40">
+              <TextBlock Grid.Column="0" Text="Vertical"
+                         ToolTip.Tip="Vertical keystone — pull the top edge inward (positive) or outward (negative)." />
+              <Slider Grid.Column="1" x:Name="PerspVerticalSlider" Minimum="-100" Maximum="100" Value="0"
+                      ValueChanged="OnSettingsChanged" />
+              <TextBlock Grid.Column="2" x:Name="PerspVerticalValue" Opacity="0.7" TextAlignment="Right" Text="0" />
+            </Grid>
+            <Grid ColumnDefinitions="120,*,40">
+              <TextBlock Grid.Column="0" Text="Horizontal"
+                         ToolTip.Tip="Horizontal keystone — pull the left or right edge in / out." />
+              <Slider Grid.Column="1" x:Name="PerspHorizontalSlider" Minimum="-100" Maximum="100" Value="0"
+                      ValueChanged="OnSettingsChanged" />
+              <TextBlock Grid.Column="2" x:Name="PerspHorizontalValue" Opacity="0.7" TextAlignment="Right" Text="0" />
+            </Grid>
+            <Grid ColumnDefinitions="120,*,40">
+              <TextBlock Grid.Column="0" Text="Rotate (°)"
+                         ToolTip.Tip="In-plane rotation applied within the perspective stage. Distinct from the crop angle above." />
+              <Slider Grid.Column="1" x:Name="PerspRotateSlider" Minimum="-10" Maximum="10" TickFrequency="0.1" Value="0"
+                      ValueChanged="OnSettingsChanged" />
+              <TextBlock Grid.Column="2" x:Name="PerspRotateValue" Opacity="0.7" TextAlignment="Right" Text="0.0" />
+            </Grid>
+            <Grid ColumnDefinitions="120,*,40">
+              <TextBlock Grid.Column="0" Text="Scale" />
+              <Slider Grid.Column="1" x:Name="PerspScaleSlider" Minimum="50" Maximum="150" Value="100"
+                      ValueChanged="OnSettingsChanged" />
+              <TextBlock Grid.Column="2" x:Name="PerspScaleValue" Opacity="0.7" TextAlignment="Right" Text="100" />
+            </Grid>
+            <Grid ColumnDefinitions="120,*,40">
+              <TextBlock Grid.Column="0" Text="Aspect" />
+              <Slider Grid.Column="1" x:Name="PerspAspectSlider" Minimum="-100" Maximum="100" Value="0"
+                      ValueChanged="OnSettingsChanged" />
+              <TextBlock Grid.Column="2" x:Name="PerspAspectValue" Opacity="0.7" TextAlignment="Right" Text="0" />
+            </Grid>
+            <Grid ColumnDefinitions="120,*,40">
+              <TextBlock Grid.Column="0" Text="X offset" />
+              <Slider Grid.Column="1" x:Name="PerspXSlider" Minimum="-100" Maximum="100" Value="0"
+                      ValueChanged="OnSettingsChanged" />
+              <TextBlock Grid.Column="2" x:Name="PerspXValue" Opacity="0.7" TextAlignment="Right" Text="0" />
+            </Grid>
+            <Grid ColumnDefinitions="120,*,40">
+              <TextBlock Grid.Column="0" Text="Y offset" />
+              <Slider Grid.Column="1" x:Name="PerspYSlider" Minimum="-100" Maximum="100" Value="0"
+                      ValueChanged="OnSettingsChanged" />
+              <TextBlock Grid.Column="2" x:Name="PerspYValue" Opacity="0.7" TextAlignment="Right" Text="0" />
+            </Grid>
+          </StackPanel>
+
+          <Border Height="1" Background="#DDD" />
+
+          <!-- Tone -->
+          <TextBlock Text="Tone" FontWeight="SemiBold" Opacity="0.85" />
+          <Grid ColumnDefinitions="120,*,40">
+            <TextBlock Grid.Column="0" Text="Exposure (EV)" />
+            <Slider Grid.Column="1" x:Name="ExposureSlider" Minimum="-5" Maximum="5" TickFrequency="0.1" Value="0"
+                    ValueChanged="OnSettingsChanged" />
+            <TextBlock Grid.Column="2" x:Name="ExposureValue" Opacity="0.7" TextAlignment="Right" Text="0.0" />
+          </Grid>
+          <Grid ColumnDefinitions="120,*,40">
+            <TextBlock Grid.Column="0" Text="Contrast" />
+            <Slider Grid.Column="1" x:Name="ContrastSlider" Minimum="-100" Maximum="100" Value="0"
+                    ValueChanged="OnSettingsChanged" />
+            <TextBlock Grid.Column="2" x:Name="ContrastValue" Opacity="0.7" TextAlignment="Right" Text="0" />
+          </Grid>
+          <Grid ColumnDefinitions="120,*,40">
+            <TextBlock Grid.Column="0" Text="Highlights" />
+            <Slider Grid.Column="1" x:Name="HighlightsSlider" Minimum="-100" Maximum="100" Value="0"
+                    ValueChanged="OnSettingsChanged" />
+            <TextBlock Grid.Column="2" x:Name="HighlightsValue" Opacity="0.7" TextAlignment="Right" Text="0" />
+          </Grid>
+          <Grid ColumnDefinitions="120,*,40">
+            <TextBlock Grid.Column="0" Text="Shadows" />
+            <Slider Grid.Column="1" x:Name="ShadowsSlider" Minimum="-100" Maximum="100" Value="0"
+                    ValueChanged="OnSettingsChanged" />
+            <TextBlock Grid.Column="2" x:Name="ShadowsValue" Opacity="0.7" TextAlignment="Right" Text="0" />
+          </Grid>
+          <Grid ColumnDefinitions="120,*,40">
+            <TextBlock Grid.Column="0" Text="Whites" />
+            <Slider Grid.Column="1" x:Name="WhitesSlider" Minimum="-100" Maximum="100" Value="0"
+                    ValueChanged="OnSettingsChanged" />
+            <TextBlock Grid.Column="2" x:Name="WhitesValue" Opacity="0.7" TextAlignment="Right" Text="0" />
+          </Grid>
+          <Grid ColumnDefinitions="120,*,40">
+            <TextBlock Grid.Column="0" Text="Blacks" />
+            <Slider Grid.Column="1" x:Name="BlacksSlider" Minimum="-100" Maximum="100" Value="0"
+                    ValueChanged="OnSettingsChanged" />
+            <TextBlock Grid.Column="2" x:Name="BlacksValue" Opacity="0.7" TextAlignment="Right" Text="0" />
+          </Grid>
+
+          <Border Height="1" Background="#DDD" />
+
+          <!-- Presence -->
+          <TextBlock Text="Presence" FontWeight="SemiBold" Opacity="0.85" />
+          <Grid ColumnDefinitions="120,*,40">
+            <TextBlock Grid.Column="0" Text="Clarity" />
+            <Slider Grid.Column="1" x:Name="ClaritySlider" Minimum="-100" Maximum="100" Value="0"
+                    ValueChanged="OnSettingsChanged" />
+            <TextBlock Grid.Column="2" x:Name="ClarityValue" Opacity="0.7" TextAlignment="Right" Text="0" />
+          </Grid>
+          <Grid ColumnDefinitions="120,*,40">
+            <TextBlock Grid.Column="0" Text="Dehaze"
+                       ToolTip.Tip="Pulls midtone contrast and saturation back from atmospheric haze. Negative softens." />
+            <Slider Grid.Column="1" x:Name="DehazeSlider" Minimum="-100" Maximum="100" Value="0"
+                    ValueChanged="OnSettingsChanged" />
+            <TextBlock Grid.Column="2" x:Name="DehazeValue" Opacity="0.7" TextAlignment="Right" Text="0" />
+          </Grid>
+          <Grid ColumnDefinitions="120,*,40">
+            <TextBlock Grid.Column="0" Text="Vibrance" />
+            <Slider Grid.Column="1" x:Name="VibranceSlider" Minimum="-100" Maximum="100" Value="0"
+                    ValueChanged="OnSettingsChanged" />
+            <TextBlock Grid.Column="2" x:Name="VibranceValue" Opacity="0.7" TextAlignment="Right" Text="0" />
+          </Grid>
+          <Grid ColumnDefinitions="120,*,40">
+            <TextBlock Grid.Column="0" Text="Color enh."
+                       ToolTip.Tip="Skin-tone-protective vibrance — boosts saturation everywhere except orange/yellow hues so people don't go plastic-y." />
+            <Slider Grid.Column="1" x:Name="ColorEnhancementSlider" Minimum="-100" Maximum="100" Value="0"
+                    ValueChanged="OnSettingsChanged" />
+            <TextBlock Grid.Column="2" x:Name="ColorEnhancementValue" Opacity="0.7" TextAlignment="Right" Text="0" />
+          </Grid>
+          <Grid ColumnDefinitions="120,*,40">
+            <TextBlock Grid.Column="0" Text="Saturation" />
+            <Slider Grid.Column="1" x:Name="SaturationSlider" Minimum="-100" Maximum="100" Value="0"
+                    ValueChanged="OnSettingsChanged" />
+            <TextBlock Grid.Column="2" x:Name="SaturationValue" Opacity="0.7" TextAlignment="Right" Text="0" />
+          </Grid>
+
+          <Border Height="1" Background="#DDD" />
+
+          <!-- Color -->
+          <TextBlock Text="White balance" FontWeight="SemiBold" Opacity="0.85" />
+          <Grid ColumnDefinitions="120,*,40">
+            <TextBlock Grid.Column="0" Text="Temperature" />
+            <Slider Grid.Column="1" x:Name="TemperatureSlider" Minimum="-100" Maximum="100" Value="0"
+                    ValueChanged="OnSettingsChanged" />
+            <TextBlock Grid.Column="2" x:Name="TemperatureValue" Opacity="0.7" TextAlignment="Right" Text="0" />
+          </Grid>
+          <Grid ColumnDefinitions="120,*,40">
+            <TextBlock Grid.Column="0" Text="Tint" />
+            <Slider Grid.Column="1" x:Name="TintSlider" Minimum="-100" Maximum="100" Value="0"
+                    ValueChanged="OnSettingsChanged" />
+            <TextBlock Grid.Column="2" x:Name="TintValue" Opacity="0.7" TextAlignment="Right" Text="0" />
+          </Grid>
+
+          <Border Height="1" Background="#DDD" />
+
+          <!-- Per-channel gain. Multiplies each channel after WB so users
+               can fix individual casts that simple temperature/tint can't
+               reach (e.g. cyan-tinted blue sky). -->
+          <TextBlock Text="Channels (R / G / B)" FontWeight="SemiBold" Opacity="0.85" />
+          <Grid ColumnDefinitions="120,*,40">
+            <TextBlock Grid.Column="0" Text="Red" Foreground="#C0392B" FontWeight="SemiBold" />
+            <Slider Grid.Column="1" x:Name="RedGainSlider" Minimum="-100" Maximum="100" Value="0"
+                    ValueChanged="OnSettingsChanged" />
+            <TextBlock Grid.Column="2" x:Name="RedGainValue" Opacity="0.7" TextAlignment="Right" Text="0" />
+          </Grid>
+          <Grid ColumnDefinitions="120,*,40">
+            <TextBlock Grid.Column="0" Text="Green" Foreground="#1E8449" FontWeight="SemiBold" />
+            <Slider Grid.Column="1" x:Name="GreenGainSlider" Minimum="-100" Maximum="100" Value="0"
+                    ValueChanged="OnSettingsChanged" />
+            <TextBlock Grid.Column="2" x:Name="GreenGainValue" Opacity="0.7" TextAlignment="Right" Text="0" />
+          </Grid>
+          <Grid ColumnDefinitions="120,*,40">
+            <TextBlock Grid.Column="0" Text="Blue" Foreground="#2471A3" FontWeight="SemiBold" />
+            <Slider Grid.Column="1" x:Name="BlueGainSlider" Minimum="-100" Maximum="100" Value="0"
+                    ValueChanged="OnSettingsChanged" />
+            <TextBlock Grid.Column="2" x:Name="BlueGainValue" Opacity="0.7" TextAlignment="Right" Text="0" />
+          </Grid>
+
+          <Border Height="1" Background="#DDD" />
+
+          <!-- Tone curve editor. Click empty space to insert a point,
+               drag to move, right-click to remove (end anchors stay
+               put). Curve LUT is applied uniformly to all channels. -->
+          <StackPanel Spacing="4">
+            <Grid ColumnDefinitions="*,Auto,Auto,Auto">
+              <TextBlock Grid.Column="0" Text="Tone curve" FontWeight="SemiBold" Opacity="0.85" VerticalAlignment="Center" />
+              <ComboBox Grid.Column="1" x:Name="CurveChannelCombo" Width="100" Padding="4,1" FontSize="11"
+                        SelectedIndex="0" Margin="0,0,4,0"
+                        ToolTip.Tip="Pick the channel to edit. The master curve runs first; per-channel curves run after for fine colour control."
+                        SelectionChanged="OnCurveChannelChanged">
+                <ComboBoxItem Content="Master" />
+                <ComboBoxItem Content="Red" />
+                <ComboBoxItem Content="Green" />
+                <ComboBoxItem Content="Blue" />
+              </ComboBox>
+              <ComboBox Grid.Column="2" x:Name="CurveInterpolationCombo" Width="100" Padding="4,1" FontSize="11"
+                        SelectedIndex="0"
+                        ToolTip.Tip="Interpolation between control points: linear is exact at every point, spline / Bezier produce smooth curves."
+                        SelectionChanged="OnCurveInterpolationChanged">
+                <ComboBoxItem Content="Linear" />
+                <ComboBoxItem Content="Spline" />
+                <ComboBoxItem Content="Bezier" />
+              </ComboBox>
+              <Button Grid.Column="3" Content="Reset" Padding="6,2" FontSize="11" Margin="6,0,0,0" Click="OnResetCurveClick"
+                      ToolTip.Tip="Reset the active channel's curve" />
+            </Grid>
+            <controls:ToneCurveEditor x:Name="CurveEditor" Height="200" />
+          </StackPanel>
+
+          <Border Height="1" Background="#DDD" />
+
+          <!-- Color Grading: 3 luminance-band wheels + a global wheel.
+               Pick a wheel via the toggle row; the H/S/L sliders edit
+               that wheel's tint. Shadows / Midtones / Highlights are
+               weighted by per-pixel luminance; Global tints uniformly. -->
+          <StackPanel Spacing="4">
+            <TextBlock Text="Color grading" FontWeight="SemiBold" Opacity="0.85" />
+            <StackPanel Orientation="Horizontal" Spacing="4">
+              <ToggleButton x:Name="GradeWheelShadow"    Content="Shadows"    IsChecked="True" Click="OnGradeWheelClick" Tag="0" Padding="8,2" FontSize="11" />
+              <ToggleButton x:Name="GradeWheelMidtone"   Content="Midtones"                       Click="OnGradeWheelClick" Tag="1" Padding="8,2" FontSize="11" />
+              <ToggleButton x:Name="GradeWheelHighlight" Content="Highlights"                     Click="OnGradeWheelClick" Tag="2" Padding="8,2" FontSize="11" />
+              <ToggleButton x:Name="GradeWheelGlobal"    Content="Global"                         Click="OnGradeWheelClick" Tag="3" Padding="8,2" FontSize="11" />
+              <Button Content="Reset" Padding="6,2" FontSize="11" Margin="6,0,0,0" Click="OnResetGradingClick"
+                      ToolTip.Tip="Reset all four color-grading wheels" />
+            </StackPanel>
+            <Grid ColumnDefinitions="120,*,40">
+              <TextBlock Grid.Column="0" Text="Hue" />
+              <Slider Grid.Column="1" x:Name="GradeHueSlider" Minimum="0" Maximum="360" Value="0"
+                      ValueChanged="OnGradeAxisChanged" />
+              <TextBlock Grid.Column="2" x:Name="GradeHueValue" Opacity="0.7" TextAlignment="Right" Text="0" />
+            </Grid>
+            <Grid ColumnDefinitions="120,*,40">
+              <TextBlock Grid.Column="0" Text="Saturation" />
+              <Slider Grid.Column="1" x:Name="GradeSatSlider" Minimum="0" Maximum="100" Value="0"
+                      ValueChanged="OnGradeAxisChanged" />
+              <TextBlock Grid.Column="2" x:Name="GradeSatValue" Opacity="0.7" TextAlignment="Right" Text="0" />
+            </Grid>
+            <Grid ColumnDefinitions="120,*,40">
+              <TextBlock Grid.Column="0" Text="Luminance" />
+              <Slider Grid.Column="1" x:Name="GradeLumSlider" Minimum="-100" Maximum="100" Value="0"
+                      ValueChanged="OnGradeAxisChanged" />
+              <TextBlock Grid.Column="2" x:Name="GradeLumValue" Opacity="0.7" TextAlignment="Right" Text="0" />
+            </Grid>
+          </StackPanel>
+
+          <Border Height="1" Background="#DDD" />
+
+          <!-- HSL color mixer: 8 hue bands × Hue / Saturation / Luminance.
+               Click a coloured chip to pick the band; the three sliders
+               then edit that band's adjustments. Pixels get weighted
+               contributions from the two nearest bands so adjacent
+               edits blend smoothly. -->
+          <StackPanel Spacing="4">
+            <TextBlock Text="Color mixer (HSL)" FontWeight="SemiBold" Opacity="0.85" />
+            <StackPanel Orientation="Horizontal" Spacing="2" x:Name="HslChipRow">
+              <ToggleButton x:Name="HslChip0" Tag="0" Background="#E74C3C" Width="32" Height="22" Padding="0" IsChecked="True"
+                            Click="OnHslChipClick" ToolTip.Tip="Red" />
+              <ToggleButton x:Name="HslChip1" Tag="1" Background="#E67E22" Width="32" Height="22" Padding="0"
+                            Click="OnHslChipClick" ToolTip.Tip="Orange" />
+              <ToggleButton x:Name="HslChip2" Tag="2" Background="#F1C40F" Width="32" Height="22" Padding="0"
+                            Click="OnHslChipClick" ToolTip.Tip="Yellow" />
+              <ToggleButton x:Name="HslChip3" Tag="3" Background="#27AE60" Width="32" Height="22" Padding="0"
+                            Click="OnHslChipClick" ToolTip.Tip="Green" />
+              <ToggleButton x:Name="HslChip4" Tag="4" Background="#1ABC9C" Width="32" Height="22" Padding="0"
+                            Click="OnHslChipClick" ToolTip.Tip="Aqua" />
+              <ToggleButton x:Name="HslChip5" Tag="5" Background="#2980B9" Width="32" Height="22" Padding="0"
+                            Click="OnHslChipClick" ToolTip.Tip="Blue" />
+              <ToggleButton x:Name="HslChip6" Tag="6" Background="#8E44AD" Width="32" Height="22" Padding="0"
+                            Click="OnHslChipClick" ToolTip.Tip="Purple" />
+              <ToggleButton x:Name="HslChip7" Tag="7" Background="#C2185B" Width="32" Height="22" Padding="0"
+                            Click="OnHslChipClick" ToolTip.Tip="Magenta" />
+              <Button Content="Reset" Padding="6,2" FontSize="11" Margin="6,0,0,0" Click="OnResetHslClick"
+                      ToolTip.Tip="Reset all HSL bands to zero" />
+            </StackPanel>
+            <Grid ColumnDefinitions="120,*,40">
+              <TextBlock Grid.Column="0" Text="Hue" />
+              <Slider Grid.Column="1" x:Name="HslHueSlider" Minimum="-100" Maximum="100" Value="0"
+                      ValueChanged="OnHslAxisChanged" />
+              <TextBlock Grid.Column="2" x:Name="HslHueValue" Opacity="0.7" TextAlignment="Right" Text="0" />
+            </Grid>
+            <Grid ColumnDefinitions="120,*,40">
+              <TextBlock Grid.Column="0" Text="Saturation" />
+              <Slider Grid.Column="1" x:Name="HslSatSlider" Minimum="-100" Maximum="100" Value="0"
+                      ValueChanged="OnHslAxisChanged" />
+              <TextBlock Grid.Column="2" x:Name="HslSatValue" Opacity="0.7" TextAlignment="Right" Text="0" />
+            </Grid>
+            <Grid ColumnDefinitions="120,*,40">
+              <TextBlock Grid.Column="0" Text="Luminance" />
+              <Slider Grid.Column="1" x:Name="HslLumSlider" Minimum="-100" Maximum="100" Value="0"
+                      ValueChanged="OnHslAxisChanged" />
+              <TextBlock Grid.Column="2" x:Name="HslLumValue" Opacity="0.7" TextAlignment="Right" Text="0" />
+            </Grid>
+          </StackPanel>
+
+          <Border Height="1" Background="#DDD" />
+
+          <!-- B&W mixer: same 8 hue bands as HSL but contributing to a
+               single gray output. Toggle "Convert to B&W" to flatten;
+               the active-band slider biases that hue's contribution. -->
+          <StackPanel Spacing="4">
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBlock Grid.Column="0" Text="Black &amp; White" FontWeight="SemiBold" Opacity="0.85" VerticalAlignment="Center" />
+              <CheckBox Grid.Column="1" x:Name="ConvertToBwCheck" Content="Convert" FontSize="11" IsCheckedChanged="OnConvertToBwChanged"
+                        ToolTip.Tip="Flatten the image to gray after applying all colour edits, with the per-band mixer below biasing each hue's contribution to gray." />
+            </Grid>
+            <StackPanel Orientation="Horizontal" Spacing="2">
+              <ToggleButton x:Name="BwChip0" Tag="0" Background="#E74C3C" Width="32" Height="22" Padding="0" IsChecked="True"
+                            Click="OnBwChipClick" ToolTip.Tip="Red contribution to gray" />
+              <ToggleButton x:Name="BwChip1" Tag="1" Background="#E67E22" Width="32" Height="22" Padding="0"
+                            Click="OnBwChipClick" ToolTip.Tip="Orange" />
+              <ToggleButton x:Name="BwChip2" Tag="2" Background="#F1C40F" Width="32" Height="22" Padding="0"
+                            Click="OnBwChipClick" ToolTip.Tip="Yellow" />
+              <ToggleButton x:Name="BwChip3" Tag="3" Background="#27AE60" Width="32" Height="22" Padding="0"
+                            Click="OnBwChipClick" ToolTip.Tip="Green" />
+              <ToggleButton x:Name="BwChip4" Tag="4" Background="#1ABC9C" Width="32" Height="22" Padding="0"
+                            Click="OnBwChipClick" ToolTip.Tip="Aqua" />
+              <ToggleButton x:Name="BwChip5" Tag="5" Background="#2980B9" Width="32" Height="22" Padding="0"
+                            Click="OnBwChipClick" ToolTip.Tip="Blue" />
+              <ToggleButton x:Name="BwChip6" Tag="6" Background="#8E44AD" Width="32" Height="22" Padding="0"
+                            Click="OnBwChipClick" ToolTip.Tip="Purple" />
+              <ToggleButton x:Name="BwChip7" Tag="7" Background="#C2185B" Width="32" Height="22" Padding="0"
+                            Click="OnBwChipClick" ToolTip.Tip="Magenta" />
+              <Button Content="Reset" Padding="6,2" FontSize="11" Margin="6,0,0,0" Click="OnResetBwClick"
+                      ToolTip.Tip="Reset all gray-mixer bands to zero" />
+            </StackPanel>
+            <Grid ColumnDefinitions="120,*,40">
+              <TextBlock Grid.Column="0" Text="Mix" />
+              <Slider Grid.Column="1" x:Name="BwMixSlider" Minimum="-100" Maximum="100" Value="0"
+                      ValueChanged="OnBwMixChanged" />
+              <TextBlock Grid.Column="2" x:Name="BwMixValue" Opacity="0.7" TextAlignment="Right" Text="0" />
+            </Grid>
+          </StackPanel>
+
+          <Border Height="1" Background="#DDD" />
+
+          <!-- Split Toning (legacy; superseded by Color Grading). Adobe still
+               carries these in older catalogues, so we model them for parity. -->
+          <StackPanel Spacing="4">
+            <TextBlock Text="Split toning (legacy)" FontWeight="SemiBold" Opacity="0.85" />
+            <TextBlock Text="Shadows" Opacity="0.7" FontSize="11" />
+            <Grid ColumnDefinitions="120,*,40">
+              <TextBlock Grid.Column="0" Text="  Hue" Opacity="0.85" />
+              <Slider Grid.Column="1" x:Name="SplitShHueSlider" Minimum="0" Maximum="360" Value="0"
+                      ValueChanged="OnSettingsChanged" />
+              <TextBlock Grid.Column="2" x:Name="SplitShHueValue" Opacity="0.7" TextAlignment="Right" Text="0" />
+            </Grid>
+            <Grid ColumnDefinitions="120,*,40">
+              <TextBlock Grid.Column="0" Text="  Saturation" Opacity="0.85" />
+              <Slider Grid.Column="1" x:Name="SplitShSatSlider" Minimum="0" Maximum="100" Value="0"
+                      ValueChanged="OnSettingsChanged" />
+              <TextBlock Grid.Column="2" x:Name="SplitShSatValue" Opacity="0.7" TextAlignment="Right" Text="0" />
+            </Grid>
+            <TextBlock Text="Highlights" Opacity="0.7" FontSize="11" />
+            <Grid ColumnDefinitions="120,*,40">
+              <TextBlock Grid.Column="0" Text="  Hue" Opacity="0.85" />
+              <Slider Grid.Column="1" x:Name="SplitHlHueSlider" Minimum="0" Maximum="360" Value="0"
+                      ValueChanged="OnSettingsChanged" />
+              <TextBlock Grid.Column="2" x:Name="SplitHlHueValue" Opacity="0.7" TextAlignment="Right" Text="0" />
+            </Grid>
+            <Grid ColumnDefinitions="120,*,40">
+              <TextBlock Grid.Column="0" Text="  Saturation" Opacity="0.85" />
+              <Slider Grid.Column="1" x:Name="SplitHlSatSlider" Minimum="0" Maximum="100" Value="0"
+                      ValueChanged="OnSettingsChanged" />
+              <TextBlock Grid.Column="2" x:Name="SplitHlSatValue" Opacity="0.7" TextAlignment="Right" Text="0" />
+            </Grid>
+            <Grid ColumnDefinitions="120,*,40">
+              <TextBlock Grid.Column="0" Text="Balance" />
+              <Slider Grid.Column="1" x:Name="SplitBalanceSlider" Minimum="-100" Maximum="100" Value="0"
+                      ValueChanged="OnSettingsChanged" />
+              <TextBlock Grid.Column="2" x:Name="SplitBalanceValue" Opacity="0.7" TextAlignment="Right" Text="0" />
+            </Grid>
+          </StackPanel>
+
+          <Border Height="1" Background="#DDD" />
+
+          <!-- Parametric tone curve — four luminance-band shifts with
+               adjustable split points. Adobe defaults: 25 / 50 / 75. -->
+          <StackPanel Spacing="4">
+            <TextBlock Text="Parametric curve" FontWeight="SemiBold" Opacity="0.85" />
+            <Grid ColumnDefinitions="120,*,40">
+              <TextBlock Grid.Column="0" Text="Highlights" />
+              <Slider Grid.Column="1" x:Name="ParamHlSlider" Minimum="-100" Maximum="100" Value="0"
+                      ValueChanged="OnSettingsChanged" />
+              <TextBlock Grid.Column="2" x:Name="ParamHlValue" Opacity="0.7" TextAlignment="Right" Text="0" />
+            </Grid>
+            <Grid ColumnDefinitions="120,*,40">
+              <TextBlock Grid.Column="0" Text="Lights" />
+              <Slider Grid.Column="1" x:Name="ParamLightsSlider" Minimum="-100" Maximum="100" Value="0"
+                      ValueChanged="OnSettingsChanged" />
+              <TextBlock Grid.Column="2" x:Name="ParamLightsValue" Opacity="0.7" TextAlignment="Right" Text="0" />
+            </Grid>
+            <Grid ColumnDefinitions="120,*,40">
+              <TextBlock Grid.Column="0" Text="Darks" />
+              <Slider Grid.Column="1" x:Name="ParamDarksSlider" Minimum="-100" Maximum="100" Value="0"
+                      ValueChanged="OnSettingsChanged" />
+              <TextBlock Grid.Column="2" x:Name="ParamDarksValue" Opacity="0.7" TextAlignment="Right" Text="0" />
+            </Grid>
+            <Grid ColumnDefinitions="120,*,40">
+              <TextBlock Grid.Column="0" Text="Shadows" />
+              <Slider Grid.Column="1" x:Name="ParamShSlider" Minimum="-100" Maximum="100" Value="0"
+                      ValueChanged="OnSettingsChanged" />
+              <TextBlock Grid.Column="2" x:Name="ParamShValue" Opacity="0.7" TextAlignment="Right" Text="0" />
+            </Grid>
+            <Grid ColumnDefinitions="120,*,40">
+              <TextBlock Grid.Column="0" Text="  Shadow split" Opacity="0.85" />
+              <Slider Grid.Column="1" x:Name="ParamShSplitSlider" Minimum="0" Maximum="100" Value="25"
+                      ValueChanged="OnSettingsChanged" />
+              <TextBlock Grid.Column="2" x:Name="ParamShSplitValue" Opacity="0.7" TextAlignment="Right" Text="25" />
+            </Grid>
+            <Grid ColumnDefinitions="120,*,40">
+              <TextBlock Grid.Column="0" Text="  Mid split" Opacity="0.85" />
+              <Slider Grid.Column="1" x:Name="ParamMidSplitSlider" Minimum="0" Maximum="100" Value="50"
+                      ValueChanged="OnSettingsChanged" />
+              <TextBlock Grid.Column="2" x:Name="ParamMidSplitValue" Opacity="0.7" TextAlignment="Right" Text="50" />
+            </Grid>
+            <Grid ColumnDefinitions="120,*,40">
+              <TextBlock Grid.Column="0" Text="  Highlight split" Opacity="0.85" />
+              <Slider Grid.Column="1" x:Name="ParamHlSplitSlider" Minimum="0" Maximum="100" Value="75"
+                      ValueChanged="OnSettingsChanged" />
+              <TextBlock Grid.Column="2" x:Name="ParamHlSplitValue" Opacity="0.7" TextAlignment="Right" Text="75" />
+            </Grid>
+          </StackPanel>
+
+          <Border Height="1" Background="#DDD" />
+
+          <!-- Detail -->
+          <TextBlock Text="Detail" FontWeight="SemiBold" Opacity="0.85" />
+          <Grid ColumnDefinitions="120,*,40">
+            <TextBlock Grid.Column="0" Text="Texture" />
+            <Slider Grid.Column="1" x:Name="TextureSlider" Minimum="-100" Maximum="100" Value="0"
+                    ValueChanged="OnSettingsChanged" />
+            <TextBlock Grid.Column="2" x:Name="TextureValue" Opacity="0.7" TextAlignment="Right" Text="0" />
+          </Grid>
+          <Grid ColumnDefinitions="120,*,40">
+            <TextBlock Grid.Column="0" Text="Smoothness"
+                       ToolTip.Tip="Pre-sharpen blur — knocks back noise before edge enhancement" />
+            <Slider Grid.Column="1" x:Name="SmoothnessSlider" Minimum="0" Maximum="100" Value="0"
+                    ValueChanged="OnSettingsChanged" />
+            <TextBlock Grid.Column="2" x:Name="SmoothnessValue" Opacity="0.7" TextAlignment="Right" Text="0" />
+          </Grid>
+          <Grid ColumnDefinitions="120,*,40">
+            <TextBlock Grid.Column="0" Text="Sharpening" />
+            <Slider Grid.Column="1" x:Name="SharpeningSlider" Minimum="0" Maximum="150" Value="0"
+                    ValueChanged="OnSettingsChanged" />
+            <TextBlock Grid.Column="2" x:Name="SharpeningValue" Opacity="0.7" TextAlignment="Right" Text="0" />
+          </Grid>
+          <Grid ColumnDefinitions="120,*,40">
+            <TextBlock Grid.Column="0" Text="  Radius" Opacity="0.85"
+                       ToolTip.Tip="Sharpening kernel radius in pixels. 0 = derive from Sharpening; ~1.0 px is the Adobe default for fine detail." />
+            <Slider Grid.Column="1" x:Name="SharpenRadiusSlider" Minimum="0" Maximum="3" Value="0"
+                    ValueChanged="OnSettingsChanged" />
+            <TextBlock Grid.Column="2" x:Name="SharpenRadiusValue" Opacity="0.7" TextAlignment="Right" Text="0.0" />
+          </Grid>
+          <Grid ColumnDefinitions="120,*,40">
+            <TextBlock Grid.Column="0" Text="  Detail" Opacity="0.85"
+                       ToolTip.Tip="Extra small-radius pass that emphasises high-frequency texture (skin, foliage)." />
+            <Slider Grid.Column="1" x:Name="SharpenDetailSlider" Minimum="0" Maximum="100" Value="0"
+                    ValueChanged="OnSettingsChanged" />
+            <TextBlock Grid.Column="2" x:Name="SharpenDetailValue" Opacity="0.7" TextAlignment="Right" Text="0" />
+          </Grid>
+          <Grid ColumnDefinitions="120,*,40">
+            <TextBlock Grid.Column="0" Text="  Masking" Opacity="0.85"
+                       ToolTip.Tip="Edge mask aggression — high values restrict sharpening to detected edges. Currently emitted to the Adobe XMP schema only; no pixel effect yet." />
+            <Slider Grid.Column="1" x:Name="SharpenMaskingSlider" Minimum="0" Maximum="100" Value="0"
+                    ValueChanged="OnSettingsChanged" />
+            <TextBlock Grid.Column="2" x:Name="SharpenMaskingValue" Opacity="0.7" TextAlignment="Right" Text="0" />
+          </Grid>
+
+          <!-- Noise reduction. Smoothness above is the luminance amount;
+               these sliders refine it and add chroma denoise. Detail /
+               contrast / smoothness modifiers are emitted to the Adobe
+               schema (Lightroom honours them) — pixel implementations
+               for Lum NR detail / contrast are a follow-up; chroma
+               reduction works today via a YCbCr-style chroma blur. -->
+          <Grid ColumnDefinitions="120,*,40">
+            <TextBlock Grid.Column="0" Text="  Lum detail" Opacity="0.85"
+                       ToolTip.Tip="Higher = preserve more high-frequency luminance detail when smoothing. Shrinks the Smoothness blur sigma." />
+            <Slider Grid.Column="1" x:Name="LumNrDetailSlider" Minimum="0" Maximum="100" Value="0"
+                    ValueChanged="OnSettingsChanged" />
+            <TextBlock Grid.Column="2" x:Name="LumNrDetailValue" Opacity="0.7" TextAlignment="Right" Text="0" />
+          </Grid>
+          <Grid ColumnDefinitions="120,*,40">
+            <TextBlock Grid.Column="0" Text="  Lum contrast" Opacity="0.85"
+                       ToolTip.Tip="Higher = preserve high-contrast edges when smoothing. Shrinks the Smoothness blur sigma." />
+            <Slider Grid.Column="1" x:Name="LumNrContrastSlider" Minimum="0" Maximum="100" Value="0"
+                    ValueChanged="OnSettingsChanged" />
+            <TextBlock Grid.Column="2" x:Name="LumNrContrastValue" Opacity="0.7" TextAlignment="Right" Text="0" />
+          </Grid>
+          <Grid ColumnDefinitions="120,*,40">
+            <TextBlock Grid.Column="0" Text="Color noise" />
+            <Slider Grid.Column="1" x:Name="ColorNrSlider" Minimum="0" Maximum="100" Value="0"
+                    ValueChanged="OnSettingsChanged" />
+            <TextBlock Grid.Column="2" x:Name="ColorNrValue" Opacity="0.7" TextAlignment="Right" Text="0" />
+          </Grid>
+          <Grid ColumnDefinitions="120,*,40">
+            <TextBlock Grid.Column="0" Text="  Color detail" Opacity="0.85"
+                       ToolTip.Tip="Higher = preserve fine colour edges when reducing chroma noise. Shrinks the chroma blur sigma." />
+            <Slider Grid.Column="1" x:Name="ColorNrDetailSlider" Minimum="0" Maximum="100" Value="0"
+                    ValueChanged="OnSettingsChanged" />
+            <TextBlock Grid.Column="2" x:Name="ColorNrDetailValue" Opacity="0.7" TextAlignment="Right" Text="0" />
+          </Grid>
+          <Grid ColumnDefinitions="120,*,40">
+            <TextBlock Grid.Column="0" Text="  Color smooth" Opacity="0.85"
+                       ToolTip.Tip="Higher = stronger chroma smoothing. Grows the chroma blur sigma on top of the Color noise amount." />
+            <Slider Grid.Column="1" x:Name="ColorNrSmoothSlider" Minimum="0" Maximum="100" Value="0"
+                    ValueChanged="OnSettingsChanged" />
+            <TextBlock Grid.Column="2" x:Name="ColorNrSmoothValue" Opacity="0.7" TextAlignment="Right" Text="0" />
+          </Grid>
+
+          <Border Height="1" Background="#DDD" />
+
+          <!-- Lens corrections: manual distortion + per-channel CA + defringe.
+               These run BEFORE the develop sliders so colour adjustments
+               operate on a geometrically-corrected image. -->
+          <TextBlock Text="Lens corrections" FontWeight="SemiBold" Opacity="0.85" />
+          <Grid ColumnDefinitions="120,*,40">
+            <TextBlock Grid.Column="0" Text="Distortion"
+                       ToolTip.Tip="Manual radial distortion correction. Negative = remove barrel; positive = remove pincushion." />
+            <Slider Grid.Column="1" x:Name="LensDistortSlider" Minimum="-100" Maximum="100" Value="0"
+                    ValueChanged="OnSettingsChanged" />
+            <TextBlock Grid.Column="2" x:Name="LensDistortValue" Opacity="0.7" TextAlignment="Right" Text="0" />
+          </Grid>
+          <Grid ColumnDefinitions="120,*,40">
+            <TextBlock Grid.Column="0" Text="CA red/cyan"
+                       ToolTip.Tip="Correct red/cyan chromatic-aberration fringes by scaling the red channel radially." />
+            <Slider Grid.Column="1" x:Name="CaRSlider" Minimum="-100" Maximum="100" Value="0"
+                    ValueChanged="OnSettingsChanged" />
+            <TextBlock Grid.Column="2" x:Name="CaRValue" Opacity="0.7" TextAlignment="Right" Text="0" />
+          </Grid>
+          <Grid ColumnDefinitions="120,*,40">
+            <TextBlock Grid.Column="0" Text="CA blue/yellow"
+                       ToolTip.Tip="Correct blue/yellow chromatic-aberration fringes by scaling the blue channel radially." />
+            <Slider Grid.Column="1" x:Name="CaBSlider" Minimum="-100" Maximum="100" Value="0"
+                    ValueChanged="OnSettingsChanged" />
+            <TextBlock Grid.Column="2" x:Name="CaBValue" Opacity="0.7" TextAlignment="Right" Text="0" />
+          </Grid>
+          <Grid ColumnDefinitions="120,*,40">
+            <TextBlock Grid.Column="0" Text="Defringe purple"
+                       ToolTip.Tip="Desaturate purple halos around backlit edges. Adobe range 0..20." />
+            <Slider Grid.Column="1" x:Name="DefringePurpleSlider" Minimum="0" Maximum="20" Value="0"
+                    ValueChanged="OnSettingsChanged" />
+            <TextBlock Grid.Column="2" x:Name="DefringePurpleValue" Opacity="0.7" TextAlignment="Right" Text="0" />
+          </Grid>
+          <Grid ColumnDefinitions="120,*,40">
+            <TextBlock Grid.Column="0" Text="Defringe green"
+                       ToolTip.Tip="Desaturate green halos around foliage edges. Adobe range 0..20." />
+            <Slider Grid.Column="1" x:Name="DefringeGreenSlider" Minimum="0" Maximum="20" Value="0"
+                    ValueChanged="OnSettingsChanged" />
+            <TextBlock Grid.Column="2" x:Name="DefringeGreenValue" Opacity="0.7" TextAlignment="Right" Text="0" />
+          </Grid>
+
+          <Border Height="1" Background="#DDD" />
+
+          <!-- Camera calibration. Per-primary nudges used by colour
+               scientists to fine-tune the camera's primary mapping. -->
+          <TextBlock Text="Calibration" FontWeight="SemiBold" Opacity="0.85" />
+          <Grid ColumnDefinitions="120,*,40">
+            <TextBlock Grid.Column="0" Text="Red hue" Foreground="#C0392B" FontWeight="SemiBold" />
+            <Slider Grid.Column="1" x:Name="CalRedHueSlider" Minimum="-100" Maximum="100" Value="0"
+                    ValueChanged="OnSettingsChanged" />
+            <TextBlock Grid.Column="2" x:Name="CalRedHueValue" Opacity="0.7" TextAlignment="Right" Text="0" />
+          </Grid>
+          <Grid ColumnDefinitions="120,*,40">
+            <TextBlock Grid.Column="0" Text="Red saturation" Foreground="#C0392B" />
+            <Slider Grid.Column="1" x:Name="CalRedSatSlider" Minimum="-100" Maximum="100" Value="0"
+                    ValueChanged="OnSettingsChanged" />
+            <TextBlock Grid.Column="2" x:Name="CalRedSatValue" Opacity="0.7" TextAlignment="Right" Text="0" />
+          </Grid>
+          <Grid ColumnDefinitions="120,*,40">
+            <TextBlock Grid.Column="0" Text="Green hue" Foreground="#1E8449" FontWeight="SemiBold" />
+            <Slider Grid.Column="1" x:Name="CalGreenHueSlider" Minimum="-100" Maximum="100" Value="0"
+                    ValueChanged="OnSettingsChanged" />
+            <TextBlock Grid.Column="2" x:Name="CalGreenHueValue" Opacity="0.7" TextAlignment="Right" Text="0" />
+          </Grid>
+          <Grid ColumnDefinitions="120,*,40">
+            <TextBlock Grid.Column="0" Text="Green saturation" Foreground="#1E8449" />
+            <Slider Grid.Column="1" x:Name="CalGreenSatSlider" Minimum="-100" Maximum="100" Value="0"
+                    ValueChanged="OnSettingsChanged" />
+            <TextBlock Grid.Column="2" x:Name="CalGreenSatValue" Opacity="0.7" TextAlignment="Right" Text="0" />
+          </Grid>
+          <Grid ColumnDefinitions="120,*,40">
+            <TextBlock Grid.Column="0" Text="Blue hue" Foreground="#2471A3" FontWeight="SemiBold" />
+            <Slider Grid.Column="1" x:Name="CalBlueHueSlider" Minimum="-100" Maximum="100" Value="0"
+                    ValueChanged="OnSettingsChanged" />
+            <TextBlock Grid.Column="2" x:Name="CalBlueHueValue" Opacity="0.7" TextAlignment="Right" Text="0" />
+          </Grid>
+          <Grid ColumnDefinitions="120,*,40">
+            <TextBlock Grid.Column="0" Text="Blue saturation" Foreground="#2471A3" />
+            <Slider Grid.Column="1" x:Name="CalBlueSatSlider" Minimum="-100" Maximum="100" Value="0"
+                    ValueChanged="OnSettingsChanged" />
+            <TextBlock Grid.Column="2" x:Name="CalBlueSatValue" Opacity="0.7" TextAlignment="Right" Text="0" />
+          </Grid>
+
+          <Border Height="1" Background="#DDD" />
+
+          <!-- Local adjustments: linear / radial gradient masks with
+               per-mask develop sliders. Click + buttons to add a mask;
+               select an entry to edit its sliders + numeric geometry.
+               Foreign mask li's (Brush, AI subject masks) are preserved
+               unedited through save cycles even though we don't show them. -->
+          <StackPanel Spacing="4">
+            <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto">
+              <TextBlock Grid.Column="0" Text="Local adjustments" FontWeight="SemiBold" Opacity="0.85" VerticalAlignment="Center" />
+              <Button Grid.Column="1" Content="+ Linear" Padding="6,2" FontSize="11" Click="OnAddLinearLocalClick"
+                      ToolTip.Tip="Add a linear-gradient masked correction. Drag the two yellow handles on the preview to place it." />
+              <Button Grid.Column="2" Content="+ Radial" Padding="6,2" FontSize="11" Margin="4,0,0,0" Click="OnAddRadialLocalClick"
+                      ToolTip.Tip="Add a radial-gradient masked correction. Drag the centre dot to move; drag the side dots to resize." />
+              <Button Grid.Column="3" Content="+ Brush"  Padding="6,2" FontSize="11" Margin="4,0,0,0" Click="OnAddBrushLocalClick"
+                      ToolTip.Tip="Add a brush-painted masked correction. Paint on the preview to add dabs. Toggle Erase to subtract from the mask." />
+              <Button Grid.Column="4" Content="– Remove" Padding="6,2" FontSize="11" Margin="4,0,0,0" Click="OnRemoveLocalClick"
+                      ToolTip.Tip="Remove the selected local adjustment." />
+            </Grid>
+            <ListBox x:Name="LocalAdjustmentsList" Height="80" SelectionChanged="OnLocalSelected" />
+
+            <Grid ColumnDefinitions="*,Auto" x:Name="LocalDetailsHeader" IsVisible="False">
+              <TextBlock Grid.Column="0" Text="Selected mask geometry" Opacity="0.7" FontSize="11" VerticalAlignment="Center" />
+              <TextBlock Grid.Column="1" x:Name="LocalMaskTypeLabel" Opacity="0.7" FontSize="11" />
+            </Grid>
+
+            <!-- Linear-mask geometry. Visible only when the active local is Linear. -->
+            <Grid x:Name="LinearMaskRow" IsVisible="False" ColumnDefinitions="Auto,*,Auto,*" RowDefinitions="Auto,Auto">
+              <TextBlock Grid.Row="0" Grid.Column="0" Text="X0:" Opacity="0.85" Margin="0,0,4,0" VerticalAlignment="Center" />
+              <NumericUpDown Grid.Row="0" Grid.Column="1" x:Name="LinX0Box" MinWidth="110" Minimum="0" Maximum="1" Increment="0.05" Value="0.5" FormatString="0.00" ValueChanged="OnLocalMaskGeometryChanged" />
+              <TextBlock Grid.Row="0" Grid.Column="2" Text="Y0:" Opacity="0.85" Margin="6,0,4,0" VerticalAlignment="Center" />
+              <NumericUpDown Grid.Row="0" Grid.Column="3" x:Name="LinY0Box" MinWidth="110" Minimum="0" Maximum="1" Increment="0.05" Value="0.0" FormatString="0.00" ValueChanged="OnLocalMaskGeometryChanged" />
+              <TextBlock Grid.Row="1" Grid.Column="0" Text="X1:" Opacity="0.85" Margin="0,2,4,0" VerticalAlignment="Center" />
+              <NumericUpDown Grid.Row="1" Grid.Column="1" x:Name="LinX1Box" MinWidth="110" Margin="0,2,0,0" Minimum="0" Maximum="1" Increment="0.05" Value="0.5" FormatString="0.00" ValueChanged="OnLocalMaskGeometryChanged" />
+              <TextBlock Grid.Row="1" Grid.Column="2" Text="Y1:" Opacity="0.85" Margin="6,2,4,0" VerticalAlignment="Center" />
+              <NumericUpDown Grid.Row="1" Grid.Column="3" x:Name="LinY1Box" MinWidth="110" Margin="0,2,0,0" Minimum="0" Maximum="1" Increment="0.05" Value="1.0" FormatString="0.00" ValueChanged="OnLocalMaskGeometryChanged" />
+            </Grid>
+
+            <!-- Radial-mask geometry. -->
+            <StackPanel x:Name="RadialMaskRows" IsVisible="False" Spacing="2">
+              <Grid ColumnDefinitions="Auto,*,Auto,*" RowDefinitions="Auto,Auto">
+                <TextBlock Grid.Row="0" Grid.Column="0" Text="Cx:" Opacity="0.85" Margin="0,0,4,0" VerticalAlignment="Center" />
+                <NumericUpDown Grid.Row="0" Grid.Column="1" x:Name="RadCxBox" MinWidth="110" Minimum="0" Maximum="1" Increment="0.05" Value="0.5"  FormatString="0.00" ValueChanged="OnLocalMaskGeometryChanged" />
+                <TextBlock Grid.Row="0" Grid.Column="2" Text="Cy:" Opacity="0.85" Margin="6,0,4,0" VerticalAlignment="Center" />
+                <NumericUpDown Grid.Row="0" Grid.Column="3" x:Name="RadCyBox" MinWidth="110" Minimum="0" Maximum="1" Increment="0.05" Value="0.5"  FormatString="0.00" ValueChanged="OnLocalMaskGeometryChanged" />
+                <TextBlock Grid.Row="1" Grid.Column="0" Text="Rx:" Opacity="0.85" Margin="0,2,4,0" VerticalAlignment="Center" />
+                <NumericUpDown Grid.Row="1" Grid.Column="1" x:Name="RadRxBox" MinWidth="110" Margin="0,2,0,0" Minimum="0.01" Maximum="1" Increment="0.05" Value="0.25" FormatString="0.00" ValueChanged="OnLocalMaskGeometryChanged" />
+                <TextBlock Grid.Row="1" Grid.Column="2" Text="Ry:" Opacity="0.85" Margin="6,2,4,0" VerticalAlignment="Center" />
+                <NumericUpDown Grid.Row="1" Grid.Column="3" x:Name="RadRyBox" MinWidth="110" Margin="0,2,0,0" Minimum="0.01" Maximum="1" Increment="0.05" Value="0.25" FormatString="0.00" ValueChanged="OnLocalMaskGeometryChanged" />
+              </Grid>
+              <Grid ColumnDefinitions="120,*,40,Auto">
+                <TextBlock Grid.Column="0" Text="Feather" />
+                <Slider Grid.Column="1" x:Name="RadFeatherSlider" Minimum="0" Maximum="100" Value="50" ValueChanged="OnLocalMaskFeatherChanged" />
+                <TextBlock Grid.Column="2" x:Name="RadFeatherValue" Opacity="0.7" TextAlignment="Right" Text="50" />
+                <CheckBox Grid.Column="3" x:Name="RadInvertCheck" Content="Invert" Margin="6,0,0,0" IsCheckedChanged="OnLocalMaskInvertChanged" />
+              </Grid>
+            </StackPanel>
+
+            <!-- Range mask: narrow the geometric mask to a luminance band.
+                 Shown alongside whichever geometry is active. -->
+            <StackPanel x:Name="RangeMaskRow" IsVisible="False" Spacing="2">
+              <TextBlock Text="Luminance range mask" Opacity="0.7" FontSize="11" />
+              <Grid ColumnDefinitions="120,*,40">
+                <TextBlock Grid.Column="0" Text="  Min lum" Opacity="0.85"
+                           ToolTip.Tip="Pixels below this luminance get zero mask weight." />
+                <Slider Grid.Column="1" x:Name="RangeLumMinSlider" Minimum="0" Maximum="1" TickFrequency="0.05" Value="0"
+                        ValueChanged="OnRangeMaskChanged" />
+                <TextBlock Grid.Column="2" x:Name="RangeLumMinValue" Opacity="0.7" TextAlignment="Right" Text="0.00" />
+              </Grid>
+              <Grid ColumnDefinitions="120,*,40">
+                <TextBlock Grid.Column="0" Text="  Max lum" Opacity="0.85"
+                           ToolTip.Tip="Pixels above this luminance get zero mask weight." />
+                <Slider Grid.Column="1" x:Name="RangeLumMaxSlider" Minimum="0" Maximum="1" TickFrequency="0.05" Value="1"
+                        ValueChanged="OnRangeMaskChanged" />
+                <TextBlock Grid.Column="2" x:Name="RangeLumMaxValue" Opacity="0.7" TextAlignment="Right" Text="1.00" />
+              </Grid>
+              <Grid ColumnDefinitions="120,*,40">
+                <TextBlock Grid.Column="0" Text="  Feather" Opacity="0.85"
+                           ToolTip.Tip="Smooths the edge of the luminance band so the constraint isn't a hard cliff." />
+                <Slider Grid.Column="1" x:Name="RangeLumFeatherSlider" Minimum="0.01" Maximum="0.5" TickFrequency="0.02" Value="0.1"
+                        ValueChanged="OnRangeMaskChanged" />
+                <TextBlock Grid.Column="2" x:Name="RangeLumFeatherValue" Opacity="0.7" TextAlignment="Right" Text="0.10" />
+              </Grid>
+              <TextBlock Text="Hue range mask" Opacity="0.7" FontSize="11" Margin="0,4,0,0" />
+              <Grid ColumnDefinitions="120,*,40">
+                <TextBlock Grid.Column="0" Text="  Min hue" Opacity="0.85"
+                           ToolTip.Tip="Lower edge of the hue band (0=red, 0.33=green, 0.67=blue). Wraps around when max&lt;min." />
+                <Slider Grid.Column="1" x:Name="RangeHueMinSlider" Minimum="0" Maximum="1" TickFrequency="0.05" Value="0"
+                        ValueChanged="OnRangeMaskChanged" />
+                <TextBlock Grid.Column="2" x:Name="RangeHueMinValue" Opacity="0.7" TextAlignment="Right" Text="0.00" />
+              </Grid>
+              <Grid ColumnDefinitions="120,*,40">
+                <TextBlock Grid.Column="0" Text="  Max hue" Opacity="0.85"
+                           ToolTip.Tip="Upper edge of the hue band. Set lower than Min to wrap across the red seam." />
+                <Slider Grid.Column="1" x:Name="RangeHueMaxSlider" Minimum="0" Maximum="1" TickFrequency="0.05" Value="1"
+                        ValueChanged="OnRangeMaskChanged" />
+                <TextBlock Grid.Column="2" x:Name="RangeHueMaxValue" Opacity="0.7" TextAlignment="Right" Text="1.00" />
+              </Grid>
+              <Grid ColumnDefinitions="120,*,40">
+                <TextBlock Grid.Column="0" Text="  Hue feather" Opacity="0.85"
+                           ToolTip.Tip="Softens the edge of the hue band." />
+                <Slider Grid.Column="1" x:Name="RangeHueFeatherSlider" Minimum="0.005" Maximum="0.25" TickFrequency="0.01" Value="0.05"
+                        ValueChanged="OnRangeMaskChanged" />
+                <TextBlock Grid.Column="2" x:Name="RangeHueFeatherValue" Opacity="0.7" TextAlignment="Right" Text="0.05" />
+              </Grid>
+            </StackPanel>
+
+            <!-- Sub-masks: extra masks combined with the primary via
+                 Add / Subtract / Intersect. The first sub-mask defaults
+                 to Subtract (carve a hole); change it via the picker. -->
+            <StackPanel x:Name="SubMasksRow" IsVisible="False" Spacing="2">
+              <Grid ColumnDefinitions="*,Auto,Auto,Auto">
+                <TextBlock Grid.Column="0" Text="Sub-masks" Opacity="0.7" FontSize="11" VerticalAlignment="Center" />
+                <Button Grid.Column="1" Content="+ Linear"  Padding="6,2" FontSize="11" Click="OnAddSubMaskLinearClick"
+                        ToolTip.Tip="Add a linear-gradient sub-mask combined with the primary." />
+                <Button Grid.Column="2" Content="+ Radial"  Padding="6,2" FontSize="11" Margin="2,0,0,0" Click="OnAddSubMaskRadialClick"
+                        ToolTip.Tip="Add a radial-gradient sub-mask. Use Intersect to focus the correction inside an ellipse." />
+                <Button Grid.Column="3" Content="+ Brush"   Padding="6,2" FontSize="11" Margin="2,0,0,0" Click="OnAddSubMaskBrushClick"
+                        ToolTip.Tip="Add a brush sub-mask. Defaults to Subtract — paint to carve a hole in the primary." />
+              </Grid>
+              <ListBox x:Name="SubMasksList" Height="60" SelectionChanged="OnSubMaskSelected" />
+              <Grid ColumnDefinitions="*,Auto,Auto" x:Name="SubMaskOpRow" IsVisible="False">
+                <TextBlock Grid.Column="0" Text="Combine" Opacity="0.7" FontSize="11" VerticalAlignment="Center" />
+                <ComboBox Grid.Column="1" x:Name="SubMaskOpCombo" Width="100" FontSize="11"
+                          SelectionChanged="OnSubMaskOpChanged">
+                  <ComboBoxItem Content="Add" />
+                  <ComboBoxItem Content="Subtract" />
+                  <ComboBoxItem Content="Intersect" />
+                </ComboBox>
+                <Button Grid.Column="2" Content="– Remove" Padding="6,2" FontSize="11" Margin="4,0,0,0" Click="OnRemoveSubMaskClick" />
+              </Grid>
+            </StackPanel>
+
+            <!-- Brush controls — visible only when the active mask is Brush. -->
+            <StackPanel x:Name="BrushControlsRow" IsVisible="False" Spacing="2">
+              <TextBlock Text="Click + drag on the preview to paint. Scroll wheel resizes the brush. The yellow circle is the brush cursor."
+                         Opacity="0.7" FontSize="11" TextWrapping="Wrap" />
+              <Grid ColumnDefinitions="60,*,50,Auto,Auto">
+                <TextBlock Grid.Column="0" Text="Brush" Opacity="0.85" VerticalAlignment="Center" />
+                <Slider Grid.Column="1" x:Name="BrushSizeSlider" Minimum="0.005" Maximum="0.5" Value="0.05"
+                        ValueChanged="OnBrushSizeChanged"
+                        ToolTip.Tip="Brush dab radius in normalised image coords (0.05 ≈ 1/20 of the long edge). Scroll-wheel over the preview to resize quickly." />
+                <TextBlock Grid.Column="2" x:Name="BrushSizeValue" Opacity="0.7" TextAlignment="Right" Text="0.050" />
+                <CheckBox  Grid.Column="3" x:Name="BrushEraseCheck" Content="Erase" Margin="6,0,0,0" IsCheckedChanged="OnBrushEraseChanged"
+                           ToolTip.Tip="Toggle eraser mode — strokes subtract from the mask instead of adding. Cursor turns red when on." />
+                <Button    Grid.Column="4" Content="Clear" Padding="6,2" FontSize="11" Margin="4,0,0,0" Click="OnBrushClearClick"
+                           ToolTip.Tip="Remove all dabs from this brush mask." />
+              </Grid>
+              <Grid ColumnDefinitions="60,*,40">
+                <TextBlock Grid.Column="0" Text="Flow" Opacity="0.85" VerticalAlignment="Center" />
+                <Slider Grid.Column="1" x:Name="BrushFlowSlider" Minimum="0.05" Maximum="1" Value="1"
+                        ValueChanged="OnBrushFlowChanged"
+                        ToolTip.Tip="Per-dab strength. Lower flow lets the user build coverage gradually." />
+                <TextBlock Grid.Column="2" x:Name="BrushFlowValue" Opacity="0.7" TextAlignment="Right" Text="1.00" />
+              </Grid>
+            </StackPanel>
+
+            <!-- Per-mask develop sliders. Disabled until something is selected. -->
+            <StackPanel x:Name="LocalSlidersPanel" IsVisible="False" Spacing="2">
+              <Grid ColumnDefinitions="120,*,40">
+                <TextBlock Grid.Column="0" Text="Exposure" />
+                <Slider Grid.Column="1" x:Name="LocalExposureSlider" Minimum="-4" Maximum="4" TickFrequency="0.1" Value="0" ValueChanged="OnLocalSliderChanged" />
+                <TextBlock Grid.Column="2" x:Name="LocalExposureValue" Opacity="0.7" TextAlignment="Right" Text="0.0" />
+              </Grid>
+              <Grid ColumnDefinitions="120,*,40">
+                <TextBlock Grid.Column="0" Text="Contrast" />
+                <Slider Grid.Column="1" x:Name="LocalContrastSlider" Minimum="-100" Maximum="100" Value="0" ValueChanged="OnLocalSliderChanged" />
+                <TextBlock Grid.Column="2" x:Name="LocalContrastValue" Opacity="0.7" TextAlignment="Right" Text="0" />
+              </Grid>
+              <Grid ColumnDefinitions="120,*,40">
+                <TextBlock Grid.Column="0" Text="Highlights" />
+                <Slider Grid.Column="1" x:Name="LocalHighlightsSlider" Minimum="-100" Maximum="100" Value="0" ValueChanged="OnLocalSliderChanged" />
+                <TextBlock Grid.Column="2" x:Name="LocalHighlightsValue" Opacity="0.7" TextAlignment="Right" Text="0" />
+              </Grid>
+              <Grid ColumnDefinitions="120,*,40">
+                <TextBlock Grid.Column="0" Text="Shadows" />
+                <Slider Grid.Column="1" x:Name="LocalShadowsSlider" Minimum="-100" Maximum="100" Value="0" ValueChanged="OnLocalSliderChanged" />
+                <TextBlock Grid.Column="2" x:Name="LocalShadowsValue" Opacity="0.7" TextAlignment="Right" Text="0" />
+              </Grid>
+              <Grid ColumnDefinitions="120,*,40">
+                <TextBlock Grid.Column="0" Text="Saturation" />
+                <Slider Grid.Column="1" x:Name="LocalSaturationSlider" Minimum="-100" Maximum="100" Value="0" ValueChanged="OnLocalSliderChanged" />
+                <TextBlock Grid.Column="2" x:Name="LocalSaturationValue" Opacity="0.7" TextAlignment="Right" Text="0" />
+              </Grid>
+              <Grid ColumnDefinitions="120,*,40">
+                <TextBlock Grid.Column="0" Text="Temperature" />
+                <Slider Grid.Column="1" x:Name="LocalTemperatureSlider" Minimum="-100" Maximum="100" Value="0" ValueChanged="OnLocalSliderChanged" />
+                <TextBlock Grid.Column="2" x:Name="LocalTemperatureValue" Opacity="0.7" TextAlignment="Right" Text="0" />
+              </Grid>
+              <Grid ColumnDefinitions="120,*,40">
+                <TextBlock Grid.Column="0" Text="Tint" />
+                <Slider Grid.Column="1" x:Name="LocalTintSlider" Minimum="-100" Maximum="100" Value="0" ValueChanged="OnLocalSliderChanged" />
+                <TextBlock Grid.Column="2" x:Name="LocalTintValue" Opacity="0.7" TextAlignment="Right" Text="0" />
+              </Grid>
+              <Grid ColumnDefinitions="120,*,40">
+                <TextBlock Grid.Column="0" Text="Clarity" />
+                <Slider Grid.Column="1" x:Name="LocalClaritySlider" Minimum="-100" Maximum="100" Value="0" ValueChanged="OnLocalSliderChanged" />
+                <TextBlock Grid.Column="2" x:Name="LocalClarityValue" Opacity="0.7" TextAlignment="Right" Text="0" />
+              </Grid>
+              <Grid ColumnDefinitions="120,*,40">
+                <TextBlock Grid.Column="0" Text="Luminance"
+                           ToolTip.Tip="Hue-preserving lift / crush within the masked region." />
+                <Slider Grid.Column="1" x:Name="LocalLuminanceSlider" Minimum="-100" Maximum="100" Value="0" ValueChanged="OnLocalSliderChanged" />
+                <TextBlock Grid.Column="2" x:Name="LocalLuminanceValue" Opacity="0.7" TextAlignment="Right" Text="0" />
+              </Grid>
+              <Grid ColumnDefinitions="120,*,40">
+                <TextBlock Grid.Column="0" Text="Toning hue"
+                           ToolTip.Tip="Hue (0..360°) of a single-colour cast applied to the masked region." />
+                <Slider Grid.Column="1" x:Name="LocalToningHueSlider" Minimum="0" Maximum="360" Value="0" ValueChanged="OnLocalSliderChanged" />
+                <TextBlock Grid.Column="2" x:Name="LocalToningHueValue" Opacity="0.7" TextAlignment="Right" Text="0" />
+              </Grid>
+              <Grid ColumnDefinitions="120,*,40">
+                <TextBlock Grid.Column="0" Text="Toning sat"
+                           ToolTip.Tip="Strength of the toning cast. 0 = no tint." />
+                <Slider Grid.Column="1" x:Name="LocalToningSatSlider" Minimum="0" Maximum="100" Value="0" ValueChanged="OnLocalSliderChanged" />
+                <TextBlock Grid.Column="2" x:Name="LocalToningSatValue" Opacity="0.7" TextAlignment="Right" Text="0" />
+              </Grid>
+              <Grid ColumnDefinitions="120,*,40">
+                <TextBlock Grid.Column="0" Text="Defringe"
+                           ToolTip.Tip="Desaturate purple / green halos within the masked region only. 0..20." />
+                <Slider Grid.Column="1" x:Name="LocalDefringeSlider" Minimum="0" Maximum="20" Value="0" ValueChanged="OnLocalSliderChanged" />
+                <TextBlock Grid.Column="2" x:Name="LocalDefringeValue" Opacity="0.7" TextAlignment="Right" Text="0" />
+              </Grid>
+            </StackPanel>
+          </StackPanel>
+
+          <Border Height="1" Background="#DDD" />
+
+          <!-- Effects: post-crop vignette + grain. Vignette amount is
+               negative for darkened corners (most common look). Grain
+               is monochrome film-style noise — Size / Frequency are
+               emitted to crs: only for now. -->
+          <TextBlock Text="Effects" FontWeight="SemiBold" Opacity="0.85" />
+          <Grid ColumnDefinitions="120,*,40">
+            <TextBlock Grid.Column="0" Text="Vignette" />
+            <Slider Grid.Column="1" x:Name="VignetteAmountSlider" Minimum="-100" Maximum="100" Value="0"
+                    ValueChanged="OnSettingsChanged" />
+            <TextBlock Grid.Column="2" x:Name="VignetteAmountValue" Opacity="0.7" TextAlignment="Right" Text="0" />
+          </Grid>
+          <Grid ColumnDefinitions="120,*,40">
+            <TextBlock Grid.Column="0" Text="  Midpoint" Opacity="0.85" />
+            <Slider Grid.Column="1" x:Name="VignetteMidpointSlider" Minimum="0" Maximum="100" Value="50"
+                    ValueChanged="OnSettingsChanged" />
+            <TextBlock Grid.Column="2" x:Name="VignetteMidpointValue" Opacity="0.7" TextAlignment="Right" Text="50" />
+          </Grid>
+          <Grid ColumnDefinitions="120,*,40">
+            <TextBlock Grid.Column="0" Text="  Feather" Opacity="0.85" />
+            <Slider Grid.Column="1" x:Name="VignetteFeatherSlider" Minimum="0" Maximum="100" Value="50"
+                    ValueChanged="OnSettingsChanged" />
+            <TextBlock Grid.Column="2" x:Name="VignetteFeatherValue" Opacity="0.7" TextAlignment="Right" Text="50" />
+          </Grid>
+          <Grid ColumnDefinitions="120,*,40">
+            <TextBlock Grid.Column="0" Text="  Roundness" Opacity="0.85" />
+            <Slider Grid.Column="1" x:Name="VignetteRoundnessSlider" Minimum="-100" Maximum="100" Value="0"
+                    ValueChanged="OnSettingsChanged" />
+            <TextBlock Grid.Column="2" x:Name="VignetteRoundnessValue" Opacity="0.7" TextAlignment="Right" Text="0" />
+          </Grid>
+          <Grid ColumnDefinitions="120,*,40">
+            <TextBlock Grid.Column="0" Text="  Highlight protect" Opacity="0.85"
+                       ToolTip.Tip="When the vignette darkens, spare bright pixels by this amount so a sun in the corner doesn't get muddied." />
+            <Slider Grid.Column="1" x:Name="VignetteHighlightProtectSlider" Minimum="0" Maximum="100" Value="0"
+                    ValueChanged="OnSettingsChanged" />
+            <TextBlock Grid.Column="2" x:Name="VignetteHighlightProtectValue" Opacity="0.7" TextAlignment="Right" Text="0" />
+          </Grid>
+          <Grid ColumnDefinitions="120,*,40">
+            <TextBlock Grid.Column="0" Text="Grain" />
+            <Slider Grid.Column="1" x:Name="GrainAmountSlider" Minimum="0" Maximum="100" Value="0"
+                    ValueChanged="OnSettingsChanged" />
+            <TextBlock Grid.Column="2" x:Name="GrainAmountValue" Opacity="0.7" TextAlignment="Right" Text="0" />
+          </Grid>
+          <Grid ColumnDefinitions="120,*,40">
+            <TextBlock Grid.Column="0" Text="  Size" Opacity="0.85"
+                       ToolTip.Tip="Grain particle size — larger values produce chunkier blocks." />
+            <Slider Grid.Column="1" x:Name="GrainSizeSlider" Minimum="0" Maximum="100" Value="25"
+                    ValueChanged="OnSettingsChanged" />
+            <TextBlock Grid.Column="2" x:Name="GrainSizeValue" Opacity="0.7" TextAlignment="Right" Text="25" />
+          </Grid>
+          <Grid ColumnDefinitions="120,*,40">
+            <TextBlock Grid.Column="0" Text="  Frequency" Opacity="0.85"
+                       ToolTip.Tip="Grain density — fraction of pixels that get noise applied. Lower = sparser." />
+            <Slider Grid.Column="1" x:Name="GrainFreqSlider" Minimum="0" Maximum="100" Value="50"
+                    ValueChanged="OnSettingsChanged" />
+            <TextBlock Grid.Column="2" x:Name="GrainFreqValue" Opacity="0.7" TextAlignment="Right" Text="50" />
+          </Grid>
+
+          <Button Content="Reset all" Click="OnResetAllClick" HorizontalAlignment="Stretch" />
+
+          <Border Background="#F8F8F8" BorderBrush="#DDD" BorderThickness="1" CornerRadius="4" Padding="8">
+            <TextBlock Opacity="0.75" TextWrapping="Wrap" FontSize="11"
+                       Text="Sliders preview live as you drag. Save as… renders a full-resolution JPEG to a new file; the original is never modified. Save your favourite combos as templates and apply them to multiple selected files in one go." />
+          </Border>
         </StackPanel>
-
-        <Button Content="Reset all" Click="OnResetAllClick" HorizontalAlignment="Stretch" />
-
-        <Border Background="#F8F8F8" BorderBrush="#DDD" BorderThickness="1" CornerRadius="4" Padding="8">
-          <TextBlock x:Name="HintText" Opacity="0.75" TextWrapping="Wrap" FontSize="11"
-                     Text="Sliders update the preview live. Save as… renders a full-resolution JPEG to a new file; the original is never modified." />
-        </Border>
-      </StackPanel>
+      </ScrollViewer>
     </Grid>
 
-    <Grid Grid.Row="1" ColumnDefinitions="*,Auto,Auto" Margin="0,12,0,0">
+    <Grid Grid.Row="1" ColumnDefinitions="*,Auto,Auto,Auto" Margin="0,12,0,0">
       <TextBlock Grid.Column="0" x:Name="StatusText" VerticalAlignment="Center" Opacity="0.75" />
-      <Button Grid.Column="1" Content="Save as..." Click="OnSaveAsClick" FontWeight="Bold" />
-      <Button Grid.Column="2" Content="Close" Click="OnCloseClick" IsCancel="True" Margin="6,0,0,0" />
+      <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center"
+                  ToolTip.Tip="Embedded thumbnail long-edge size and JPEG quality. The other edge is computed from the preview's aspect ratio. If the request exceeds the 64 KB EXIF segment cap, PhotoManager auto-shrinks to the highest-PSNR fit.">
+        <TextBlock Text="Max edge" VerticalAlignment="Center" Opacity="0.75" />
+        <NumericUpDown x:Name="ThumbMaxEdgeBox" Width="120" MinWidth="120" Minimum="16" Maximum="2048" Increment="8" Value="160" FormatString="0" />
+        <TextBlock Text="Q" VerticalAlignment="Center" Opacity="0.75" Margin="4,0,0,0" />
+        <NumericUpDown x:Name="ThumbQualityBox" Width="110" MinWidth="110" Minimum="1" Maximum="100" Increment="5" Value="75" FormatString="0" />
+        <Button Content="Bake thumbnail" Click="OnBakeThumbnailClick" Margin="6,0,0,0"
+                ToolTip.Tip="Replace the JPEG's embedded EXIF thumbnail with the current developed preview at the long-edge size and quality set on the left. Pixel data of the main image is not changed." />
+      </StackPanel>
+      <Button Grid.Column="2" Content="Save as..." Click="OnSaveAsClick" FontWeight="Bold" Margin="6,0,0,0" />
+      <Button Grid.Column="3" Content="Close" Click="OnCloseClick" IsCancel="True" Margin="6,0,0,0" />
     </Grid>
   </Grid>
 </Window>

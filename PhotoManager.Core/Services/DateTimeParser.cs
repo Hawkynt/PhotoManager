@@ -69,8 +69,15 @@ public class DateTimeParser : IDateTimeParser {
       var minute = match.Groups["minute"].Success ? int.Parse(match.Groups["minute"].Value) : defaultValues.Minute;
       var second = match.Groups["second"].Success ? int.Parse(match.Groups["second"].Value) : defaultValues.Second;
 
+      // Two-digit year cutoff at 50: 00-49 → 2000-2049, 50-99 → 1950-1999.
+      // Photographs almost never get a future date, so being aggressive
+      // about pushing the boundary forward biases correctly: a "49" file
+      // today (2026) is far more likely to mean 2049 isn't credible — but
+      // we still need a deterministic split, and 50 matches the half-
+      // century convention used by most DAMs. Update CLAUDE.md if you
+      // shift this.
       if (match.Groups["year"].Length == 2)
-        year += year < 80 ? 2000 : 1900;
+        year += year < 50 ? 2000 : 1900;
 
       DateTime? result = null;
       try {

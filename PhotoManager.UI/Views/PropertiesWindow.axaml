@@ -8,6 +8,25 @@
         MinWidth="600" MinHeight="480"
         WindowStartupLocation="CenterOwner"
         Title="Properties">
+  <Window.Styles>
+    <!-- Dirty-edit highlight: the DirtyTracker toggles ".dirty" on any
+         input whose value has changed since the last clean snapshot. -->
+    <Style Selector="TextBox.dirty">
+      <Setter Property="Background" Value="#DCE8F5" />
+    </Style>
+    <Style Selector="ComboBox.dirty">
+      <Setter Property="Background" Value="#DCE8F5" />
+    </Style>
+    <Style Selector="CheckBox.dirty">
+      <Setter Property="Background" Value="#DCE8F5" />
+    </Style>
+    <Style Selector="DatePicker.dirty">
+      <Setter Property="Background" Value="#DCE8F5" />
+    </Style>
+    <Style Selector="TimePicker.dirty">
+      <Setter Property="Background" Value="#DCE8F5" />
+    </Style>
+  </Window.Styles>
   <Grid RowDefinitions="Auto,*,Auto" Margin="12">
     <TextBlock Grid.Row="0" x:Name="HeaderText" FontSize="14" FontWeight="SemiBold" Margin="0,0,0,8" />
 
@@ -44,10 +63,15 @@
       <TabItem Header="Credits">
         <ScrollViewer VerticalScrollBarVisibility="Auto">
           <StackPanel Spacing="8" Margin="8">
-            <Grid ColumnDefinitions="120,*">
-              <TextBlock Grid.Column="0" Text="Creator:" VerticalAlignment="Center"
-                         ToolTip.Tip="Photographer / author — dc:creator + IPTC By-line + EXIF Artist" />
-              <TextBox Grid.Column="1" x:Name="CreatorBox" />
+            <TextBlock Opacity="0.75" TextWrapping="Wrap"
+                       Text="Creator and Copyright live in both XMP (dc:creator / dc:rights) and IPTC (By-line / 2:116). The main Metadata panel keeps them synced; here they are shown separately so you can diverge the two containers if needed (e.g. an imported file arrived with inconsistent values and you want to keep them that way)." />
+            <Grid ColumnDefinitions="120,*,120,*">
+              <TextBlock Grid.Column="0" Text="Creator (XMP):" VerticalAlignment="Center"
+                         ToolTip.Tip="dc:creator — main XMP creator field" />
+              <TextBox Grid.Column="1" x:Name="CreatorXmpBox" Margin="0,0,8,0" />
+              <TextBlock Grid.Column="2" Text="Creator (IPTC):" VerticalAlignment="Center"
+                         ToolTip.Tip="IPTC 2:80 By-line" />
+              <TextBox Grid.Column="3" x:Name="CreatorIptcBox" />
             </Grid>
             <Grid ColumnDefinitions="120,*">
               <TextBlock Grid.Column="0" Text="Credit:" VerticalAlignment="Center"
@@ -59,10 +83,13 @@
                          ToolTip.Tip="Original source of the image — photoshop:Source + IPTC Source" />
               <TextBox Grid.Column="1" x:Name="SourceBox" />
             </Grid>
-            <Grid ColumnDefinitions="120,*">
-              <TextBlock Grid.Column="0" Text="Copyright:" VerticalAlignment="Center"
-                         ToolTip.Tip="Copyright notice — dc:rights + IPTC Copyright" />
-              <TextBox Grid.Column="1" x:Name="CopyrightBox" Watermark="© 2026 Your Name" />
+            <Grid ColumnDefinitions="120,*,120,*">
+              <TextBlock Grid.Column="0" Text="Copyright (XMP):" VerticalAlignment="Center"
+                         ToolTip.Tip="dc:rights — main XMP copyright notice" />
+              <TextBox Grid.Column="1" x:Name="CopyrightXmpBox" Margin="0,0,8,0" Watermark="© 2026 Your Name" />
+              <TextBlock Grid.Column="2" Text="Copyright (IPTC):" VerticalAlignment="Center"
+                         ToolTip.Tip="IPTC 2:116 Copyright Notice" />
+              <TextBox Grid.Column="3" x:Name="CopyrightIptcBox" />
             </Grid>
             <Grid ColumnDefinitions="120,*">
               <TextBlock Grid.Column="0" Text="Rights usage:" VerticalAlignment="Top" Margin="0,6,0,0"

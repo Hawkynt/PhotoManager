@@ -3,13 +3,14 @@ namespace PhotoManager.Core.Metadata.Containers;
 /// <summary>
 /// Atomic in-place file rewrite used by every container metadata writer.
 /// Writes a <c>.pmtmp</c> neighbour, swaps it in via <c>File.Replace</c>,
-/// and restores the ORIGINAL <c>LastWriteTimeUtc</c> on success.
+/// and restores ALL three filesystem timestamps (creation, last-write,
+/// last-access) on success.
 ///
-/// The mtime restore is the crux of the design: when only metadata
+/// The timestamp restore is the crux of the design: when only metadata
 /// segments (XMP/IPTC/EXIF) change, the pixel data is byte-identical, so
-/// the file's last-modified timestamp shouldn't advance. Backup tools,
-/// DAMs, and sync services use mtime to decide what's changed — updating
-/// it on every tag edit would force full re-scans and cloud re-uploads
+/// none of the file timestamps should advance. Backup tools, DAMs, and
+/// sync services use these timestamps to decide what's changed — updating
+/// them on every tag edit would force full re-scans and cloud re-uploads
 /// for no real change.
 /// </summary>
 internal static class AtomicMetadataWrite {
@@ -17,9 +18,14 @@ internal static class AtomicMetadataWrite {
     ArgumentNullException.ThrowIfNull(target);
     ArgumentNullException.ThrowIfNull(output);
 
-    var originalMtime = File.Exists(target.FullName)
-      ? File.GetLastWriteTimeUtc(target.FullName)
-      : (DateTime?)null;
+    DateTime? originalCreated = null;
+    DateTime? originalModified = null;
+    DateTime? originalAccessed = null;
+    if (File.Exists(target.FullName)) {
+      originalCreated = File.GetCreationTimeUtc(target.FullName);
+      originalModified = File.GetLastWriteTimeUtc(target.FullName);
+      originalAccessed = File.GetLastAccessTimeUtc(target.FullName);
+    }
 
     var tempPath = target.FullName + ".pmtmp";
     try {
@@ -38,13 +44,12 @@ internal static class AtomicMetadataWrite {
       throw;
     }
 
-    if (originalMtime is { } mtime) {
-      try {
-        File.SetLastWriteTimeUtc(target.FullName, mtime);
-      } catch {
-        // Read-only filesystem or similar — not fatal, the write succeeded.
-      }
-    }
+    // Restore timestamps. Each is wrapped individually because read-only
+    // filesystems / strict perms can reject one without breaking the
+    // others — and the metadata write itself already succeeded.
+    if (originalCreated  is { } c) { try { File.SetCreationTimeUtc(target.FullName,  c); } catch { } }
+    if (originalModified is { } m) { try { File.SetLastWriteTimeUtc(target.FullName, m); } catch { } }
+    if (originalAccessed is { } a) { try { File.SetLastAccessTimeUtc(target.FullName, a); } catch { } }
 
     target.Refresh();
   }

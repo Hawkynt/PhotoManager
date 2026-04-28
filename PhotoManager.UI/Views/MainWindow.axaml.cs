@@ -64,6 +64,16 @@ public partial class MainWindow : Window {
   private object? _lastRenderedMetadataRef;
   private double _lastRenderBoundsSignature = double.NaN;
 
+  // Tracks unsaved edits on the metadata editor. Paints .dirty (light blue)
+  // on any input whose value differs from the last clean snapshot.
+  private readonly DirtyTracker _dirtyTracker = new();
+
+  // Detection (📦 / 👤) populates _currentMetadata.Regions in memory only.
+  // This flag tells BuildEditFromUi to include the new region list so Save
+  // commits them, and tells region accept/dismiss/tag handlers to flush
+  // first so file/in-memory indexes stay aligned.
+  private bool _regionsPending;
+
   public MainWindow() : this(null!, null!) { }
 
   public MainWindow(MainController controller, AboutController aboutController) {
@@ -87,6 +97,7 @@ public partial class MainWindow : Window {
 
     this.InitializeEditorOptions();
     this.InitializeMiniMap();
+    this.InitializeDirtyTracker();
 
     // Redraw the region overlay whenever layout updates. LayoutUpdated is
     // fired after every arrange pass on the associated control, so it
@@ -116,14 +127,193 @@ public partial class MainWindow : Window {
   }
 
   private void InitializeEditorOptions() {
-    if (this.FindControl<ComboBox>("RatingCombo") is { } ratingCombo) {
-      ratingCombo.ItemsSource = new object[] { "—", -1, 0, 1, 2, 3, 4, 5 };
-      ratingCombo.SelectedIndex = 0;
-    }
+    // Rating + label are now chip rows (one click sets the value); no
+    // ComboBox seeding needed.
+  }
 
-    if (this.FindControl<ComboBox>("LabelCombo") is { } labelCombo) {
-      labelCombo.ItemsSource = new[] { "—", "Red", "Yellow", "Green", "Blue", "Purple" };
-      labelCombo.SelectedIndex = 0;
+  private static readonly string[] EditorStarNames = { "EditStar1", "EditStar2", "EditStar3", "EditStar4", "EditStar5" };
+  private static readonly string[] EditorLabelNames = { "EditLabelRed", "EditLabelYellow", "EditLabelGreen", "EditLabelBlue", "EditLabelPurple" };
+
+  /// <summary>
+  /// Authoritative rating value backing the chip row. Source of truth so
+  /// click handlers don't have to deduce the "previous" rating from the
+  /// chip IsChecked state — which is unreliable because ToggleButton
+  /// auto-toggles the clicked chip BEFORE our Click handler runs.
+  /// -1 = rejected, 0 = unrated, 1..5 = stars.
+  /// </summary>
+  private int _editorRating;
+
+  /// <summary>
+  /// Picasa-style rating click: clicking a star sets the rating to its
+  /// position (so star 3 → rating=3); clicking the same star again clears
+  /// the rating. Reject is mutually exclusive with positive ratings.
+  /// </summary>
+  private void OnEditorStarClick(object? sender, RoutedEventArgs e) {
+    if (sender is not Avalonia.Controls.Primitives.ToggleButton clicked || clicked.Tag is null)
+      return;
+    if (!int.TryParse(clicked.Tag.ToString(), out var pos))
+      return;
+
+    var newRating = this._editorRating == pos ? 0 : pos;
+    this.SetEditorRating(newRating);
+  }
+
+  private void OnEditorRejectClick(object? sender, RoutedEventArgs e) {
+    this.SetEditorRating(this._editorRating == -1 ? 0 : -1);
+  }
+
+  /// <summary>
+  /// Stamp Created / Modified / Accessed file-timestamp pickers with the
+  /// detected capture date — useful when imported files have garbage
+  /// filesystem timestamps but EXIF/XMP holds the real shutter time.
+  /// Doesn't write yet; user still has to hit Save.
+  /// </summary>
+  private void OnApplyCaptureDateToFileTimestampsClick(object? sender, RoutedEventArgs e) {
+    var capture = this.ReadCapturePickerValue();
+    if (capture is null) {
+      this._controller.ViewModel.StatusMessage = "No capture date — fill in the Captured pickers first.";
+      return;
+    }
+    this.SetTimestampPicker("FileCreatedDate", "FileCreatedTime", capture.Value);
+    this.SetTimestampPicker("FileModifiedDate", "FileModifiedTime", capture.Value);
+    this.SetTimestampPicker("FileAccessedDate", "FileAccessedTime", capture.Value);
+    this._controller.ViewModel.StatusMessage = $"Stamped Created/Modified/Accessed with {capture.Value:yyyy-MM-dd HH:mm:ss}. Click Save to commit.";
+  }
+
+  /// <summary>Read a date+time picker pair into a single local DateTime.</summary>
+  private DateTime? ReadTimestampPicker(string dateName, string timeName) {
+    var date = this.FindControl<DatePicker>(dateName)?.SelectedDate;
+    if (date is null)
+      return null;
+    var time = this.FindControl<TimePicker>(timeName)?.SelectedTime ?? TimeSpan.Zero;
+    return DateTime.SpecifyKind(date.Value.DateTime.Date + time, DateTimeKind.Local);
+  }
+
+  private DateTime? ReadCapturePickerValue() => this.ReadTimestampPicker("CaptureDatePicker", "CaptureTimePicker");
+
+  /// <summary>Sets the date+time picker pair to a local DateTime (or clears both).</summary>
+  private void SetTimestampPicker(string dateName, string timeName, DateTime? value) {
+    try {
+      if (this.FindControl<DatePicker>(dateName) is { } dp)
+        dp.SelectedDate = value is { } v
+          ? new DateTimeOffset(DateTime.SpecifyKind(v.Date, DateTimeKind.Unspecified))
+          : null;
+      if (this.FindControl<TimePicker>(timeName) is { } tp)
+        tp.SelectedTime = value is { } v2 ? v2.TimeOfDay : null;
+    } catch {
+      // Edge-case Kind/offset combos can blow up DateTimeOffset; ignore.
+    }
+  }
+
+  /// <summary>
+  /// After a metadata write the file's timestamps were preserved by
+  /// AtomicMetadataWrite; if the user explicitly changed any of the
+  /// timestamp pickers, apply that change here. Compared against the
+  /// file's *current* timestamp with second precision so picker round-trip
+  /// jitter doesn't trigger spurious writes.
+  /// </summary>
+  private void ApplyFileTimestampEdits(FileInfo file) {
+    if (!file.Exists)
+      return;
+
+    file.Refresh();
+    TryApply(file.CreationTime, this.ReadTimestampPicker("FileCreatedDate", "FileCreatedTime"),
+      v => File.SetCreationTime(file.FullName, v));
+    TryApply(file.LastWriteTime, this.ReadTimestampPicker("FileModifiedDate", "FileModifiedTime"),
+      v => File.SetLastWriteTime(file.FullName, v));
+    TryApply(file.LastAccessTime, this.ReadTimestampPicker("FileAccessedDate", "FileAccessedTime"),
+      v => File.SetLastAccessTime(file.FullName, v));
+    file.Refresh();
+
+    static void TryApply(DateTime current, DateTime? requested, Action<DateTime> set) {
+      if (requested is not { } req)
+        return;
+      // Drop sub-second to keep comparisons sane; pickers have no millis.
+      var currentTrunc = new DateTime(current.Year, current.Month, current.Day,
+        current.Hour, current.Minute, current.Second, current.Kind);
+      if (req == currentTrunc)
+        return;
+      try { set(req); } catch { /* Read-only filesystem etc. — best effort. */ }
+    }
+  }
+
+  private void OnEditorLabelClick(object? sender, RoutedEventArgs e) {
+    if (sender is not ToggleButton clicked)
+      return;
+    var nowChecked = clicked.IsChecked == true;
+    foreach (var name in EditorLabelNames) {
+      if (this.FindControl<ToggleButton>(name) is { } tb && !ReferenceEquals(tb, clicked))
+        tb.IsChecked = false;
+    }
+    clicked.IsChecked = nowChecked;
+  }
+
+  private int GetEditorRating() => this._editorRating;
+
+  private void SetEditorRating(int rating) {
+    this._editorRating = rating;
+    if (this.FindControl<Avalonia.Controls.Primitives.ToggleButton>("EditRatingReject") is { } reject)
+      reject.IsChecked = rating == -1;
+    for (var i = 0; i < EditorStarNames.Length; i++) {
+      if (this.FindControl<Avalonia.Controls.Primitives.ToggleButton>(EditorStarNames[i]) is { } star)
+        star.IsChecked = rating > 0 && (i + 1) <= rating;
+    }
+  }
+
+  private string? GetEditorLabel() {
+    foreach (var name in EditorLabelNames) {
+      if (this.FindControl<ToggleButton>(name)?.IsChecked == true)
+        return name.Substring("EditLabel".Length);
+    }
+    return null;
+  }
+
+  private void SetEditorLabel(string? label) {
+    foreach (var name in EditorLabelNames) {
+      if (this.FindControl<ToggleButton>(name) is { } tb)
+        tb.IsChecked = string.Equals(name.Substring("EditLabel".Length), label, StringComparison.OrdinalIgnoreCase);
+    }
+  }
+
+  /// <summary>
+  /// Register every user-editable control in the Metadata panel with the
+  /// dirty tracker so unsaved edits paint a light-blue background until
+  /// the next Save / Revert / file-switch resets the clean snapshot.
+  /// </summary>
+  private void InitializeDirtyTracker() {
+    foreach (var name in new[] {
+      "FileNameBox", "GpsLatBox", "GpsLonBox", "GpsAltBox",
+      "DirectionBox", "TargetLatBox", "TargetLonBox",
+      "LocationBox", "CityBox", "StateBox", "CountryBox", "CountryCodeBox",
+      "KeywordsBox", "TitleBox", "CaptionBox", "CreatorBox", "CopyrightBox",
+    }) {
+      if (this.FindControl<TextBox>(name) is { } tb)
+        this._dirtyTracker.Track(tb);
+    }
+    if (this.FindControl<Avalonia.Controls.Primitives.ToggleButton>("DirectionMagneticCheck") is { } magCheck)
+      this._dirtyTracker.Track(magCheck);
+    if (this.FindControl<DatePicker>("CaptureDatePicker") is { } datePicker)
+      this._dirtyTracker.Track(datePicker);
+    if (this.FindControl<TimePicker>("CaptureTimePicker") is { } timePicker)
+      this._dirtyTracker.Track(timePicker);
+    foreach (var name in new[] {
+      "FileCreatedDate", "FileModifiedDate", "FileAccessedDate"
+    }) {
+      if (this.FindControl<DatePicker>(name) is { } dp)
+        this._dirtyTracker.Track(dp);
+    }
+    foreach (var name in new[] {
+      "FileCreatedTime", "FileModifiedTime", "FileAccessedTime"
+    }) {
+      if (this.FindControl<TimePicker>(name) is { } tp)
+        this._dirtyTracker.Track(tp);
+    }
+    // Rating + label chips: each ToggleButton lights up blue independently
+    // when its checked state diverges from the loaded snapshot.
+    foreach (var name in new[] { "EditRatingReject", "EditStar1", "EditStar2", "EditStar3", "EditStar4", "EditStar5",
+                                 "EditLabelRed", "EditLabelYellow", "EditLabelGreen", "EditLabelBlue", "EditLabelPurple" }) {
+      if (this.FindControl<Avalonia.Controls.Primitives.ToggleButton>(name) is { } tgl)
+        this._dirtyTracker.Track(tgl);
     }
   }
 
@@ -186,6 +376,15 @@ public partial class MainWindow : Window {
   /// unless currently showing the wide default.
   /// </summary>
   private void RefreshMiniMap(bool forceCenter = false) {
+    try {
+      this.RefreshMiniMapCore(forceCenter);
+    } catch {
+      // The map is a visual aid — a render / viewport hiccup must never
+      // propagate into the file-load path and crash the whole window.
+    }
+  }
+
+  private void RefreshMiniMapCore(bool forceCenter) {
     if (this.FindControl<Mapsui.UI.Avalonia.MapControl>("MiniMapControl") is not { } mc)
       return;
     if (this._miniMapCameraLayer is null || this._miniMapTargetLayer is null || this._miniMapBeamLayer is null)
@@ -293,6 +492,7 @@ public partial class MainWindow : Window {
 
   private async void OnWindowOpened(object? sender, EventArgs e) {
     await this._controller.LoadSettingsAsync();
+    this.RefreshSavedSearchesCombo();
 
     // Restoring a session with saved checked source paths should land the
     // user on a populated grid — otherwise every launch requires a manual
@@ -306,11 +506,25 @@ public partial class MainWindow : Window {
     if (grid != null)
       grid.ItemsSource = null;
 
-    var items = await this._controller.ScanCheckedSourcesAsync();
+    // Grid contents follow the BrowseMode toggle: sources tree (default)
+    // or recursive walk of the destination directory.
+    var items = this._controller.ViewModel.BrowseMode == BrowseMode.Target
+      ? await this._controller.ScanTargetDirectoryAsync()
+      : await this._controller.ScanCheckedSourcesAsync();
     this._currentFileItems = items;
 
     if (grid != null)
       grid.ItemsSource = items;
+  }
+
+  private async void OnBrowseModeChanged(object? sender, RoutedEventArgs e) {
+    if (sender is not RadioButton rb || rb.IsChecked != true)
+      return;
+    var mode = rb.Tag as string == nameof(BrowseMode.Target) ? BrowseMode.Target : BrowseMode.Sources;
+    if (this._controller.ViewModel.BrowseMode == mode)
+      return;
+    this._controller.ViewModel.BrowseMode = mode;
+    await this.ScanCheckedSourcesAsync();
   }
 
   private async void OnBrowseDestinationClick(object? sender, RoutedEventArgs e)
@@ -347,6 +561,147 @@ public partial class MainWindow : Window {
     this.ApplySearchFilter();
   }
 
+  // Star chips behave like radio buttons: clicking one un-checks the others
+  // (so "≥3" and "≥5" can't both be lit). Clicking the same one again
+  // clears the filter — toggle-off semantics.
+  private void OnStarFilterClick(object? sender, RoutedEventArgs e) {
+    if (sender is not ToggleButton clicked)
+      return;
+    var nowChecked = clicked.IsChecked == true;
+    foreach (var name in new[] { "StarFilter1", "StarFilter2", "StarFilter3", "StarFilter4", "StarFilter5" }) {
+      if (this.FindControl<ToggleButton>(name) is { } tb && !ReferenceEquals(tb, clicked))
+        tb.IsChecked = false;
+    }
+    clicked.IsChecked = nowChecked;
+    this.ApplySearchFilter();
+  }
+
+  // Same radio behaviour for color labels.
+  private void OnLabelFilterClick(object? sender, RoutedEventArgs e) {
+    if (sender is not ToggleButton clicked)
+      return;
+    var nowChecked = clicked.IsChecked == true;
+    foreach (var name in new[] { "LabelRed", "LabelYellow", "LabelGreen", "LabelBlue", "LabelPurple" }) {
+      if (this.FindControl<ToggleButton>(name) is { } tb && !ReferenceEquals(tb, clicked))
+        tb.IsChecked = false;
+    }
+    clicked.IsChecked = nowChecked;
+    this.ApplySearchFilter();
+  }
+
+  private int? GetActiveMinStars() {
+    foreach (var (name, value) in new[] {
+      ("StarFilter5", 5), ("StarFilter4", 4), ("StarFilter3", 3), ("StarFilter2", 2), ("StarFilter1", 1)
+    }) {
+      if (this.FindControl<ToggleButton>(name)?.IsChecked == true)
+        return value;
+    }
+    return null;
+  }
+
+  private string? GetActiveLabel() {
+    foreach (var name in new[] { "LabelRed", "LabelYellow", "LabelGreen", "LabelBlue", "LabelPurple" }) {
+      if (this.FindControl<ToggleButton>(name)?.IsChecked == true)
+        return name.Substring("Label".Length);
+    }
+    return null;
+  }
+
+  /// <summary>
+  /// Refresh the saved-searches combo from the view model. Called after
+  /// settings load and after a new search is added so the dropdown reflects
+  /// current state.
+  /// </summary>
+  private void RefreshSavedSearchesCombo() {
+    if (this.FindControl<ComboBox>("SavedSearchesCombo") is not { } combo)
+      return;
+
+    var saved = this._controller.ViewModel.SavedSearches;
+    // Suppress selection event so re-binding doesn't fire OnSavedSearchSelected.
+    this._suppressSavedSelection = true;
+    try {
+      combo.ItemsSource = saved.Select(s => s.Name).ToList();
+      combo.SelectedIndex = -1;
+    } finally {
+      this._suppressSavedSelection = false;
+    }
+  }
+
+  private bool _suppressSavedSelection;
+
+  private void OnSavedSearchSelected(object? sender, SelectionChangedEventArgs e) {
+    if (this._suppressSavedSelection)
+      return;
+    if (sender is not ComboBox combo)
+      return;
+    if (combo.SelectedItem is not string name)
+      return;
+
+    var match = this._controller.ViewModel.SavedSearches
+      .FirstOrDefault(s => string.Equals(s.Name, name, StringComparison.Ordinal));
+    if (match is null)
+      return;
+
+    this.ApplySavedSearch(match);
+  }
+
+  private void ApplySavedSearch(SavedSearchData saved) {
+    if (this.FindControl<TextBox>("SearchBox") is { } box)
+      box.Text = saved.Text;
+
+    // Reset chips, then re-check the saved values.
+    foreach (var n in new[] { "StarFilter1", "StarFilter2", "StarFilter3", "StarFilter4", "StarFilter5" })
+      if (this.FindControl<ToggleButton>(n) is { } tb) tb.IsChecked = false;
+    if (saved.MinStars is { } stars && this.FindControl<ToggleButton>($"StarFilter{stars}") is { } star)
+      star.IsChecked = true;
+
+    foreach (var n in new[] { "LabelRed", "LabelYellow", "LabelGreen", "LabelBlue", "LabelPurple" })
+      if (this.FindControl<ToggleButton>(n) is { } tb) tb.IsChecked = false;
+    if (!string.IsNullOrEmpty(saved.ColorLabel)
+        && this.FindControl<ToggleButton>($"Label{saved.ColorLabel}") is { } lbl)
+      lbl.IsChecked = true;
+
+    this.ApplySearchFilter();
+  }
+
+  private async void OnSaveSearchClick(object? sender, RoutedEventArgs e) {
+    var query = this.FindControl<TextBox>("SearchBox")?.Text ?? string.Empty;
+    var minStars = this.GetActiveMinStars();
+    var label = this.GetActiveLabel();
+
+    if (string.IsNullOrWhiteSpace(query) && minStars is null && label is null) {
+      this._controller.ViewModel.StatusMessage = "Set at least one filter before saving.";
+      return;
+    }
+
+    var defaultName = !string.IsNullOrWhiteSpace(query)
+      ? query.Trim()
+      : (minStars is { } s && label is { } l) ? $"★≥{s} {l}"
+      : minStars is { } s2 ? $"★≥{s2}"
+      : label!;
+    var prompt = new InputDialogWindow("Save filter", "Name for this filter:", defaultName);
+    var name = await prompt.ShowDialog<string?>(this);
+    if (string.IsNullOrWhiteSpace(name))
+      return;
+
+    var entry = new SavedSearchData {
+      Name = name,
+      Text = query,
+      MinStars = minStars,
+      ColorLabel = label
+    };
+
+    // Replace any existing search with the same name so editing is sane.
+    var list = this._controller.ViewModel.SavedSearches.Where(s =>
+      !string.Equals(s.Name, name, StringComparison.OrdinalIgnoreCase)).ToList();
+    list.Add(entry);
+    this._controller.ViewModel.SavedSearches = list;
+    await this._controller.SaveSettingsAsync();
+
+    this.RefreshSavedSearchesCombo();
+    this._controller.ViewModel.StatusMessage = $"Saved filter \"{name}\".";
+  }
+
   /// <summary>
   /// Re-filter the grid against the current search box contents. Space splits
   /// the input into AND tokens; each token must be a substring of some row's
@@ -365,18 +720,27 @@ public partial class MainWindow : Window {
       .Select(t => t.ToLowerInvariant())
       .ToArray();
 
-    if (tokens.Length == 0) {
-      grid.ItemsSource = this._currentFileItems;
-      return;
-    }
+    var minStars = this.GetActiveMinStars();
+    var requiredLabel = this.GetActiveLabel();
 
+    // Always assign a fresh collection — DataGrid no-ops when ItemsSource
+    // is re-set to the same reference, which made post-edit Rating /
+    // ColorLabel changes invisible until the user re-scanned. The new list
+    // is cheap (a couple of dictionary lookups per row).
     var filtered = new ObservableCollection<FileItemModel>(
-      this._currentFileItems.Where(item => MatchesAllTokens(item, tokens))
+      this._currentFileItems.Where(item =>
+           MatchesAllTokens(item, tokens)
+        && (minStars is null || (item.Rating ?? 0) >= minStars.Value)
+        && (requiredLabel is null
+            || string.Equals(item.ColorLabel, requiredLabel, StringComparison.OrdinalIgnoreCase)))
     );
     grid.ItemsSource = filtered;
   }
 
   private static bool MatchesAllTokens(FileItemModel item, string[] tokensLower) {
+    if (tokensLower.Length == 0)
+      return true;
+
     // SearchIndex is already lower-cased by the indexer; combining it with
     // the filename and source path defends against a search-before-index
     // race — filter still hits something sensible even if the background
@@ -412,6 +776,30 @@ public partial class MainWindow : Window {
   private async void OnOpenModelsDialogClick(object? sender, RoutedEventArgs e) {
     var window = new ModelDownloadWindow();
     await window.ShowDialog(this);
+  }
+
+  private async void OnOpenWorldMapClick(object? sender, RoutedEventArgs e) {
+    var scanned = this._currentFileItems?
+      .Select(i => i.FileInfo)
+      .Where(f => f != null && f.Exists)
+      .Cast<FileInfo>()
+      .ToList() ?? new List<FileInfo>();
+
+    var window = new WorldMapWindow(scanned);
+    var picked = await window.ShowDialog<FileInfo?>(this);
+    if (picked is null)
+      return;
+
+    // Picked a pin → select that file in the grid so the preview & metadata
+    // panel switch to it without the user having to scroll/click.
+    if (this.FindControl<DataGrid>("FilesGrid") is { } grid && this._currentFileItems is { } items) {
+      var match = items.FirstOrDefault(it => it.FileInfo is { } fi
+          && string.Equals(fi.FullName, picked.FullName, StringComparison.OrdinalIgnoreCase));
+      if (match is not null) {
+        grid.SelectedItem = match;
+        grid.ScrollIntoView(match, null);
+      }
+    }
   }
 
   private async void OnOpenFaceGalleryClick(object? sender, RoutedEventArgs e) {
@@ -504,7 +892,16 @@ public partial class MainWindow : Window {
       this._controller.ViewModel.StatusMessage = "Select a photo first.";
       return;
     }
-    var window = new EditImageWindow(file);
+
+    // Pass the full grid selection so "Apply template to selection" can
+    // render every selected file in one go without a second dialog.
+    var selection = this.FindControl<DataGrid>("FilesGrid")?.SelectedItems
+      .OfType<FileItemModel>()
+      .Where(i => i.FileInfo is { Exists: true })
+      .Select(i => i.FileInfo!)
+      .ToList() ?? new List<FileInfo>();
+
+    var window = new EditImageWindow(file, selection);
     await window.ShowDialog(this);
   }
 
@@ -573,9 +970,28 @@ public partial class MainWindow : Window {
 
     this._currentFile = file;
     this._currentMetadata = md;
+    // Fresh load → no pending detection. (Save also funnels through here.)
+    this._regionsPending = false;
 
     this.SyncEditorFromMetadata(md, file, winningDate, winningSource);
     this.RefreshRegionsUi(md);
+
+    // Surface format/extension mismatches in the status bar so the user
+    // notices PNGs hiding inside .jpg etc. Best-effort and silent on error.
+    _ = this.CheckFileSignatureMismatchAsync(file);
+  }
+
+  private async Task CheckFileSignatureMismatchAsync(FileInfo file) {
+    try {
+      var detection = await FileSignatureDetector.DetectAsync(file);
+      if (detection is null || detection.MatchesDeclared || detection.SuggestedRenameExtension is null)
+        return;
+      this._controller.ViewModel.StatusMessage =
+        $"⚠ {file.Name} looks like .{detection.SuggestedRenameExtension}, not {file.Extension}. "
+        + $"Edit Name to fix the extension.";
+    } catch {
+      // Mismatch hint is a nice-to-have; don't fail the load on detection error.
+    }
   }
 
   private void RefreshRegionsUi(FullMetadata md) {
@@ -903,16 +1319,18 @@ public partial class MainWindow : Window {
       var registry = new PeopleRegistry();
       var service = new FaceRecognitionService(detector, this._metadataReader, this._metadataWriter, registry, embedder);
 
-      var result = await service.DetectAndWriteAsync(file);
-      var named = result.Count(r => !string.IsNullOrWhiteSpace(r.PersonName));
+      // Detect-only — merge into in-memory state. Save commits.
+      var result = await service.DetectAsync(file);
+      this.StagePendingDetection(result.Regions, result.Keywords);
+
+      var named = result.Faces.Count(r => !string.IsNullOrWhiteSpace(r.PersonName));
       var hint = embedder.IsAvailable
         ? (registry.KnownNames.Any()
             ? $" ({named} auto-named from {registry.KnownNames.Count()} known person(s))"
             : " (tag a face to start training the recognizer)")
         : " — install the ArcFace model to enable automatic recognition";
 
-      this._controller.ViewModel.StatusMessage = $"Detected {result.Count} face(s){hint}.";
-      await this.ReloadCurrentMetadataAsync(file);
+      this._controller.ViewModel.StatusMessage = $"Detected {result.Faces.Count} face(s){hint}. Click 💾 to save.";
     } catch (Exception ex) {
       this._controller.ViewModel.StatusMessage = $"Face detection failed: {ex.Message}";
     }
@@ -930,14 +1348,54 @@ public partial class MainWindow : Window {
       var proposer = new YoloRegionProposer(yolo);
       var proposed = await proposer.ProposeAsync(file);
 
-      if (proposed.Count > 0)
-        await this._regionService.AppendAsync(file, proposed);
+      // Merge into the in-memory region list, deduping by (box+category)
+      // so re-running the proposer doesn't pile duplicates. Save commits.
+      var existing = this._currentMetadata?.Regions ?? Array.Empty<TaggedRegion>();
+      var merged = DedupeRegions(existing.Concat(proposed));
+      this.StagePendingDetection(merged, this._currentMetadata?.Keywords);
 
-      this._controller.ViewModel.StatusMessage = $"Proposed {proposed.Count} region(s).";
-      await this.ReloadCurrentMetadataAsync(file);
+      this._controller.ViewModel.StatusMessage =
+        proposed.Count == 0
+          ? "Object detector found nothing new."
+          : $"Detected {proposed.Count} object(s). Click 💾 to save.";
     } catch (Exception ex) {
-      this._controller.ViewModel.StatusMessage = $"Region proposal failed: {ex.Message}";
+      this._controller.ViewModel.StatusMessage = $"Object detection failed: {ex.Message}";
     }
+  }
+
+  /// <summary>
+  /// Update <see cref="_currentMetadata"/> with the new regions / keywords
+  /// from a detection pass and refresh the region UI — without writing to
+  /// disk. Sets <see cref="_regionsPending"/> so the next Save includes the
+  /// new region list (and so per-region Accept/Dismiss/Tag handlers know to
+  /// flush first).
+  /// </summary>
+  private void StagePendingDetection(IReadOnlyList<TaggedRegion> regions, IReadOnlyList<string>? keywords) {
+    if (this._currentMetadata is { } md) {
+      this._currentMetadata = md with {
+        Regions = regions,
+        Keywords = keywords ?? md.Keywords
+      };
+    } else {
+      this._currentMetadata = new FullMetadata { Regions = regions, Keywords = keywords ?? Array.Empty<string>() };
+    }
+    this._regionsPending = true;
+    this.RefreshRegionsUi(this._currentMetadata);
+  }
+
+  /// <summary>
+  /// Drop regions whose (box, category) pair already appears earlier in
+  /// the sequence. Mirrors RegionService's server-side dedupe so the
+  /// in-memory merge has the same semantics as the writer's persisted
+  /// merge.
+  /// </summary>
+  private static IReadOnlyList<TaggedRegion> DedupeRegions(IEnumerable<TaggedRegion> input) {
+    var seen = new HashSet<(NormalizedBoundingBox, RegionCategory)>();
+    var result = new List<TaggedRegion>();
+    foreach (var r in input)
+      if (seen.Add((r.Box, r.Category)))
+        result.Add(r);
+    return result;
   }
 
   /// <summary>
@@ -964,17 +1422,42 @@ public partial class MainWindow : Window {
     return false;
   }
 
-  private async void OnAcceptRegionClick(object? sender, RoutedEventArgs e)
-    => await this.RegionAction(sender, async (file, index) => await this._regionService.AcceptAsync(file, index));
+  private async void OnAcceptRegionClick(object? sender, RoutedEventArgs e) {
+    await this.FlushPendingRegionsAsync();
+    await this.RegionAction(sender, async (file, index) => await this._regionService.AcceptAsync(file, index));
+  }
 
-  private async void OnDiscardRegionClick(object? sender, RoutedEventArgs e)
-    => await this.RegionAction(sender, async (file, index) => await this._regionService.DiscardAsync(file, index));
+  private async void OnDiscardRegionClick(object? sender, RoutedEventArgs e) {
+    await this.FlushPendingRegionsAsync();
+    await this.RegionAction(sender, async (file, index) => await this._regionService.DiscardAsync(file, index));
+  }
+
+  /// <summary>
+  /// If detection is sitting in memory only, flush it to disk before any
+  /// per-region operation that addresses regions by index — otherwise the
+  /// service reads the file (which doesn't have the pending regions yet)
+  /// and edits the wrong row.
+  /// </summary>
+  private async Task FlushPendingRegionsAsync() {
+    if (!this._regionsPending)
+      return;
+    if (this._currentFile is not { } file || !file.Exists)
+      return;
+    var edit = this.BuildEditFromUi();
+    try {
+      await this._metadataWriter.ApplyAsync(file, edit);
+      await this.ReloadCurrentMetadataAsync(file);
+    } catch (Exception ex) {
+      this._controller.ViewModel.StatusMessage = $"Couldn't save pending detection: {ex.Message}";
+    }
+  }
 
   private async void OnTagRegionClick(object? sender, RoutedEventArgs e) {
     if (sender is not Button { Tag: int index })
       return;
     if (this._currentFile is not { } file || !file.Exists)
       return;
+    await this.FlushPendingRegionsAsync();
     if (this._currentMetadata is not { } md || index < 0 || index >= md.Regions.Count)
       return;
 
@@ -1047,6 +1530,41 @@ public partial class MainWindow : Window {
   private async Task ReloadCurrentMetadataAsync(FileInfo file) {
     this._currentMetadata = await this._metadataReader.ReadAsync(file);
     await this.UpdateMetadataAsync(file, CancellationToken.None);
+    this.RefreshFileItemIndex(file, this._currentMetadata);
+  }
+
+  /// <summary>
+  /// Mirror a fresh metadata read onto the matching FileItemModel and
+  /// re-run the active search filter so rating-chip / search-bar visibility
+  /// reflects the just-written change. Called from every metadata-write
+  /// path (single Save, Apply-to-selection, region accept etc.).
+  /// </summary>
+  private void RefreshFileItemIndex(FileInfo file, FullMetadata metadata) {
+    if (this._currentFileItems is null)
+      return;
+    var item = this._currentFileItems.FirstOrDefault(i =>
+      i.FileInfo is { } fi
+      && string.Equals(fi.FullName, file.FullName, StringComparison.OrdinalIgnoreCase));
+    if (item is null)
+      return;
+    this._controller.RefreshFileIndex(item, metadata);
+
+    // Hard rebind: null the grid's ItemsSource before ApplySearchFilter
+    // re-builds it. Avalonia's DataGrid otherwise can keep its cached
+    // visualization when handed the same ObservableCollection instance,
+    // even though our inner FileItemModel.Rating just changed. We restore
+    // the prior selection by reference afterwards so editing the same row
+    // doesn't bounce focus away.
+    var grid = this.FindControl<DataGrid>("FilesGrid");
+    var preserved = grid?.SelectedItem as FileItemModel;
+    if (grid != null)
+      grid.ItemsSource = null;
+    this.ApplySearchFilter();
+    if (grid != null && preserved != null
+        && grid.ItemsSource is IEnumerable<FileItemModel> rows
+        && rows.Any(it => ReferenceEquals(it, preserved))) {
+      grid.SelectedItem = preserved;
+    }
   }
 
   private static string FormatFileSize(long bytes) {
@@ -1073,9 +1591,13 @@ public partial class MainWindow : Window {
     var inv = System.Globalization.CultureInfo.InvariantCulture;
 
     // Filename, path, size — read-only labels + the rename-on-save box at
-    // the top of the editor.
+    // the top of the editor. The base-name and the extension live in
+    // separate boxes so the user can never edit the extension by accident
+    // (the right-hand box is IsReadOnly).
     if (this.FindControl<TextBox>("FileNameBox") is { } nameBox)
-      nameBox.Text = file?.Name ?? string.Empty;
+      nameBox.Text = file is null ? string.Empty : System.IO.Path.GetFileNameWithoutExtension(file.Name);
+    if (this.FindControl<TextBox>("FileExtensionBox") is { } extBox)
+      extBox.Text = file?.Extension ?? string.Empty;
     if (this.FindControl<TextBlock>("PathText") is { } pathText) {
       pathText.Text = file?.FullName ?? string.Empty;
       ToolTip.SetTip(pathText, file?.FullName);
@@ -1083,23 +1605,36 @@ public partial class MainWindow : Window {
     if (this.FindControl<TextBlock>("SizeText") is { } sizeText)
       sizeText.Text = file is { Exists: true } ? FormatFileSize(file.Length) : string.Empty;
 
-    // Filesystem timestamps. Local time is friendlier than UTC for the UI.
-    if (this.FindControl<TextBlock>("CreatedText") is { } createdText)
-      createdText.Text = file is { Exists: true } ? file.CreationTime.ToString(UiDateFormat) : string.Empty;
-    if (this.FindControl<TextBlock>("ModifiedText") is { } modifiedText)
-      modifiedText.Text = file is { Exists: true } ? file.LastWriteTime.ToString(UiDateFormat) : string.Empty;
-    if (this.FindControl<TextBlock>("AccessedText") is { } accessedText)
-      accessedText.Text = file is { Exists: true } ? file.LastAccessTime.ToString(UiDateFormat) : string.Empty;
+    // Filesystem timestamps in local time. Pickers stay nullable so an
+    // empty value (no file) shows a clean placeholder instead of 0001-01-01.
+    this.SetTimestampPicker("FileCreatedDate",  "FileCreatedTime",  file?.Exists == true ? file.CreationTime  : null);
+    this.SetTimestampPicker("FileModifiedDate", "FileModifiedTime", file?.Exists == true ? file.LastWriteTime : null);
+    this.SetTimestampPicker("FileAccessedDate", "FileAccessedTime", file?.Exists == true ? file.LastAccessTime: null);
 
     // Capture date: XMP DateCreated wins; otherwise whichever source the
     // importer selected as most logical for the file. The hint string tells
     // the user where the picker's seed value came from so they know whether
     // to overwrite it.
     var captureDate = md.DateCreated ?? winningDate;
-    if (this.FindControl<DatePicker>("CaptureDatePicker") is { } dateBox)
-      dateBox.SelectedDate = captureDate is { } d ? new DateTimeOffset(DateTime.SpecifyKind(d.Date, DateTimeKind.Unspecified)) : null;
-    if (this.FindControl<TimePicker>("CaptureTimePicker") is { } timeBox)
-      timeBox.SelectedTime = captureDate is { } t ? t.TimeOfDay : null;
+    // DateTimeOffset throws on edge-case kinds (Utc that blows the local
+    // offset window). Guard so a single bad timestamp can't kill the whole
+    // metadata load.
+    if (this.FindControl<DatePicker>("CaptureDatePicker") is { } dateBox) {
+      try {
+        dateBox.SelectedDate = captureDate is { } d
+          ? new DateTimeOffset(DateTime.SpecifyKind(d.Date, DateTimeKind.Unspecified))
+          : null;
+      } catch {
+        dateBox.SelectedDate = null;
+      }
+    }
+    if (this.FindControl<TimePicker>("CaptureTimePicker") is { } timeBox) {
+      try {
+        timeBox.SelectedTime = captureDate is { } t ? t.TimeOfDay : null;
+      } catch {
+        timeBox.SelectedTime = null;
+      }
+    }
     if (this.FindControl<TextBlock>("CaptureDateHint") is { } hint) {
       hint.Text = md.DateCreated != null
         ? "(from XMP)"
@@ -1123,7 +1658,7 @@ public partial class MainWindow : Window {
 
     if (this.FindControl<TextBox>("DirectionBox") is { } dirBox)
       dirBox.Text = md.ImageDirection?.Degrees.ToString("0.##", inv) ?? string.Empty;
-    if (this.FindControl<CheckBox>("DirectionMagneticCheck") is { } magCheck)
+    if (this.FindControl<Avalonia.Controls.Primitives.ToggleButton>("DirectionMagneticCheck") is { } magCheck)
       magCheck.IsChecked = md.ImageDirection?.Reference == PhotoManager.Core.Metadata.DirectionReference.Magnetic;
 
     if (this.FindControl<TextBox>("TargetLatBox") is { } tgtLat)
@@ -1147,13 +1682,8 @@ public partial class MainWindow : Window {
       addrText.Text = parts.Any() ? string.Join(", ", parts) : string.Empty;
     }
 
-    if (this.FindControl<ComboBox>("RatingCombo") is { } ratingCombo) {
-      object target = md.Rating.HasValue ? md.Rating.Value : "—";
-      ratingCombo.SelectedItem = target;
-    }
-
-    if (this.FindControl<ComboBox>("LabelCombo") is { } labelCombo)
-      labelCombo.SelectedItem = string.IsNullOrEmpty(md.ColorLabel) ? "—" : md.ColorLabel;
+    this.SetEditorRating(md.Rating ?? 0);
+    this.SetEditorLabel(string.IsNullOrEmpty(md.ColorLabel) ? null : md.ColorLabel);
 
     if (this.FindControl<TextBox>("KeywordsBox") is { } keywordsBox)
       keywordsBox.Text = md.Keywords.Count == 0 ? string.Empty : string.Join(", ", md.Keywords);
@@ -1166,9 +1696,20 @@ public partial class MainWindow : Window {
       creatorBox.Text = md.Creator ?? string.Empty;
     if (this.FindControl<TextBox>("CopyrightBox") is { } copyrightBox)
       copyrightBox.Text = md.Copyright ?? string.Empty;
+
+    // Snapshot the freshly-loaded values as the clean baseline so any
+    // subsequent user edit paints light-blue until Save or Revert.
+    try { this._dirtyTracker.SetClean(); } catch { /* dirty-highlight cosmetic — not fatal */ }
   }
 
-  private void OnRevertMetadataClick(object? sender, RoutedEventArgs e) {
+  private async void OnRevertMetadataClick(object? sender, RoutedEventArgs e) {
+    // Pending detections live in _currentMetadata.Regions only — Revert
+    // discards them by re-reading the file (which still has the old
+    // region list). The full reload also resets the dirty tracker.
+    if (this._currentFile is { Exists: true } file) {
+      await this.ReloadCurrentMetadataAsync(file);
+      return;
+    }
     if (this._currentMetadata is { } md)
       this.SyncEditorFromMetadata(md);
   }
@@ -1241,7 +1782,7 @@ public partial class MainWindow : Window {
     var inv = System.Globalization.CultureInfo.InvariantCulture;
     if (this.FindControl<TextBox>("DirectionBox") is { } dirBox)
       dirBox.Text = result.HeadingDegrees.ToString("0.##", inv);
-    if (this.FindControl<CheckBox>("DirectionMagneticCheck") is { } magCheck)
+    if (this.FindControl<Avalonia.Controls.Primitives.ToggleButton>("DirectionMagneticCheck") is { } magCheck)
       magCheck.IsChecked = false;
     if (this.FindControl<TextBox>("TargetLatBox") is { } tgtLat)
       tgtLat.Text = result.Target.Latitude.ToString("0.######", inv);
@@ -1282,9 +1823,9 @@ public partial class MainWindow : Window {
       this._controller.ViewModel.StatusMessage =
         $"Detected {result.Labels.Count} label(s): {string.Join(", ", result.DistinctLabelNames())}";
 
-      // Refresh the displayed metadata (keywords may have grown)
-      this._currentMetadata = await this._metadataReader.ReadAsync(file);
-      await this.UpdateMetadataAsync(file, CancellationToken.None);
+      // Refresh the displayed metadata + the search-index snapshot so new
+      // keywords surface in chips and the search bar.
+      await this.ReloadCurrentMetadataAsync(file);
     } catch (Exception ex) {
       this._controller.ViewModel.StatusMessage = $"Detection failed: {ex.Message}";
     }
@@ -1294,26 +1835,32 @@ public partial class MainWindow : Window {
     if (this._currentFile is not { } file || !file.Exists)
       return;
 
-    // File rename first. If the target already exists we abort everything —
-    // silently overwriting someone else's file would be catastrophic, and
-    // the user should pick a new name rather than having Save randomly
-    // succeed/fail based on directory contents.
-    var newName = this.FindControl<TextBox>("FileNameBox")?.Text?.Trim();
-    if (!string.IsNullOrWhiteSpace(newName)
-        && !string.Equals(newName, file.Name, StringComparison.Ordinal)) {
-      var renamed = this.TryRenameCurrentFile(file, newName);
-      if (renamed is null)
-        return;
-      file = renamed;
-      this._currentFile = renamed;
+    // File rename first. The Name box holds only the base name; the
+    // extension lives in a separate read-only box, so we recompose the
+    // full filename here and force the original extension on the way in.
+    var typedBase = this.FindControl<TextBox>("FileNameBox")?.Text?.Trim();
+    if (!string.IsNullOrWhiteSpace(typedBase)) {
+      var fullCandidate = typedBase + file.Extension;
+      if (!string.Equals(fullCandidate, file.Name, StringComparison.Ordinal)) {
+        var renamed = this.TryRenameCurrentFile(file, fullCandidate);
+        if (renamed is null)
+          return;
+        file = renamed;
+        this._currentFile = renamed;
+      }
     }
 
     var edit = this.BuildEditFromUi();
     try {
       await this._metadataWriter.ApplyAsync(file, edit);
+      // Apply user-edited filesystem timestamps AFTER the metadata write so
+      // AtomicMetadataWrite's preservation pass doesn't undo them.
+      this.ApplyFileTimestampEdits(file);
       this._controller.ViewModel.StatusMessage = $"Saved metadata for {file.Name}";
-      this._currentMetadata = await this._metadataReader.ReadAsync(file);
-      await this.UpdateMetadataAsync(file, CancellationToken.None);
+      // Reload via the shared helper so the FileItemModel.Rating /
+      // ColorLabel / SearchIndex are refreshed and the chip + search bar
+      // filters track the change.
+      await this.ReloadCurrentMetadataAsync(file);
     } catch (Exception ex) {
       this._controller.ViewModel.StatusMessage = $"Failed to save: {ex.Message}";
     }
@@ -1333,6 +1880,27 @@ public partial class MainWindow : Window {
       return null;
     }
 
+    // Force-preserve the original extension. Anything the user typed after
+    // the last dot is treated as part of the base name to be replaced
+    // (jpg → jpg2 used to silently rename the file out of supported
+    // extensions, which then disappeared from the grid). Format-mismatch
+    // detection still surfaces extension hints in the status bar — but
+    // the actual fix has to happen via the OS so a mistyped key here
+    // can't corrupt the file extension.
+    var typedBase = System.IO.Path.GetFileNameWithoutExtension(newName);
+    var typedExt  = System.IO.Path.GetExtension(newName);
+    if (!string.IsNullOrEmpty(typedExt)
+        && !string.Equals(typedExt, file.Extension, StringComparison.OrdinalIgnoreCase)) {
+      this._controller.ViewModel.StatusMessage =
+        $"Extension stays {file.Extension} — typed \"{typedExt}\" was ignored.";
+    }
+    newName = typedBase + file.Extension;
+
+    if (string.IsNullOrWhiteSpace(typedBase)) {
+      this._controller.ViewModel.StatusMessage = "Filename can't be empty.";
+      return null;
+    }
+
     var directory = file.Directory;
     if (directory is null) {
       this._controller.ViewModel.StatusMessage = "Can't determine target directory for rename.";
@@ -1345,6 +1913,12 @@ public partial class MainWindow : Window {
       return null;
     }
 
+    // Capture the path BEFORE MoveTo — FileInfo.MoveTo mutates the same
+    // instance to point at the new location, so without this snapshot the
+    // post-move lookup against _currentFileItems would compare new vs new
+    // and silently miss its row. The grid would then show a ghost name
+    // and RefreshFileItemIndex couldn't update the in-memory index.
+    var oldFullName = file.FullName;
     try {
       file.MoveTo(target.FullName);
     } catch (Exception ex) {
@@ -1355,7 +1929,7 @@ public partial class MainWindow : Window {
     // Mirror the rename in the grid so the UI doesn't point at a ghost path.
     if (this._currentFileItems is { } items) {
       foreach (var item in items) {
-        if (item.FileInfo is { } fi && string.Equals(fi.FullName, file.FullName, StringComparison.OrdinalIgnoreCase)) {
+        if (item.FileInfo is { } fi && string.Equals(fi.FullName, oldFullName, StringComparison.OrdinalIgnoreCase)) {
           item.FileInfo = target;
           item.FileName = target.Name;
           break;
@@ -1387,10 +1961,21 @@ public partial class MainWindow : Window {
       try {
         await this._metadataWriter.ApplyAsync(item.FileInfo!, edit);
         written++;
+
+        // Re-snapshot the search index for this row so the chip + search
+        // filters reflect the new value without waiting for a full rescan.
+        try {
+          var fresh = await this._metadataReader.ReadAsync(item.FileInfo!);
+          this._controller.RefreshFileIndex(item, fresh);
+        } catch {
+          // Index refresh is best-effort; the write already succeeded.
+        }
       } catch {
         errors++;
       }
     }
+
+    this.ApplySearchFilter();
 
     this._controller.ViewModel.StatusMessage = errors == 0
       ? $"Applied edit to {written} file(s)."
@@ -1402,27 +1987,80 @@ public partial class MainWindow : Window {
     }
   }
 
+  /// <summary>
+  /// Build a MetadataEdit from the editor. Only fields the user actually
+  /// changed since the last load are emitted as Optional.Set(...) — the
+  /// rest stay at <c>default</c> so the writer leaves them alone. This is
+  /// what makes Apply-to-selection safe: setting Copyright on five files
+  /// won't stomp their other tags.
+  /// </summary>
   private MetadataEdit BuildEditFromUi() {
     var inv = System.Globalization.CultureInfo.InvariantCulture;
-    return new MetadataEdit {
-      Gps            = ReadGpsFromEditor(inv),
-      ImageDirection = this.ReadDirectionFromEditor(inv),
-      TargetGps      = this.ReadTargetGpsFromEditor(inv),
-      Location       = ReadTextFromEditor("LocationBox"),
-      City           = ReadTextFromEditor("CityBox"),
-      State          = ReadTextFromEditor("StateBox"),
-      Country        = ReadTextFromEditor("CountryBox"),
-      CountryCode    = ReadTextFromEditor("CountryCodeBox"),
-      Rating         = ReadRatingFromEditor(),
-      ColorLabel     = ReadLabelFromEditor(),
-      Keywords       = ReadKeywordsFromEditor(),
-      Title          = ReadTextFromEditor("TitleBox"),
-      Caption        = ReadTextFromEditor("CaptionBox"),
-      Creator        = ReadTextFromEditor("CreatorBox"),
-      Copyright      = ReadTextFromEditor("CopyrightBox"),
-      DateCreated    = this.ReadCaptureDateFromEditor()
+    var edit = new MetadataEdit {
+      Gps            = this.IsGpsDirty()    ? this.ReadGpsFromEditor(inv)        : default,
+      ImageDirection = this.IsDirectionDirty() ? this.ReadDirectionFromEditor(inv) : default,
+      TargetGps      = this.IsTargetDirty() ? this.ReadTargetGpsFromEditor(inv)  : default,
+      Location       = this.ReadTextIfDirty("LocationBox"),
+      City           = this.ReadTextIfDirty("CityBox"),
+      State          = this.ReadTextIfDirty("StateBox"),
+      Country        = this.ReadTextIfDirty("CountryBox"),
+      CountryCode    = this.ReadTextIfDirty("CountryCodeBox"),
+      Rating         = this.IsRatingDirty() ? this.ReadRatingFromEditor() : default,
+      ColorLabel     = this.IsLabelDirty()  ? this.ReadLabelFromEditor()  : default,
+      Keywords       = this.IsControlDirty(this.FindControl<TextBox>("KeywordsBox"))
+                       ? this.ReadKeywordsFromEditor() : default,
+      Title          = this.ReadTextIfDirty("TitleBox"),
+      Caption        = this.ReadTextIfDirty("CaptionBox"),
+      Creator        = this.ReadTextIfDirty("CreatorBox"),
+      Copyright      = this.ReadTextIfDirty("CopyrightBox"),
+      DateCreated    = this.IsCaptureDateDirty() ? this.ReadCaptureDateFromEditor() : default
     };
+
+    // Pending detection results stay in _currentMetadata.Regions until the
+    // user hits Save — emit them only when the flag says so, otherwise the
+    // existing on-disk regions stay untouched.
+    if (this._regionsPending && this._currentMetadata?.Regions is { } regions) {
+      edit = edit with {
+        Regions = Optional<IReadOnlyList<TaggedRegion>>.Set(regions)
+      };
+    }
+
+    return edit;
   }
+
+  // --- Dirty-aware readers ---
+
+  private bool IsControlDirty(Control? c) => this._dirtyTracker.IsDirty(c);
+
+  private Optional<string?> ReadTextIfDirty(string boxName) {
+    var box = this.FindControl<TextBox>(boxName);
+    if (!this.IsControlDirty(box))
+      return default;
+    return Optional<string?>.Set(box?.Text ?? string.Empty);
+  }
+
+  private bool IsGpsDirty() => new[] { "GpsLatBox", "GpsLonBox", "GpsAltBox" }
+    .Any(n => this.IsControlDirty(this.FindControl<TextBox>(n)));
+
+  private bool IsDirectionDirty() =>
+    this.IsControlDirty(this.FindControl<TextBox>("DirectionBox"))
+    || this.IsControlDirty(this.FindControl<Avalonia.Controls.Primitives.ToggleButton>("DirectionMagneticCheck"));
+
+  private bool IsTargetDirty() =>
+    this.IsControlDirty(this.FindControl<TextBox>("TargetLatBox"))
+    || this.IsControlDirty(this.FindControl<TextBox>("TargetLonBox"));
+
+  private bool IsRatingDirty() => new[] {
+    "EditRatingReject", "EditStar1", "EditStar2", "EditStar3", "EditStar4", "EditStar5"
+  }.Any(n => this.IsControlDirty(this.FindControl<Avalonia.Controls.Primitives.ToggleButton>(n)));
+
+  private bool IsLabelDirty() => new[] {
+    "EditLabelRed", "EditLabelYellow", "EditLabelGreen", "EditLabelBlue", "EditLabelPurple"
+  }.Any(n => this.IsControlDirty(this.FindControl<Avalonia.Controls.Primitives.ToggleButton>(n)));
+
+  private bool IsCaptureDateDirty() =>
+    this.IsControlDirty(this.FindControl<DatePicker>("CaptureDatePicker"))
+    || this.IsControlDirty(this.FindControl<TimePicker>("CaptureTimePicker"));
 
   private Optional<DateTime?> ReadCaptureDateFromEditor() {
     var dateBox = this.FindControl<DatePicker>("CaptureDatePicker");
@@ -1473,7 +2111,7 @@ public partial class MainWindow : Window {
     if (degrees is < 0 or > 360)
       return default;
 
-    var magnetic = this.FindControl<CheckBox>("DirectionMagneticCheck")?.IsChecked == true;
+    var magnetic = this.FindControl<Avalonia.Controls.Primitives.ToggleButton>("DirectionMagneticCheck")?.IsChecked == true;
     return new ImageDirection(degrees, magnetic ? DirectionReference.Magnetic : DirectionReference.True);
   }
 
@@ -1562,16 +2200,15 @@ public partial class MainWindow : Window {
   }
 
   private Optional<int?> ReadRatingFromEditor() {
-    if (this.FindControl<ComboBox>("RatingCombo")?.SelectedItem is int r)
-      return r;
-    return Optional<int?>.Set(null);
+    var rating = this.GetEditorRating();
+    // 0 = "no stars" — write null so the field clears in XMP rather than
+    // forcing a literal 0 (which some readers interpret as "rated zero").
+    return rating == 0 ? Optional<int?>.Set(null) : Optional<int?>.Set(rating);
   }
 
   private Optional<string?> ReadLabelFromEditor() {
-    var selected = this.FindControl<ComboBox>("LabelCombo")?.SelectedItem as string;
-    if (string.IsNullOrEmpty(selected) || selected == "—")
-      return Optional<string?>.Set(null);
-    return selected;
+    var label = this.GetEditorLabel();
+    return string.IsNullOrEmpty(label) ? Optional<string?>.Set(null) : Optional<string?>.Set(label);
   }
 
   private Optional<IReadOnlyList<string>> ReadKeywordsFromEditor() {

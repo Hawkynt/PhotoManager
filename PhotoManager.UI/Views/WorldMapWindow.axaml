@@ -1,0 +1,30 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:mapsui="using:Mapsui.UI.Avalonia"
+        mc:Ignorable="d" d:DesignWidth="1100" d:DesignHeight="700"
+        x:Class="PhotoManager.UI.Views.WorldMapWindow"
+        Width="1100" Height="700"
+        MinWidth="700" MinHeight="500"
+        WindowStartupLocation="CenterOwner"
+        Title="World map">
+  <Grid RowDefinitions="Auto,*,Auto" Margin="12">
+    <StackPanel Grid.Row="0" Spacing="4" Margin="0,0,0,8">
+      <TextBlock Text="World map" FontSize="16" FontWeight="SemiBold" />
+      <TextBlock Opacity="0.75" TextWrapping="Wrap"
+                 Text="Every geotagged photo from your currently scanned library, plotted as a pin. Click a pin to see which photo lives there; the Open button reveals it in the main grid." />
+    </StackPanel>
+
+    <Border Grid.Row="1" BorderBrush="#DDD" BorderThickness="1" CornerRadius="4">
+      <mapsui:MapControl x:Name="MapControl" />
+    </Border>
+
+    <Grid Grid.Row="2" ColumnDefinitions="*,Auto,Auto" Margin="0,8,0,0">
+      <TextBlock Grid.Column="0" x:Name="StatusText" VerticalAlignment="Center" Opacity="0.8" />
+      <Button Grid.Column="1" x:Name="OpenButton" Content="Open in main window"
+              Click="OnOpenClick" IsEnabled="False" Margin="0,0,6,0" />
+      <Button Grid.Column="2" Content="Close" Click="OnCloseClick" IsCancel="True" />
+    </Grid>
+  </Grid>
+</Window>

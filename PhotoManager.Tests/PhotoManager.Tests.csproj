@@ -24,6 +24,9 @@
     <PackageReference Include="NUnit" Version="3.14.0" />
     <PackageReference Include="NUnit.Analyzers" Version="3.9.0" />
     <PackageReference Include="NUnit3TestAdapter" Version="4.5.0" />
+    <!-- Headless Avalonia lets us instantiate Windows / view models in
+         tests without a real display, so view-glue logic gets coverage. -->
+    <PackageReference Include="Avalonia.Headless.NUnit" Version="11.2.3" />
   </ItemGroup>
 
   <ItemGroup>
@@ -32,6 +35,9 @@
 
   <ItemGroup>
     <ProjectReference Include="..\PhotoManager.Core\PhotoManager.Core.csproj" />
+    <!-- Reference UI so we can test pure-CLR view models / POCOs without
+         needing an Avalonia runtime. Window classes still require headless. -->
+    <ProjectReference Include="..\PhotoManager.UI\PhotoManager.UI.csproj" />
   </ItemGroup>
 
 </Project>

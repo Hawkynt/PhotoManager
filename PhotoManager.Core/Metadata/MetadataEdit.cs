@@ -25,6 +25,23 @@ public sealed record MetadataEdit {
   public Optional<string?> Caption { get; init; }
   public Optional<string?> Creator { get; init; }
   public Optional<string?> Copyright { get; init; }
+
+  /// <summary>
+  /// Per-source override for the XMP <c>dc:creator</c> value. When set, it
+  /// wins over <see cref="Creator"/> for the XMP write path only — the IPTC
+  /// By-line still tracks <see cref="Creator"/> (or its own per-source
+  /// override) so callers can intentionally diverge the two containers.
+  /// </summary>
+  public Optional<string?> CreatorXmp { get; init; }
+
+  /// <summary>Per-source override for IPTC 2:80 By-line. See <see cref="CreatorXmp"/> for the semantic.</summary>
+  public Optional<string?> CreatorIptc { get; init; }
+
+  /// <summary>Per-source override for XMP <c>dc:rights</c>. See <see cref="CreatorXmp"/> for the semantic.</summary>
+  public Optional<string?> CopyrightXmp { get; init; }
+
+  /// <summary>Per-source override for IPTC 2:116 Copyright Notice. See <see cref="CreatorXmp"/> for the semantic.</summary>
+  public Optional<string?> CopyrightIptc { get; init; }
   public Optional<string?> Headline { get; init; }
   public Optional<string?> Credit { get; init; }
   public Optional<string?> Source { get; init; }

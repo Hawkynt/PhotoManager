@@ -39,8 +39,14 @@ public sealed class DirtyTracker {
         case ComboBox cb:
           cb.SelectionChanged += (_, _) => this.EvaluateSafe(cb);
           break;
+        // CheckBox is a ToggleButton, but match it explicitly so any future
+        // CheckBox-specific signal could be wired here. Both surface
+        // IsCheckedChanged on ToggleButton.
         case CheckBox chk:
           chk.IsCheckedChanged += (_, _) => this.EvaluateSafe(chk);
+          break;
+        case Avalonia.Controls.Primitives.ToggleButton tgl:
+          tgl.IsCheckedChanged += (_, _) => this.EvaluateSafe(tgl);
           break;
         case DatePicker dp:
           dp.SelectedDateChanged += (_, _) => this.EvaluateSafe(dp);
@@ -71,6 +77,25 @@ public sealed class DirtyTracker {
   /// load, after a successful Save, and after Revert / file-switch so the
   /// visual state matches the persisted state.
   /// </summary>
+  /// <summary>
+  /// True if the control's current value differs from its last clean
+  /// snapshot. Used by <c>BuildEditFromUi</c> in MainWindow so Save /
+  /// Apply-to-selection only emit Optional values for fields the user
+  /// actually changed — avoids stomping unrelated metadata on the other
+  /// files in a multi-select.
+  /// </summary>
+  public bool IsDirty(Control? control) {
+    if (control is null)
+      return false;
+    if (!this._cleanValues.TryGetValue(control, out var clean))
+      return false;
+    try {
+      return !ValuesEqual(GetCurrentValue(control), clean);
+    } catch {
+      return false;
+    }
+  }
+
   public void SetClean() {
     this._suppressEvaluate = true;
     try {
@@ -108,6 +133,7 @@ public sealed class DirtyTracker {
     TextBox tb => tb.Text ?? string.Empty,
     ComboBox cb => cb.SelectedItem,
     CheckBox chk => chk.IsChecked,
+    Avalonia.Controls.Primitives.ToggleButton tgl => tgl.IsChecked,
     DatePicker dp => dp.SelectedDate,
     TimePicker tp => tp.SelectedTime,
     _ => null

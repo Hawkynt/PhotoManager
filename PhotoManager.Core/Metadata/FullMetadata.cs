@@ -39,11 +39,31 @@ public sealed record FullMetadata {
   public string? Title { get; init; }
   public string? Caption { get; init; }
 
-  /// <summary>Person or organisation who made the image — XMP <c>dc:creator</c>, IPTC 2:80 By-line, EXIF Artist.</summary>
+  /// <summary>
+  /// Person or organisation who made the image — unified "best available"
+  /// value preferring XMP over IPTC. For per-source viewing/editing see
+  /// <see cref="CreatorXmp"/> and <see cref="CreatorIptc"/>.
+  /// </summary>
   public string? Creator { get; init; }
 
-  /// <summary>Copyright notice — XMP <c>dc:rights</c>, IPTC 2:116, EXIF Copyright.</summary>
+  /// <summary>
+  /// Copyright notice — unified "best available" value preferring XMP over
+  /// IPTC. For per-source viewing/editing see <see cref="CopyrightXmp"/>
+  /// and <see cref="CopyrightIptc"/>.
+  /// </summary>
   public string? Copyright { get; init; }
+
+  /// <summary>XMP <c>dc:creator</c> value as read from the file — may differ from <see cref="CreatorIptc"/> when another tool wrote only one container.</summary>
+  public string? CreatorXmp { get; init; }
+
+  /// <summary>IPTC 2:80 By-line value as read from the file.</summary>
+  public string? CreatorIptc { get; init; }
+
+  /// <summary>XMP <c>dc:rights</c> value as read from the file.</summary>
+  public string? CopyrightXmp { get; init; }
+
+  /// <summary>IPTC 2:116 Copyright Notice value as read from the file.</summary>
+  public string? CopyrightIptc { get; init; }
 
   /// <summary>Short headline summarising the image — XMP <c>photoshop:Headline</c>, IPTC 2:105.</summary>
   public string? Headline { get; init; }

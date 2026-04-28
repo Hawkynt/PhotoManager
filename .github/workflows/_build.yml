@@ -61,6 +61,17 @@ jobs:
         with:
           node-version: '22'
 
+      # PhotoManager.Core has a sibling-repo ProjectReference to
+      # ..\..\CompressionWorkbench\FileFormat.JpegArchive\... — clone it
+      # next to the PhotoManager checkout so the relative path resolves.
+      - name: Clone sibling CompressionWorkbench
+        shell: bash
+        run: git clone --depth=1 https://github.com/Hawkynt/CompressionWorkbench.git "$GITHUB_WORKSPACE/../CompressionWorkbench"
+
+      - name: Clone sibling PNGCrushCS (RAW readers)
+        shell: bash
+        run: git clone --depth=1 https://github.com/Hawkynt/PNGCrushCS.git "$GITHUB_WORKSPACE/../PNGCrushCS"
+
       - name: Update CHANGELOG
         run: node .github/workflows/scripts/update-changelog.mjs ${{ inputs.changelog-flag }}
 
@@ -133,6 +144,14 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.x'
+
+      - name: Clone sibling CompressionWorkbench
+        shell: bash
+        run: git clone --depth=1 https://github.com/Hawkynt/CompressionWorkbench.git "$GITHUB_WORKSPACE/../CompressionWorkbench"
+
+      - name: Clone sibling PNGCrushCS (RAW readers)
+        shell: bash
+        run: git clone --depth=1 https://github.com/Hawkynt/PNGCrushCS.git "$GITHUB_WORKSPACE/../PNGCrushCS"
 
       - name: Stamp versions into csprojs
         run: perl .github/workflows/scripts/version.pl --stamp
