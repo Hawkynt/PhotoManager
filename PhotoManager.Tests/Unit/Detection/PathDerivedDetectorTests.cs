@@ -4,10 +4,14 @@ namespace PhotoManager.Tests.Unit.Detection;
 
 [TestFixture]
 public class PathDerivedDetectorTests {
+  // Test fixtures use forward-slash paths — both Windows and Linux
+  // FileInfo parse "/" as a path separator. Backslashes are
+  // Windows-only, so Linux CI saw a string with no separators and
+  // walked the test runner's working directory instead.
   [Test]
   public async Task DetectAsync_FolderStructure_ExtractsSemanticTokens() {
     var detector = new PathDerivedDetector();
-    var file = new FileInfo(@"C:\Users\alice\Photos\2024\Vacation\Rome\IMG_0001.jpg");
+    var file = new FileInfo("/Photos/2024/Vacation/Rome/IMG_0001.jpg");
 
     var result = await detector.DetectAsync(file);
 
@@ -19,7 +23,7 @@ public class PathDerivedDetectorTests {
   [Test]
   public async Task DetectAsync_FiltersStopWords() {
     var detector = new PathDerivedDetector();
-    var file = new FileInfo(@"C:\Users\alice\Pictures\DCIM\raw\IMG_0002.jpg");
+    var file = new FileInfo("/Pictures/DCIM/raw/IMG_0002.jpg");
 
     var result = await detector.DetectAsync(file);
 
@@ -32,7 +36,7 @@ public class PathDerivedDetectorTests {
   [Test]
   public async Task DetectAsync_FiltersDateLookingTokens() {
     var detector = new PathDerivedDetector();
-    var file = new FileInfo(@"C:\Photos\2024\2024-01-15\party\IMG.jpg");
+    var file = new FileInfo("/Photos/2024/2024-01-15/party/IMG.jpg");
 
     var result = await detector.DetectAsync(file);
 
@@ -46,7 +50,7 @@ public class PathDerivedDetectorTests {
   [Test]
   public async Task DetectAsync_SplitsCompoundSegments() {
     var detector = new PathDerivedDetector();
-    var file = new FileInfo(@"C:\Photos\beach-sunset_paris.2024\IMG.jpg");
+    var file = new FileInfo("/Photos/beach-sunset_paris.2024/IMG.jpg");
 
     var result = await detector.DetectAsync(file);
 
