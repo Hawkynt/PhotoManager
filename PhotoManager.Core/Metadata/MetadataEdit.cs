@@ -20,6 +20,8 @@ public sealed record MetadataEdit {
   public Optional<string?> CountryCode { get; init; }
   public Optional<int?> Rating { get; init; }
   public Optional<string?> ColorLabel { get; init; }
+  public Optional<bool?> IsPick { get; init; }
+  public Optional<bool?> IsReject { get; init; }
   public Optional<IReadOnlyList<string>> Keywords { get; init; }
   public Optional<string?> Title { get; init; }
   public Optional<string?> Caption { get; init; }

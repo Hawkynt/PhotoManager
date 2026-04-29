@@ -12,9 +12,28 @@
   <Grid RowDefinitions="*,Auto" Margin="12">
     <Grid Grid.Row="0" ColumnDefinitions="*,4,360">
       <Border Grid.Column="0" Background="#111" BorderBrush="#333" BorderThickness="1" CornerRadius="4">
-        <Grid>
-          <Image x:Name="PreviewImage" Stretch="Uniform" StretchDirection="DownOnly" />
-          <controls:MaskOverlayCanvas x:Name="MaskOverlay" IsVisible="False" IsHitTestVisible="False" />
+        <Grid RowDefinitions="Auto,*">
+          <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="6" Margin="6,4">
+            <Button x:Name="CompareToggleButton" Content="🟢 After only" Click="OnCompareToggleClick"
+                    ToolTip.Tip="Click to compare against baseline (Split view)" />
+          </StackPanel>
+          <Grid Grid.Row="1" x:Name="CompareRoot">
+            <Image x:Name="PreviewImage" Stretch="Uniform" StretchDirection="DownOnly" />
+            <Grid x:Name="SplitPanel" IsVisible="False" ColumnDefinitions="*,3,*">
+              <Image x:Name="BaselineImageSplit" Grid.Column="0" Stretch="Uniform" StretchDirection="DownOnly" />
+              <GridSplitter Grid.Column="1" Background="#888" Width="3" ResizeDirection="Columns" />
+              <Image x:Name="PreviewImageSplit"  Grid.Column="2" Stretch="Uniform" StretchDirection="DownOnly" />
+            </Grid>
+            <Grid x:Name="SliderPanel" IsVisible="False">
+              <Image x:Name="BaselineImageSlider" Stretch="Uniform" StretchDirection="DownOnly" />
+              <Image x:Name="PreviewImageSlider"  Stretch="Uniform" StretchDirection="DownOnly" />
+              <Slider x:Name="CompareSlider" Minimum="0" Maximum="1" Value="0.5"
+                      VerticalAlignment="Stretch" HorizontalAlignment="Stretch"
+                      Background="Transparent"
+                      ValueChanged="OnCompareSliderChanged" />
+            </Grid>
+            <controls:MaskOverlayCanvas x:Name="MaskOverlay" IsVisible="False" IsHitTestVisible="False" />
+          </Grid>
         </Grid>
       </Border>
 
@@ -30,9 +49,9 @@
             <Grid ColumnDefinitions="*,Auto,Auto">
               <ComboBox Grid.Column="0" x:Name="TemplateCombo" PlaceholderText="(no template)"
                         SelectionChanged="OnTemplateSelected" />
-              <Button Grid.Column="1" Content="Save…" Margin="4,0,0,0" Click="OnSaveTemplateClick"
+              <Button Grid.Column="1" Content="💾 Save…" Margin="4,0,0,0" Click="OnSaveTemplateClick"
                       ToolTip.Tip="Save the current sliders as a reusable template" />
-              <Button Grid.Column="2" Content="Apply to selection" Margin="4,0,0,0"
+              <Button Grid.Column="2" Content="🗂 Apply to selection" Margin="4,0,0,0"
                       Click="OnApplyToSelectionClick"
                       ToolTip.Tip="Render every file selected in the main window with the active settings" />
             </Grid>
@@ -71,6 +90,14 @@
                     ToolTip.Tip="Find the bounding box of non-blank content and crop to it. Strips whitespace from scans / photographed paper." />
             <Button Content="🏛️ Upright"    Click="OnUprightAutoClick"
                     ToolTip.Tip="Combined deskew + perspective hint. Today this matches Auto-level; full keystone auto-detect is a follow-up." />
+          </StackPanel>
+
+          <!-- AI-driven local-mask helpers. Each one runs an ONNX model to
+               propose a brush-mask local adjustment that the user can then
+               tweak with the regular per-mask sliders. -->
+          <StackPanel Orientation="Horizontal" Spacing="4">
+            <Button Content="🎭 Detect _subject" Click="OnDetectSubjectClick"
+                    ToolTip.Tip="Run MODNet on the source image to predict a subject alpha matte and append a brush-masked local adjustment for it." />
           </StackPanel>
 
           <StackPanel Orientation="Horizontal" Spacing="4">
@@ -1015,7 +1042,7 @@
 
           <Button Content="Reset all" Click="OnResetAllClick" HorizontalAlignment="Stretch" />
 
-          <Border Background="#F8F8F8" BorderBrush="#DDD" BorderThickness="1" CornerRadius="4" Padding="8">
+          <Border Background="{DynamicResource SubtlePanelBrush}" BorderBrush="{DynamicResource PanelBorderBrush}" BorderThickness="1" CornerRadius="4" Padding="8">
             <TextBlock Opacity="0.75" TextWrapping="Wrap" FontSize="11"
                        Text="Sliders preview live as you drag. Save as… renders a full-resolution JPEG to a new file; the original is never modified. Save your favourite combos as templates and apply them to multiple selected files in one go." />
           </Border>
@@ -1031,11 +1058,11 @@
         <NumericUpDown x:Name="ThumbMaxEdgeBox" Width="120" MinWidth="120" Minimum="16" Maximum="2048" Increment="8" Value="160" FormatString="0" />
         <TextBlock Text="Q" VerticalAlignment="Center" Opacity="0.75" Margin="4,0,0,0" />
         <NumericUpDown x:Name="ThumbQualityBox" Width="110" MinWidth="110" Minimum="1" Maximum="100" Increment="5" Value="75" FormatString="0" />
-        <Button Content="Bake thumbnail" Click="OnBakeThumbnailClick" Margin="6,0,0,0"
+        <Button Content="🖼 Bake thumbnail" Click="OnBakeThumbnailClick" Margin="6,0,0,0"
                 ToolTip.Tip="Replace the JPEG's embedded EXIF thumbnail with the current developed preview at the long-edge size and quality set on the left. Pixel data of the main image is not changed." />
       </StackPanel>
-      <Button Grid.Column="2" Content="Save as..." Click="OnSaveAsClick" FontWeight="Bold" Margin="6,0,0,0" />
-      <Button Grid.Column="3" Content="Close" Click="OnCloseClick" IsCancel="True" Margin="6,0,0,0" />
+      <Button Grid.Column="2" Content="💾 Save as..." Click="OnSaveAsClick" FontWeight="Bold" Margin="6,0,0,0" />
+      <Button Grid.Column="3" Content="🚪 Close" Click="OnCloseClick" IsCancel="True" Margin="6,0,0,0" />
     </Grid>
   </Grid>
 </Window>

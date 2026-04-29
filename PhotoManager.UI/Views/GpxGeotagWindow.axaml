@@ -18,13 +18,13 @@
     <Grid Grid.Row="1" ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,6">
       <TextBlock Grid.Column="0" Text="GPX file:" VerticalAlignment="Center" Margin="0,0,6,0" />
       <TextBox Grid.Column="1" x:Name="GpxPathBox" Watermark="Path to .gpx" />
-      <Button Grid.Column="2" Content="Browse..." Margin="6,0,0,0" Click="OnBrowseGpxClick" />
+      <Button Grid.Column="2" Content="📂 Browse..." Margin="6,0,0,0" Click="OnBrowseGpxClick" />
     </Grid>
 
     <Grid Grid.Row="2" ColumnDefinitions="Auto,*,Auto,Auto" Margin="0,0,0,6">
       <TextBlock Grid.Column="0" Text="Photos folder:" VerticalAlignment="Center" Margin="0,0,6,0" />
       <TextBox Grid.Column="1" x:Name="FolderBox" Watermark="Path to photos" />
-      <Button Grid.Column="2" Content="Browse..." Margin="6,0,0,0" Click="OnBrowseFolderClick" />
+      <Button Grid.Column="2" Content="📂 Browse..." Margin="6,0,0,0" Click="OnBrowseFolderClick" />
       <CheckBox Grid.Column="3" x:Name="RecursiveBox" Content="Recursive" IsChecked="True" Margin="12,0,0,0" VerticalAlignment="Center" />
     </Grid>
 
@@ -36,7 +36,7 @@
       <TextBlock Grid.Column="4" Text=" Tol (s):" VerticalAlignment="Center" Margin="16,0,4,0" />
       <TextBox Grid.Column="5" x:Name="ToleranceBox" Text="60" HorizontalAlignment="Left" Width="70" />
       <CheckBox Grid.Column="6" x:Name="OverwriteBox" Content="Overwrite existing GPS" Margin="16,0,0,0" VerticalAlignment="Center" />
-      <Button Grid.Column="7" Content="Geotag" Margin="12,0,0,0" FontWeight="Bold" Click="OnGeotagClick" />
+      <Button Grid.Column="7" Content="📍 Geotag" Margin="12,0,0,0" FontWeight="Bold" Click="OnGeotagClick" />
     </Grid>
 
     <Border Grid.Row="4" BorderBrush="#DDD" BorderThickness="1" CornerRadius="4">
@@ -47,7 +47,7 @@
 
     <Grid Grid.Row="5" ColumnDefinitions="*,Auto" Margin="0,8,0,0">
       <TextBlock Grid.Column="0" x:Name="StatusText" VerticalAlignment="Center" Opacity="0.75" />
-      <Button Grid.Column="1" Content="Close" Click="OnCloseClick" IsCancel="True" />
+      <Button Grid.Column="1" Content="🚪 Close" Click="OnCloseClick" IsCancel="True" />
     </Grid>
   </Grid>
 </Window>

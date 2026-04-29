@@ -99,6 +99,14 @@ public static class XmpSidecarFormatter {
     if (!string.IsNullOrEmpty(state.ColorLabel))
       description.Add(new XElement(Xmp + "Label", state.ColorLabel));
 
+    // Picasa-style cull flags. xmp:Label is taken by the color label so we
+    // emit dedicated xmp:Pick / xmp:Reject booleans rather than overloading
+    // it. Only true is written; false collapses to "absent" in XMP.
+    if (state.IsPick == true)
+      description.Add(new XElement(Xmp + "Pick", "true"));
+    if (state.IsReject == true)
+      description.Add(new XElement(Xmp + "Reject", "true"));
+
     if (state.Keywords.Count > 0) {
       var bag = new XElement(Rdf + "Bag");
       foreach (var keyword in state.Keywords)
@@ -296,6 +304,9 @@ public static class XmpSidecarFormatter {
     if (string.IsNullOrEmpty(label))
       label = null;
 
+    var isPick = ReadXmpBool(description.Element(Xmp + "Pick")?.Value);
+    var isReject = ReadXmpBool(description.Element(Xmp + "Reject")?.Value);
+
     var keywords = description
       .Element(Dc + "subject")?
       .Element(Rdf + "Bag")?
@@ -387,6 +398,8 @@ public static class XmpSidecarFormatter {
       CountryCode = countryCode,
       Rating = rating,
       ColorLabel = label,
+      IsPick = isPick,
+      IsReject = isReject,
       Keywords = keywords,
       Title = title,
       Caption = caption,
@@ -944,7 +957,7 @@ public static class XmpSidecarFormatter {
       return name.LocalName is "GPSLatitude" or "GPSLongitude" or "GPSAltitude" or "GPSAltitudeRef"
         or "GPSImgDirection" or "GPSImgDirectionRef" or "GPSDestLatitude" or "GPSDestLongitude";
     if (name.Namespace == Xmp)
-      return name.LocalName is "Rating" or "Label";
+      return name.LocalName is "Rating" or "Label" or "Pick" or "Reject";
     if (name.Namespace == Dc)
       return name.LocalName is "subject" or "title" or "description" or "creator" or "rights";
     if (name.Namespace == MwgRs)
@@ -993,6 +1006,22 @@ public static class XmpSidecarFormatter {
 
     var numerator = (long)Math.Round(absolute * 1000);
     return string.Create(CultureInfo.InvariantCulture, $"{numerator}/1000");
+  }
+
+  /// <summary>
+  /// XMP booleans use "True"/"False" in older docs, "true"/"false" in newer.
+  /// Returns null when the element is missing or the value isn't recognised
+  /// so callers can treat absent vs explicitly-false distinctly.
+  /// </summary>
+  private static bool? ReadXmpBool(string? text) {
+    if (string.IsNullOrWhiteSpace(text))
+      return null;
+    var trimmed = text.Trim();
+    if (trimmed.Equals("true", StringComparison.OrdinalIgnoreCase))
+      return true;
+    if (trimmed.Equals("false", StringComparison.OrdinalIgnoreCase))
+      return false;
+    return null;
   }
 
   private static bool TryParseRational(string text, out double value) {

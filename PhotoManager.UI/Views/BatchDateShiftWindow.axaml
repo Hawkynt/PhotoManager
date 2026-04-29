@@ -1,0 +1,50 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:views="using:PhotoManager.UI.Views"
+        mc:Ignorable="d" d:DesignWidth="780" d:DesignHeight="540"
+        x:Class="PhotoManager.UI.Views.BatchDateShiftWindow"
+        Width="780" Height="540"
+        MinWidth="600" MinHeight="400"
+        WindowStartupLocation="CenterOwner"
+        Title="Batch date shift">
+  <Grid Margin="12" RowDefinitions="Auto,Auto,Auto,*,Auto">
+
+    <TextBlock Grid.Row="0" Margin="0,0,0,8" FontWeight="SemiBold"
+               Text="Shift the EXIF capture timestamp on every selected JPEG by a fixed offset. Useful when the camera clock was set wrong (timezone, DST, drift)." />
+
+    <TextBlock Grid.Row="1" Margin="0,0,0,4" Opacity="0.85"
+               Text="Offset (positive = later, negative = earlier):" />
+
+    <Grid Grid.Row="2" ColumnDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,*" Margin="0,0,0,8">
+      <TextBlock     Grid.Column="0" Text="Days"    VerticalAlignment="Center" Margin="0,0,4,0" />
+      <NumericUpDown Grid.Column="1" x:Name="DaysBox"    MinWidth="90" Minimum="-3650" Maximum="3650" Increment="1" Value="0" FormatString="0" ValueChanged="OnOffsetChanged" />
+      <TextBlock     Grid.Column="2" Text="Hours"   VerticalAlignment="Center" Margin="12,0,4,0" />
+      <NumericUpDown Grid.Column="3" x:Name="HoursBox"   MinWidth="80" Minimum="-72"   Maximum="72"   Increment="1" Value="0" FormatString="0" ValueChanged="OnOffsetChanged" />
+      <TextBlock     Grid.Column="4" Text="Minutes" VerticalAlignment="Center" Margin="12,0,4,0" />
+      <NumericUpDown Grid.Column="5" x:Name="MinutesBox" MinWidth="80" Minimum="-1440" Maximum="1440" Increment="1" Value="0" FormatString="0" ValueChanged="OnOffsetChanged" />
+      <TextBlock     Grid.Column="6" Text="Seconds" VerticalAlignment="Center" Margin="12,0,4,0" />
+      <NumericUpDown Grid.Column="7" x:Name="SecondsBox" MinWidth="80" Minimum="-86400" Maximum="86400" Increment="1" Value="0" FormatString="0" ValueChanged="OnOffsetChanged" />
+      <TextBlock     Grid.Column="8" x:Name="OffsetSummary" Margin="12,0,0,0" Opacity="0.7" VerticalAlignment="Center" Text="Total: 00:00:00" />
+    </Grid>
+
+    <DataGrid Grid.Row="3" x:Name="PreviewGrid" x:DataType="views:DateShiftRow"
+              IsReadOnly="True" CanUserResizeColumns="True"
+              GridLinesVisibility="Horizontal" HeadersVisibility="Column"
+              AutoGenerateColumns="False">
+      <DataGrid.Columns>
+        <DataGridTextColumn Header="File"           Binding="{Binding FileName}" Width="*" />
+        <DataGridTextColumn Header="Current EXIF"   Binding="{Binding Current}"  Width="180" />
+        <DataGridTextColumn Header="Shifted to"     Binding="{Binding Shifted}"  Width="180" />
+        <DataGridTextColumn Header="Status"         Binding="{Binding Status}"   Width="120" />
+      </DataGrid.Columns>
+    </DataGrid>
+
+    <Grid Grid.Row="4" ColumnDefinitions="*,Auto,Auto" Margin="0,8,0,0">
+      <TextBlock Grid.Column="0" x:Name="StatusText" Opacity="0.7" VerticalAlignment="Center" />
+      <Button    Grid.Column="1" Content="✅ Apply"  Click="OnApplyClick"  FontWeight="Bold" Margin="0,0,6,0" />
+      <Button    Grid.Column="2" Content="❌ Cancel" Click="OnCancelClick" IsCancel="True" />
+    </Grid>
+  </Grid>
+</Window>

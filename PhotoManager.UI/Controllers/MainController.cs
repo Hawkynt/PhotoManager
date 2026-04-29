@@ -331,6 +331,13 @@ public class MainController(
     this._cancellationTokenSource?.Cancel();
   }
 
+  public void SetTheme(ThemeVariantPreference preference) {
+    if (viewModel.Theme == preference)
+      return;
+    viewModel.Theme = preference;
+    _ = this.SaveSettingsAsync();
+  }
+
   public async Task LoadSettingsAsync() {
     var settings = await settingsService.LoadAsync();
 
@@ -341,6 +348,7 @@ public class MainController(
     viewModel.PreserveOriginals = settings.PreserveOriginals;
     viewModel.TreeViewPaths = settings.TreeViewPaths;
     viewModel.SavedSearches = settings.SavedSearches;
+    viewModel.Theme = settings.Theme;
     this.RebuildSourceTreeFromSettings();
   }
 
@@ -369,7 +377,8 @@ public class MainController(
       Recursive = viewModel.Recursive,
       PreserveOriginals = viewModel.PreserveOriginals,
       TreeViewPaths = viewModel.TreeViewPaths,
-      SavedSearches = viewModel.SavedSearches
+      SavedSearches = viewModel.SavedSearches,
+      Theme = viewModel.Theme
     };
 
     await settingsService.SaveAsync(settings);
@@ -603,6 +612,8 @@ public class MainController(
                 itemWithIndex.Item.SearchIndex = BuildFullSearchIndex(itemWithIndex.Item, metadata);
                 itemWithIndex.Item.Rating = metadata.Rating;
                 itemWithIndex.Item.ColorLabel = metadata.ColorLabel;
+                itemWithIndex.Item.IsPick = metadata.IsPick == true;
+                itemWithIndex.Item.IsReject = metadata.IsReject == true;
               } catch {
                 // Bad metadata on one file shouldn't invalidate the whole index.
               }
@@ -648,6 +659,8 @@ public class MainController(
     item.SearchIndex = BuildFullSearchIndex(item, metadata);
     item.Rating = metadata.Rating;
     item.ColorLabel = metadata.ColorLabel;
+    item.IsPick = metadata.IsPick == true;
+    item.IsReject = metadata.IsReject == true;
   }
 
   /// <summary>

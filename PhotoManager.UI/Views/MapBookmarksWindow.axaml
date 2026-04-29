@@ -1,0 +1,61 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:models="using:PhotoManager.UI.Models"
+        mc:Ignorable="d" d:DesignWidth="900" d:DesignHeight="600"
+        x:Class="PhotoManager.UI.Views.MapBookmarksWindow"
+        Width="900" Height="600"
+        MinWidth="720" MinHeight="420"
+        WindowStartupLocation="CenterOwner"
+        Title="Map bookmarks">
+  <Grid RowDefinitions="Auto,Auto,*,Auto,Auto" Margin="12">
+    <StackPanel Grid.Row="0" Spacing="4" Margin="0,0,0,8">
+      <TextBlock Text="Map bookmarks" FontSize="16" FontWeight="SemiBold" />
+      <TextBlock Opacity="0.75" TextWrapping="Wrap"
+                 Text="Save the places you photograph often (a venue, a landmark, your studio) and apply them to the selected files in one click. Each bookmark stores a GPS pin plus optional place fields (city / state / country) that get written into the photo's metadata." />
+    </StackPanel>
+
+    <Grid Grid.Row="1" ColumnDefinitions="Auto,Auto,Auto,Auto,*" Margin="0,0,0,6">
+      <Button Grid.Column="0" Content="➕ Add" Click="OnAddClick" />
+      <Button Grid.Column="1" Content="✏️ Edit" Margin="6,0,0,0" Click="OnEditClick" />
+      <Button Grid.Column="2" Content="📍 Pick on map…" Margin="6,0,0,0" Click="OnPickOnMapClick" />
+      <Button Grid.Column="3" Content="🗑️ Delete" Margin="6,0,0,0" Click="OnDeleteClick" />
+    </Grid>
+
+    <Border Grid.Row="2" BorderBrush="{DynamicResource PanelBorderBrush}" BorderThickness="1" CornerRadius="4">
+      <DataGrid x:Name="BookmarksGrid"
+                AutoGenerateColumns="False"
+                CanUserResizeColumns="True"
+                GridLinesVisibility="Horizontal"
+                HeadersVisibility="Column"
+                IsReadOnly="False"
+                SelectionMode="Single">
+        <DataGrid.Columns>
+          <DataGridTextColumn Header="Name"      Binding="{CompiledBinding Name,         DataType=models:MapBookmarkRow}" Width="2*" />
+          <DataGridTextColumn Header="Lat"       Binding="{CompiledBinding Latitude,     DataType=models:MapBookmarkRow}" Width="100" />
+          <DataGridTextColumn Header="Lon"       Binding="{CompiledBinding Longitude,    DataType=models:MapBookmarkRow}" Width="100" />
+          <DataGridTextColumn Header="Radius (m)" Binding="{CompiledBinding RadiusMeters, DataType=models:MapBookmarkRow}" Width="90" />
+          <DataGridTextColumn Header="Location"  Binding="{CompiledBinding Location,     DataType=models:MapBookmarkRow}" Width="*" />
+          <DataGridTextColumn Header="City"      Binding="{CompiledBinding City,         DataType=models:MapBookmarkRow}" Width="*" />
+          <DataGridTextColumn Header="State"     Binding="{CompiledBinding State,        DataType=models:MapBookmarkRow}" Width="*" />
+          <DataGridTextColumn Header="Country"   Binding="{CompiledBinding Country,      DataType=models:MapBookmarkRow}" Width="*" />
+          <DataGridTextColumn Header="CC"        Binding="{CompiledBinding CountryCode,  DataType=models:MapBookmarkRow}" Width="60" />
+        </DataGrid.Columns>
+      </DataGrid>
+    </Border>
+
+    <Grid Grid.Row="3" ColumnDefinitions="*,Auto" Margin="0,8,0,0">
+      <TextBlock Grid.Column="0" x:Name="StatusText" VerticalAlignment="Center" Opacity="0.75" />
+      <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
+        <Button Content="🗂 Apply to selection" Click="OnApplyToSelectionClick" FontWeight="Bold"
+                ToolTip.Tip="Write the selected bookmark's GPS + place fields into every file currently selected in the main window" />
+        <Button Content="💾 Save" Click="OnSaveClick"
+                ToolTip.Tip="Persist all bookmarks to disk" />
+        <Button Content="🚪 Close" Click="OnCloseClick" IsCancel="True" />
+      </StackPanel>
+    </Grid>
+
+    <TextBlock Grid.Row="4" x:Name="HintText" Opacity="0.55" FontSize="11" Margin="0,4,0,0" TextWrapping="Wrap" />
+  </Grid>
+</Window>

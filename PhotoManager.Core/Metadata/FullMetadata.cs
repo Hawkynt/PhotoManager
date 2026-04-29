@@ -34,6 +34,20 @@ public sealed record FullMetadata {
   /// <summary>Adobe-style color label: "Red", "Yellow", "Green", "Blue", "Purple", or user-defined.</summary>
   public string? ColorLabel { get; init; }
 
+  /// <summary>
+  /// Picasa-style cull flag: separate from <see cref="Rating"/> so a user can
+  /// triage with P/X (Pick / Reject) without nuking a deliberate star rating.
+  /// Maps to xmp:Pick = "true". Null = not flagged.
+  /// </summary>
+  public bool? IsPick { get; init; }
+
+  /// <summary>
+  /// Picasa-style cull flag: distinct from <see cref="IsPick"/> so a user can
+  /// triage with P/X without overloading XMP <c>xmp:Label</c> (which we use
+  /// for the Adobe color label). Maps to xmp:Reject = "true". Null = not flagged.
+  /// </summary>
+  public bool? IsReject { get; init; }
+
   public IReadOnlyList<string> Keywords { get; init; } = Array.Empty<string>();
 
   public string? Title { get; init; }

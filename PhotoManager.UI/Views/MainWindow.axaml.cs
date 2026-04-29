@@ -5,6 +5,7 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Controls.Shapes;
 using Avalonia.Interactivity;
 using Avalonia.Input;
+using Avalonia.Platform.Storage;
 using Avalonia.Media;
 using Avalonia.LogicalTree;
 using Avalonia.VisualTree;
@@ -74,6 +75,11 @@ public partial class MainWindow : Window {
   // first so file/in-memory indexes stay aligned.
   private bool _regionsPending;
 
+  // Cull filter chip state. Cycles Show all → Hide rejects → Picks only →
+  // Rejects only on each click; AND-combines with text + star + label
+  // filters so the user can stack a triage pass on top of an existing query.
+  private PickRejectFilterMode _pickFilterMode = PickRejectFilterMode.ShowAll;
+
   public MainWindow() : this(null!, null!) { }
 
   public MainWindow(MainController controller, AboutController aboutController) {
@@ -92,12 +98,23 @@ public partial class MainWindow : Window {
       combo.ItemsSource = Enum.GetValues<DuplicateHandling>();
 
     var tree = this.FindControl<TreeView>("SourceTree");
-    if (tree != null)
+    if (tree != null) {
       tree.ItemsSource = controller.SourceTreeRoots;
+      DragDrop.SetAllowDrop(tree, true);
+      tree.AddHandler(DragDrop.DragOverEvent, this.OnSourceTreeDragOver);
+      tree.AddHandler(DragDrop.DropEvent, this.OnSourceTreeDrop);
+    }
+
+    if (this.FindControl<DataGrid>("FilesGrid") is { } filesGrid) {
+      DragDrop.SetAllowDrop(filesGrid, true);
+      filesGrid.AddHandler(DragDrop.DragOverEvent, this.OnFilesGridDragOver);
+      filesGrid.AddHandler(DragDrop.DropEvent, this.OnFilesGridDrop);
+    }
 
     this.InitializeEditorOptions();
     this.InitializeMiniMap();
     this.InitializeDirtyTracker();
+    this.InitializeThemeMenu();
 
     // Redraw the region overlay whenever layout updates. LayoutUpdated is
     // fired after every arrange pass on the associated control, so it
@@ -608,6 +625,118 @@ public partial class MainWindow : Window {
   }
 
   /// <summary>
+  /// Cycle the Picasa-style cull filter chip: Show all → Hide rejects →
+  /// Picks only → Rejects only → back. Pure UI; the value AND-combines with
+  /// the text + star + label filters in <see cref="ApplySearchFilter"/>.
+  /// </summary>
+  private void OnPickFilterChipClick(object? sender, RoutedEventArgs e) {
+    this._pickFilterMode = this._pickFilterMode switch {
+      PickRejectFilterMode.ShowAll => PickRejectFilterMode.HideRejects,
+      PickRejectFilterMode.HideRejects => PickRejectFilterMode.PicksOnly,
+      PickRejectFilterMode.PicksOnly => PickRejectFilterMode.RejectsOnly,
+      _ => PickRejectFilterMode.ShowAll
+    };
+    this.RefreshPickFilterChipUi();
+    this.ApplySearchFilter();
+  }
+
+  private void RefreshPickFilterChipUi() {
+    if (this.FindControl<Button>("PickFilterChip") is not { } chip)
+      return;
+    chip.Content = this._pickFilterMode switch {
+      PickRejectFilterMode.HideRejects => "🚩 Hide rejects",
+      PickRejectFilterMode.PicksOnly => "✅ Picks only",
+      PickRejectFilterMode.RejectsOnly => "❌ Rejects only",
+      _ => "🚩 Show all"
+    };
+  }
+
+  /// <summary>
+  /// P/X/U flag every selected row. Routed into the metadata writer so the
+  /// flag travels with the file (xmp:Pick / xmp:Reject) and persists across
+  /// reloads. Falls through to the DataGrid's default key handling for
+  /// anything we don't bind so navigation keys (arrows, Home/End) keep
+  /// working.
+  /// </summary>
+  private async void OnFilesGridKeyDown(object? sender, KeyEventArgs e) {
+    // Only react to the bare letter keys; don't steal Ctrl+P (print etc.).
+    if (e.KeyModifiers != KeyModifiers.None)
+      return;
+
+    var action = e.Key switch {
+      Key.P => PickRejectHotkeyAction.Pick,
+      Key.X => PickRejectHotkeyAction.Reject,
+      Key.U => PickRejectHotkeyAction.Clear,
+      _ => PickRejectHotkeyAction.None
+    };
+    if (action == PickRejectHotkeyAction.None)
+      return;
+
+    e.Handled = true;
+    await this.ApplyPickRejectAsync(action);
+  }
+
+  private async void OnContextMarkPickClick(object? sender, RoutedEventArgs e) => await this.ApplyPickRejectAsync(PickRejectHotkeyAction.Pick);
+  private async void OnContextMarkRejectClick(object? sender, RoutedEventArgs e) => await this.ApplyPickRejectAsync(PickRejectHotkeyAction.Reject);
+  private async void OnContextClearFlagClick(object? sender, RoutedEventArgs e) => await this.ApplyPickRejectAsync(PickRejectHotkeyAction.Clear);
+
+  private async Task ApplyPickRejectAsync(PickRejectHotkeyAction action) {
+    if (action == PickRejectHotkeyAction.None)
+      return;
+
+    if (this.FindControl<DataGrid>("FilesGrid") is not { } grid)
+      return;
+
+    var selected = grid.SelectedItems
+      .OfType<FileItemModel>()
+      .Where(f => f.FileInfo is { Exists: true })
+      .ToList();
+    if (selected.Count == 0) {
+      this._controller.ViewModel.StatusMessage = "Select one or more files in the grid first.";
+      return;
+    }
+
+    var edit = PickRejectHotkeys.BuildEdit(action);
+    var written = 0;
+    var errors = 0;
+    foreach (var item in selected) {
+      try {
+        await this._metadataWriter.ApplyAsync(item.FileInfo!, edit);
+        written++;
+
+        // Mirror the new flag onto the in-memory row so the chip in the
+        // 🚩 column updates immediately and the cull filter re-evaluates
+        // without a full rescan.
+        switch (action) {
+          case PickRejectHotkeyAction.Pick: item.IsPick = true; item.IsReject = false; break;
+          case PickRejectHotkeyAction.Reject: item.IsPick = false; item.IsReject = true; break;
+          case PickRejectHotkeyAction.Clear: item.IsPick = false; item.IsReject = false; break;
+        }
+      } catch {
+        errors++;
+      }
+    }
+
+    var verb = action switch {
+      PickRejectHotkeyAction.Pick => "Picked",
+      PickRejectHotkeyAction.Reject => "Rejected",
+      _ => "Unflagged"
+    };
+    this._controller.ViewModel.StatusMessage = errors == 0
+      ? $"{verb} {written} file(s)."
+      : $"{verb} {written} file(s); {errors} failed.";
+
+    // Cull filter may now hide the just-flagged row — re-apply so visibility
+    // tracks. Also reload the editor for the previewed file (if it's one of
+    // the selection) so the in-place editor reflects the new flags.
+    this.ApplySearchFilter();
+    if (this._currentFile is { Exists: true } current
+        && selected.Any(s => s.FileInfo is { } fi
+            && string.Equals(fi.FullName, current.FullName, StringComparison.OrdinalIgnoreCase)))
+      await this.ReloadCurrentMetadataAsync(current);
+  }
+
+  /// <summary>
   /// Refresh the saved-searches combo from the view model. Called after
   /// settings load and after a new search is added so the dropdown reflects
   /// current state.
@@ -661,6 +790,9 @@ public partial class MainWindow : Window {
         && this.FindControl<ToggleButton>($"Label{saved.ColorLabel}") is { } lbl)
       lbl.IsChecked = true;
 
+    this._pickFilterMode = saved.PickFilter;
+    this.RefreshPickFilterChipUi();
+
     this.ApplySearchFilter();
   }
 
@@ -669,7 +801,8 @@ public partial class MainWindow : Window {
     var minStars = this.GetActiveMinStars();
     var label = this.GetActiveLabel();
 
-    if (string.IsNullOrWhiteSpace(query) && minStars is null && label is null) {
+    if (string.IsNullOrWhiteSpace(query) && minStars is null && label is null
+        && this._pickFilterMode == PickRejectFilterMode.ShowAll) {
       this._controller.ViewModel.StatusMessage = "Set at least one filter before saving.";
       return;
     }
@@ -688,7 +821,8 @@ public partial class MainWindow : Window {
       Name = name,
       Text = query,
       MinStars = minStars,
-      ColorLabel = label
+      ColorLabel = label,
+      PickFilter = this._pickFilterMode
     };
 
     // Replace any existing search with the same name so editing is sane.
@@ -727,12 +861,14 @@ public partial class MainWindow : Window {
     // is re-set to the same reference, which made post-edit Rating /
     // ColorLabel changes invisible until the user re-scanned. The new list
     // is cheap (a couple of dictionary lookups per row).
+    var pickMode = this._pickFilterMode;
     var filtered = new ObservableCollection<FileItemModel>(
       this._currentFileItems.Where(item =>
            MatchesAllTokens(item, tokens)
         && (minStars is null || (item.Rating ?? 0) >= minStars.Value)
         && (requiredLabel is null
-            || string.Equals(item.ColorLabel, requiredLabel, StringComparison.OrdinalIgnoreCase)))
+            || string.Equals(item.ColorLabel, requiredLabel, StringComparison.OrdinalIgnoreCase))
+        && PickRejectFilter.Matches(item, pickMode))
     );
     grid.ItemsSource = filtered;
   }
@@ -821,6 +957,133 @@ public partial class MainWindow : Window {
     await window.ShowDialog(this);
   }
 
+  private async void OnExportKmlClick(object? sender, RoutedEventArgs e) {
+    var scanned = this._currentFileItems?
+      .Select(i => i.FileInfo)
+      .Where(f => f != null && f.Exists)
+      .Cast<FileInfo>()
+      .ToList() ?? new List<FileInfo>();
+
+    if (scanned.Count == 0) {
+      this._controller.ViewModel.StatusMessage = "No geotagged photos in the current view.";
+      return;
+    }
+
+    var pairs = new System.Collections.Concurrent.ConcurrentBag<(FileInfo File, FullMetadata Metadata)>();
+    try {
+      await Parallel.ForEachAsync(scanned, new ParallelOptions {
+        MaxDegreeOfParallelism = Environment.ProcessorCount * 2
+      }, async (file, ct) => {
+        try {
+          var md = await this._metadataReader.ReadAsync(file, ct);
+          if (md.Gps is { IsValid: true })
+            pairs.Add((file, md));
+        } catch {
+          // One bad file shouldn't abort the export.
+        }
+      });
+    } catch (Exception ex) {
+      this._controller.ViewModel.StatusMessage = $"KML scan failed: {ex.Message}";
+      return;
+    }
+
+    var entries = pairs.OrderBy(p => p.File.FullName, StringComparer.OrdinalIgnoreCase).ToList();
+    if (entries.Count == 0) {
+      this._controller.ViewModel.StatusMessage = "No geotagged photos in the current view.";
+      return;
+    }
+
+    var topLevel = TopLevel.GetTopLevel(this);
+    if (topLevel?.StorageProvider is not { CanSave: true } storage) {
+      this._controller.ViewModel.StatusMessage = "Save picker unavailable.";
+      return;
+    }
+
+    var suggested = $"photomanager-locations-{DateTime.Now:yyyyMMdd}.kml";
+    var picked = await storage.SaveFilePickerAsync(new FilePickerSaveOptions {
+      Title = "Export KML",
+      SuggestedFileName = suggested,
+      DefaultExtension = "kml",
+      FileTypeChoices = [new FilePickerFileType("KML") { Patterns = ["*.kml"] }]
+    });
+    if (picked is null)
+      return;
+
+    var destination = picked.TryGetLocalPath();
+    if (string.IsNullOrWhiteSpace(destination)) {
+      this._controller.ViewModel.StatusMessage = "Couldn't resolve save path.";
+      return;
+    }
+
+    try {
+      await KmlExporter.ExportAsync(entries, new FileInfo(destination));
+      this._controller.ViewModel.StatusMessage = $"Exported {entries.Count} placemarks to {destination}";
+    } catch (Exception ex) {
+      this._controller.ViewModel.StatusMessage = $"KML export failed: {ex.Message}";
+    }
+  }
+
+  private async void OnOpenDuplicatesClick(object? sender, RoutedEventArgs e) {
+    var seedFolder = this.SeedFolderFromTree();
+    var window = seedFolder == null ? new DuplicatesWindow() : new DuplicatesWindow(seedFolder);
+    await window.ShowDialog(this);
+  }
+
+  private async void OnOpenMapBookmarksClick(object? sender, RoutedEventArgs e) {
+    var window = new MapBookmarksWindow(
+      store: null,
+      selectionProvider: this.GetSelectedFiles,
+      writer: this._metadataWriter,
+      afterApply: this.RefreshAfterBatchWriteAsync);
+    await window.ShowDialog(this);
+  }
+
+  private async void OnReverseGeocodeSelectionClick(object? sender, RoutedEventArgs e) {
+    var files = this.GetSelectedFiles();
+    if (files.Count == 0) {
+      this._controller.ViewModel.StatusMessage = "Select one or more files in the grid first.";
+      return;
+    }
+
+    var window = new ReverseGeocodeBatchWindow(files, afterApply: this.RefreshAfterBatchWriteAsync);
+    await window.ShowDialog(this);
+  }
+
+  private IReadOnlyList<FileInfo> GetSelectedFiles() {
+    var grid = this.FindControl<DataGrid>("FilesGrid");
+    if (grid is null)
+      return Array.Empty<FileInfo>();
+    return grid.SelectedItems
+      .OfType<FileItemModel>()
+      .Where(f => f.FileInfo is { Exists: true })
+      .Select(f => f.FileInfo!)
+      .ToList();
+  }
+
+  /// Re-reads the touched file's metadata, updates its grid row index, and
+  /// refreshes the preview pane if it's the currently-selected file. Used by
+  /// the batch tools (map bookmarks, reverse geocode) to keep the UI in sync
+  /// after a write without forcing a full rescan.
+  private async Task RefreshAfterBatchWriteAsync(FileInfo file) {
+    if (this._currentFileItems is { } items) {
+      var match = items.FirstOrDefault(i =>
+        i.FileInfo is { } fi
+        && string.Equals(fi.FullName, file.FullName, StringComparison.OrdinalIgnoreCase));
+      if (match is not null) {
+        try {
+          var fresh = await this._metadataReader.ReadAsync(file);
+          this._controller.RefreshFileIndex(match, fresh);
+        } catch {
+          // Best-effort — write already succeeded.
+        }
+      }
+    }
+
+    if (this._currentFile is { } current
+        && string.Equals(current.FullName, file.FullName, StringComparison.OrdinalIgnoreCase))
+      await this.ReloadCurrentMetadataAsync(current);
+  }
+
   private async void OnOpenGpxClick(object? sender, RoutedEventArgs e) {
     var seedFolder = this.SeedFolderFromTree();
     var window = seedFolder == null ? new GpxGeotagWindow() : new GpxGeotagWindow(seedFolder);
@@ -887,6 +1150,41 @@ public partial class MainWindow : Window {
     return this._currentFile is { Exists: true } ? this._currentFile : null;
   }
 
+  private async void OnOpenBatchRenameClick(object? sender, RoutedEventArgs e) {
+    var selection = this.FindControl<DataGrid>("FilesGrid")?.SelectedItems
+      .OfType<FileItemModel>()
+      .Where(i => i.FileInfo is { Exists: true })
+      .Select(i => i.FileInfo!)
+      .ToList() ?? new List<FileInfo>();
+    if (selection.Count == 0) {
+      this._controller.ViewModel.StatusMessage = "Select one or more files in the grid to rename.";
+      return;
+    }
+    var window = new BatchRenameWindow(selection, this._metadataReader);
+    await window.ShowDialog(this);
+    // After rename, the in-memory grid items still hold stale FileInfos.
+    // The simplest refresh is the existing rescan-current-paths flow.
+    await this.RescanIfPossibleAsync();
+  }
+
+  /// <summary>Re-scan the currently configured source paths so the grid picks up renamed files.</summary>
+  private Task RescanIfPossibleAsync() => this.ScanCheckedSourcesAsync();
+
+  private async void OnOpenBatchDateShiftClick(object? sender, RoutedEventArgs e) {
+    var selection = this.FindControl<DataGrid>("FilesGrid")?.SelectedItems
+      .OfType<FileItemModel>()
+      .Where(i => i.FileInfo is { Exists: true })
+      .Select(i => i.FileInfo!)
+      .ToList() ?? new List<FileInfo>();
+    if (selection.Count == 0) {
+      this._controller.ViewModel.StatusMessage = "Select one or more JPEGs in the grid to shift.";
+      return;
+    }
+    var window = new BatchDateShiftWindow(selection);
+    await window.ShowDialog(this);
+    await this.RescanIfPossibleAsync();
+  }
+
   private async void OnOpenDevelopClick(object? sender, RoutedEventArgs e) {
     if (this._currentFile is not { Exists: true } file) {
       this._controller.ViewModel.StatusMessage = "Select a photo first.";
@@ -906,6 +1204,110 @@ public partial class MainWindow : Window {
   }
 
   private void OnExitClick(object? sender, RoutedEventArgs e) => this.Close();
+
+  private void InitializeThemeMenu() {
+    this.SyncThemeMenuToViewModel();
+    this._controller.ViewModel.PropertyChanged += (_, e) => {
+      if (e.PropertyName == nameof(MainViewModel.Theme))
+        this.SyncThemeMenuToViewModel();
+    };
+  }
+
+  private void SyncThemeMenuToViewModel() {
+    var t = this._controller.ViewModel.Theme;
+    if (this.FindControl<MenuItem>("ThemeLightItem") is { } light)
+      light.IsChecked = t == ThemeVariantPreference.Light;
+    if (this.FindControl<MenuItem>("ThemeDarkItem") is { } dark)
+      dark.IsChecked = t == ThemeVariantPreference.Dark;
+    if (this.FindControl<MenuItem>("ThemeSystemItem") is { } sys)
+      sys.IsChecked = t == ThemeVariantPreference.System;
+  }
+
+  private void OnThemeLightClick(object? sender, RoutedEventArgs e)
+    => this._controller.SetTheme(ThemeVariantPreference.Light);
+
+  private void OnThemeDarkClick(object? sender, RoutedEventArgs e)
+    => this._controller.SetTheme(ThemeVariantPreference.Dark);
+
+  private void OnThemeSystemClick(object? sender, RoutedEventArgs e)
+    => this._controller.SetTheme(ThemeVariantPreference.System);
+
+  private void OnSourceTreeDragOver(object? sender, DragEventArgs e) {
+    e.DragEffects = e.Data.Contains(DataFormats.Files) ? DragDropEffects.Copy : DragDropEffects.None;
+    e.Handled = true;
+  }
+
+  private void OnSourceTreeDrop(object? sender, DragEventArgs e) {
+    var items = e.Data.GetFiles();
+    e.Handled = true;
+    if (items == null)
+      return;
+
+    var added = 0;
+    foreach (var item in items) {
+      if (item is not IStorageFolder)
+        continue;
+      var path = item.TryGetLocalPath();
+      if (string.IsNullOrEmpty(path))
+        continue;
+      var dir = new DirectoryInfo(path);
+      if (!dir.Exists)
+        continue;
+      this._controller.AddSourceTreeRoot(dir, recursive: true);
+      added++;
+    }
+
+    this._controller.ViewModel.StatusMessage = added > 0
+      ? $"Added {added} source folder(s) from drop."
+      : "Drop a folder onto the source tree to add it as a source.";
+  }
+
+  private void OnFilesGridDragOver(object? sender, DragEventArgs e) {
+    e.DragEffects = e.Data.Contains(DataFormats.Files) ? DragDropEffects.Copy : DragDropEffects.None;
+    e.Handled = true;
+  }
+
+  private async void OnFilesGridDrop(object? sender, DragEventArgs e) {
+    var items = e.Data.GetFiles()?.ToList();
+    e.Handled = true;
+    if (items == null || items.Count == 0)
+      return;
+
+    var folderPaths = new List<string>();
+    var filePaths = new List<string>();
+    foreach (var item in items) {
+      var path = item.TryGetLocalPath();
+      if (string.IsNullOrEmpty(path))
+        continue;
+      if (item is IStorageFolder)
+        folderPaths.Add(path);
+      else
+        filePaths.Add(path);
+    }
+
+    string? targetDir = null;
+    if (folderPaths.Count > 0) {
+      targetDir = folderPaths[0];
+    } else if (filePaths.Count > 0) {
+      var parents = filePaths
+        .Select(p => System.IO.Path.GetDirectoryName(p))
+        .Where(p => !string.IsNullOrEmpty(p))
+        .Distinct(StringComparer.OrdinalIgnoreCase)
+        .ToList();
+      if (parents.Count == 1)
+        targetDir = parents[0];
+    }
+
+    if (string.IsNullOrEmpty(targetDir) || !Directory.Exists(targetDir)) {
+      this._controller.ViewModel.StatusMessage = "Drop files from one folder, or drop a folder.";
+      return;
+    }
+
+    this._controller.ViewModel.BrowseMode = BrowseMode.Target;
+    this._controller.ViewModel.DestinationDirectory = targetDir;
+    await this._controller.SaveSettingsAsync();
+    await this.ScanCheckedSourcesAsync();
+  }
 
   private string? SeedFolderFromTree() => this._controller.SourceTreeRoots
     .Select(r => r.Path.FullName)

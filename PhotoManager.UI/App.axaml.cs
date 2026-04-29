@@ -1,9 +1,12 @@
+using System.ComponentModel;
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using Microsoft.Extensions.DependencyInjection;
+using PhotoManager.UI.Models;
 using PhotoManager.UI.Views;
 using PhotoManager.UI.Controllers;
+using PhotoManager.UI.Services;
 
 namespace PhotoManager.UI;
 
@@ -14,9 +17,23 @@ public partial class App : Application {
     if (this.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop) {
       var controller = Program.Services.GetRequiredService<MainController>();
       var aboutController = Program.Services.GetRequiredService<AboutController>();
+
+      // ViewModel.Theme is the source of truth at runtime; LoadSettingsAsync
+      // (fired on window open) seeds it from disk and our PropertyChanged
+      // handler re-applies it. Apply current value once now so pre-load
+      // state isn't a flash of the OS default.
+      ThemeApplier.Apply(controller.ViewModel.Theme);
+      controller.ViewModel.PropertyChanged += OnViewModelPropertyChanged;
+
       desktop.MainWindow = new MainWindow(controller, aboutController);
     }
 
     base.OnFrameworkInitializationCompleted();
+  }
+
+  private static void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e) {
+    if (e.PropertyName != nameof(MainViewModel.Theme) || sender is not MainViewModel vm)
+      return;
+    ThemeApplier.Apply(vm.Theme);
   }
 }

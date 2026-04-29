@@ -38,11 +38,11 @@
           </ItemsControl.ItemsPanel>
           <ItemsControl.ItemTemplate>
             <DataTemplate DataType="models:FaceClusterViewModel">
-              <Border Width="220" Margin="4" BorderBrush="#BBB" BorderThickness="1" CornerRadius="4" Background="White"
+              <Border Width="220" Margin="4" BorderBrush="{DynamicResource TileBorderBrush}" BorderThickness="1" CornerRadius="4" Background="{DynamicResource TileSurfaceBrush}"
                       DoubleTapped="OnClusterDoubleTapped" Tag="{CompiledBinding}"
                       ToolTip.Tip="Double-click to inspect every face in this group and unmerge faces that don't belong.">
                 <StackPanel>
-                  <Border Height="160" Background="#F7F7F7">
+                  <Border Height="160" Background="{DynamicResource ThumbBackgroundBrush}">
                     <Image Source="{CompiledBinding Thumbnail}" Stretch="Uniform" />
                   </Border>
                   <StackPanel Margin="8" Spacing="4">
@@ -64,8 +64,8 @@
 
     <Grid Grid.Row="3" ColumnDefinitions="*,Auto,Auto,Auto,Auto" Margin="0,8,0,0">
       <TextBlock Grid.Column="0" x:Name="StatusText" VerticalAlignment="Center" Opacity="0.75" />
-      <Button Grid.Column="1" Content="Merge selected" Click="OnMergeSelectedClick" />
-      <Button Grid.Column="2" Content="Close" Margin="6,0,0,0" Click="OnCloseClick" IsCancel="True" />
+      <Button Grid.Column="1" Content="🔗 Merge selected" Click="OnMergeSelectedClick" />
+      <Button Grid.Column="2" Content="🚪 Close" Margin="6,0,0,0" Click="OnCloseClick" IsCancel="True" />
     </Grid>
   </Grid>
 </Window>

@@ -139,6 +139,8 @@ public sealed class MetadataReader : IMetadataReader {
     CountryCode    = sidecar.CountryCode    ?? exif.CountryCode,
     Rating         = sidecar.Rating         ?? exif.Rating,
     ColorLabel     = sidecar.ColorLabel     ?? exif.ColorLabel,
+    IsPick         = sidecar.IsPick         ?? exif.IsPick,
+    IsReject       = sidecar.IsReject       ?? exif.IsReject,
     Keywords       = sidecar.Keywords.Count > 0 ? sidecar.Keywords : exif.Keywords,
     Title          = sidecar.Title          ?? exif.Title,
     Caption        = sidecar.Caption        ?? exif.Caption,

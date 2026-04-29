@@ -2,6 +2,34 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="PhotoManager.UI.App"
              RequestedThemeVariant="Default">
+  <Application.Resources>
+    <ResourceDictionary>
+      <!-- Theme-aware semantic brushes for tile/card UI surfaces. Hardcoded
+           hex values used to live inline; bound here so flipping the
+           Light/Dark/System selector actually changes thumbnail tiles,
+           preview panels and section borders instead of leaving white
+           rectangles around images in dark mode. -->
+      <ResourceDictionary.ThemeDictionaries>
+        <ResourceDictionary x:Key="Light">
+          <!-- Card / tile fills (was Background="White") -->
+          <SolidColorBrush x:Key="TileSurfaceBrush" Color="#FFFFFF" />
+          <!-- Subtle "image area" backgrounds (was #F7F7F7 / #F8F8F8 / #FAFAFA / #F5F5F5) -->
+          <SolidColorBrush x:Key="ThumbBackgroundBrush" Color="#F7F7F7" />
+          <SolidColorBrush x:Key="SubtlePanelBrush"   Color="#F8F8F8" />
+          <!-- Tile + section borders (was #BBB / #DDD) -->
+          <SolidColorBrush x:Key="TileBorderBrush"   Color="#BBBBBB" />
+          <SolidColorBrush x:Key="PanelBorderBrush"  Color="#DDDDDD" />
+        </ResourceDictionary>
+        <ResourceDictionary x:Key="Dark">
+          <SolidColorBrush x:Key="TileSurfaceBrush"  Color="#2A2A2A" />
+          <SolidColorBrush x:Key="ThumbBackgroundBrush" Color="#1F1F1F" />
+          <SolidColorBrush x:Key="SubtlePanelBrush"  Color="#252525" />
+          <SolidColorBrush x:Key="TileBorderBrush"   Color="#444444" />
+          <SolidColorBrush x:Key="PanelBorderBrush"  Color="#383838" />
+        </ResourceDictionary>
+      </ResourceDictionary.ThemeDictionaries>
+    </ResourceDictionary>
+  </Application.Resources>
   <Application.Styles>
     <FluentTheme />
     <StyleInclude Source="avares://Avalonia.Controls.DataGrid/Themes/Fluent.xaml" />

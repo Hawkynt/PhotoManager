@@ -9,36 +9,62 @@
 [![Last Commit](https://img.shields.io/github/last-commit/Hawkynt/PhotoManager?branch=main)![Activity](https://img.shields.io/github/commit-activity/y/Hawkynt/PhotoManager?branch=main)](https://github.com/Hawkynt/PhotoManager/commits/main)
 [![Downloads](https://img.shields.io/github/downloads/Hawkynt/PhotoManager/total)](https://github.com/Hawkynt/PhotoManager/releases)
 
-> A powerful photo organization tool that automatically sorts your photo collection based on metadata and intelligent date detection.
+> A cross-platform photo manager and lightweight DAM that organises your collection by metadata, develops RAWs/JPEGs non-destructively, and stays out of the way — no local database, no cloud sync, your folders + sidecar XMP are the source of truth.
 
 ## Purpose
 
-PhotoManager helps photographers and photo enthusiasts organize their digital photo collections by automatically detecting creation dates from various metadata sources and organizing files into a logical folder structure.
+PhotoManager helps photographers and photo enthusiasts:
+
+- **Organise** sprawling photo libraries by detecting creation dates from EXIF, GPS, filename patterns, and file-system metadata, then sorting into a `yyyy/yyyyMMdd/HHmmss` folder hierarchy.
+- **Cull** with Picasa-style picks/rejects (P/X/U hotkeys), star ratings, color labels, perceptual-hash duplicate detection, and side-by-side compare.
+- **Tag** with keywords, GPS coordinates (manual map picker, GPX track sync, reverse geocoding, map bookmarks), face detection + clustering, and ONNX-based object detection.
+- **Develop** with a Lightroom-lite pipeline: tone (exposure, contrast, highlights, shadows, whites, blacks, clarity, vibrance, saturation), white balance, sharpening + noise reduction, master + R/G/B + parametric curves, HSL, color grading, B&W mixer, split toning, vignette + grain, lens corrections, calibration, crop + perspective, brush/linear/radial local masks with luminance + hue range filters and Add/Subtract/Intersect compositing.
+- **Search** the library by keyword, person, place, rating, color label, or any-text — with saved searches, an in-memory index, and instant re-query.
+- **Export** geotagged photos to KML for Google Earth or any GPX viewer.
 
 ## Features
 
+### What's new (April 2026)
+- 🎭 **AI subject mask** — MODNet ONNX segmentation auto-creates a brush-mask local adjustment so you can tweak the subject without touching the background.
+- 🔀 **Side-by-side compare** — three modes inside the develop window: After only, split view (with grid splitter), or slider-overlay wipe against the un-edited baseline.
+- 🎨 **Theme toggle** — Light / Dark / System default, persisted across sessions.
+- 🪂 **Drag-drop** folders onto the source tree (adds them as roots) or files onto the grid (switches to target mode and scans).
+- 📤 **KML export** — `Tools → Export KML…` walks the in-memory index and writes one Placemark per geotagged photo.
+- 🔁 **Duplicate detection** — 64-bit perceptual hash + Hamming-distance clustering; no DB, in-memory only.
+- 🗺️ **Map favourites + reverse-geocode batch** — bookmark "Pizzeria Roma", apply GPS + place names to a selection in one click; resolve city/country across the whole selection.
+- ✅❌ **Picks / rejects** — P/X/U hotkeys, 🚩 column, cull-filter chip that AND-combines with star ratings + color labels.
+- ✏️ **Batch rename** with metadata tokens (`{date:yyyy-MM-dd}_{city}_{name}`), 🕒 **batch date shift** (camera-clock offset).
+
 ### Current Features
-- ✅ Multiple date source detection (EXIF, GPS, filename, file system)
-- ✅ Intelligent date selection algorithm with reliability scoring
-- ✅ Automatic folder structure creation (Year/Date/Time)
-- ✅ Duplicate handling with sequential numbering
-- ✅ Support for all common image formats via MetadataExtractor
-- ✅ WinForms GUI with preview and metadata display
-- ✅ Command-line interface for automation
-- ✅ Multi-project clean architecture
-- ✅ Comprehensive unit and integration tests (96% coverage)
-- ✅ Resource localization for internationalization
-- ✅ MVC pattern implementation in UI
+- ✅ Cross-platform desktop UI (Avalonia 11 — Windows, macOS, Linux), single-file self-contained executables per platform
+- ✅ Lightroom-lite develop pipeline (~all non-AI Adobe parameters), non-destructive via XMP `pm:developSettings` round-trip
+- ✅ AI subject mask (MODNet ONNX) → brush-dab local adjustment
+- ✅ Face detection + clustering (UltraFace + ArcFace ONNX), object detection (YOLOv8 ONNX)
+- ✅ GPS map editor, GPX geotagging, reverse geocoding, elevation lookup, triangulation/resection, world map
+- ✅ Map favourites/bookmarks, KML export, batch reverse-geocode
+- ✅ Library search (in-memory index, no DB), saved searches, smart filter chips (rating, color, picks/rejects)
+- ✅ Side-by-side compare (After / Split / Slider) inside the develop window
+- ✅ Picasa-style picks/rejects (`xmp:Pick`/`xmp:Reject`) with P/X/U hotkeys
+- ✅ Perceptual-hash duplicate detection
+- ✅ Theme toggle (Light / Dark / System), persisted in user settings
+- ✅ Drag-drop folders onto source tree / files onto grid
+- ✅ Batch rename with metadata-token templates; batch date shift; batch metadata edit
+- ✅ Multiple date source detection (EXIF SubIFD, IFD0, GPS, filename, file system) with reliability scoring
+- ✅ Folder structure organisation (`yyyy/yyyyMMdd/HHmmss`); duplicate handling with sequential numbering
+- ✅ Command-line interface for automation (preview/dry-run, recursive)
+- ✅ MVC pattern (UI), atomic metadata writes (preserved mtime), comprehensive unit + integration tests
 
 ### Planned Features
-- [ ] Drag-and-drop support in GUI
-- [ ] Advanced batch processing with parallel execution
-- [ ] Duplicate detection using file hashing
-- [ ] Custom naming patterns with variables
-- [ ] Undo/Redo functionality
-- [ ] Configuration profiles and settings persistence
-- [ ] Video file support
-- [ ] Cloud storage integration
+- [ ] AI sky mask (heuristic + dedicated model)
+- [ ] Healing brush / spot remover
+- [ ] LUT support (`.cube` / `.3dl`)
+- [ ] HDR merge (bracketed series), panorama stitch
+- [ ] Click-drag crop overlay on the develop preview
+- [ ] Hierarchical keyword tree (flattens to `dc:subject` on write)
+- [ ] Smart-album rule builder (saved searches with rating/keyword/GPS-box predicates)
+- [ ] Calendar / stacks-by-burst views
+- [ ] Status-bar progress for long operations
+- [ ] Crash-safe metadata write-back queue
 
 ## How It Works
 
@@ -71,9 +97,9 @@ PhotoManager/
 ├── PhotoManager.Tests/      # Unit and integration tests
 │   ├── Unit/               # Unit tests for individual components
 │   └── Integration/        # End-to-end workflow tests
-├── PhotoManager.UI/         # WinForms application
+├── PhotoManager.UI/         # Avalonia desktop application (cross-platform)
 │   ├── Controllers/        # MVC controllers
-│   ├── Views/              # Forms and dialogs
+│   ├── Views/              # Avalonia AXAML windows and dialogs
 │   ├── Models/             # View models
 │   └── Resources/          # Localization resources
 ├── PhotoManager.CLI/        # Command-line interface
@@ -140,10 +166,20 @@ dotnet test --filter Category=Unit
 
 The application follows a clean architecture pattern with separation of concerns:
 
-- **Core**: Contains business logic, models, and interfaces
-- **UI**: WinForms application using MVC pattern
-- **CLI**: Command-line interface for automation
-- **Tests**: Comprehensive test coverage using NUnit
+- **Core**: Contains business logic, models, and interfaces. No UI dependencies.
+- **UI**: Avalonia 11 desktop application using MVC pattern; runs on Windows, macOS, and Linux from one codebase.
+- **CLI**: Command-line interface for automation.
+- **Tests**: Comprehensive test coverage using NUnit (currently 573 tests passing).
+
+### No-database principle
+
+PhotoManager has **no local database**. The truth lives in:
+
+1. The folder structure (file location = "imported")
+2. The file's own metadata (EXIF, XMP packet)
+3. XMP sidecar files (`.xmp` next to each photo) for fields the format doesn't support natively
+
+Caches (face embeddings, perceptual hashes, library index) are in-memory only and rebuilt on scan. Settings live in a small JSON file under `%AppData%/PhotoManager/`.
 
 ### Date Detection Priority System
 
@@ -165,12 +201,10 @@ Settings can be configured through:
 
 ## Known Issues and Limitations
 
-- Currently only processes image files (video support planned)
-- GPS coordinates extraction for location mapping not yet implemented
-- No cloud storage integration
-- Single-threaded processing (parallel processing planned)
-- Settings persistence not yet implemented
-- Drag-and-drop support not implemented
+- Image files only — video support is not on the roadmap.
+- No cloud storage integration; PhotoManager works entirely on local files. The XMP sidecars and embedded XMP packets are designed to interoperate cleanly with cloud-syncing tools that respect them.
+- The AI subject mask requires a one-time ~25 MB MODNet ONNX download (`Tools → Download detection models…` or click `🎭 Detect subject` and confirm the prompt).
+- pHash duplicate detection is in-memory only — re-scanning a 10k+ photo library re-computes hashes (mtime-keyed cache short-circuits unchanged files).
 
 ## Security Considerations
 

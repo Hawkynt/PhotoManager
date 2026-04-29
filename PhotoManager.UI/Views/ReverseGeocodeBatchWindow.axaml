@@ -1,0 +1,41 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="700" d:DesignHeight="540"
+        x:Class="PhotoManager.UI.Views.ReverseGeocodeBatchWindow"
+        Width="700" Height="540"
+        MinWidth="600" MinHeight="380"
+        WindowStartupLocation="CenterOwner"
+        Title="Reverse-geocode selection">
+  <Grid RowDefinitions="Auto,Auto,Auto,*,Auto" Margin="12">
+    <StackPanel Grid.Row="0" Spacing="4" Margin="0,0,0,8">
+      <TextBlock Text="Reverse-geocode selection" FontSize="16" FontWeight="SemiBold" />
+      <TextBlock Opacity="0.75" TextWrapping="Wrap"
+                 Text="Asks OpenStreetMap's Nominatim service for a place name (city, state, country) for every selected file's GPS coordinates and writes the result into the photo's metadata. Rate-limited to 1 lookup/second per Nominatim policy — a few dozen photos take about a minute." />
+    </StackPanel>
+
+    <Grid Grid.Row="1" ColumnDefinitions="*,Auto" Margin="0,0,0,6">
+      <TextBlock Grid.Column="0" x:Name="FileCountText" VerticalAlignment="Center" />
+      <CheckBox Grid.Column="1" x:Name="OnlyEmptyBox" Content="Only fill empty fields" IsChecked="True"
+                ToolTip.Tip="When checked, leaves any place text the photo already has untouched. Uncheck to overwrite." />
+    </Grid>
+
+    <Grid Grid.Row="2" ColumnDefinitions="Auto,Auto,*" Margin="0,4,0,8">
+      <Button Grid.Column="0" Content="🌐 Resolve" FontWeight="Bold" Click="OnRunClick" x:Name="RunButton" />
+      <Button Grid.Column="1" Content="⏹ Cancel" Margin="6,0,0,0" Click="OnCancelRunClick" x:Name="CancelButton" IsEnabled="False" />
+      <TextBlock Grid.Column="2" x:Name="ProgressText" VerticalAlignment="Center" Margin="12,0,0,0" Opacity="0.75" />
+    </Grid>
+
+    <Border Grid.Row="3" BorderBrush="{DynamicResource PanelBorderBrush}" BorderThickness="1" CornerRadius="4">
+      <ScrollViewer>
+        <ItemsControl x:Name="ResultsList" Padding="4" />
+      </ScrollViewer>
+    </Border>
+
+    <Grid Grid.Row="4" ColumnDefinitions="*,Auto" Margin="0,8,0,0">
+      <TextBlock Grid.Column="0" x:Name="StatusText" VerticalAlignment="Center" Opacity="0.75" />
+      <Button Grid.Column="1" Content="🚪 Close" Click="OnCloseClick" IsCancel="True" />
+    </Grid>
+  </Grid>
+</Window>

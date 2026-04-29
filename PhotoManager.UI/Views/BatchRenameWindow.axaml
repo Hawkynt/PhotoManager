@@ -1,0 +1,47 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:views="using:PhotoManager.UI.Views"
+        mc:Ignorable="d" d:DesignWidth="780" d:DesignHeight="540"
+        x:Class="PhotoManager.UI.Views.BatchRenameWindow"
+        Width="780" Height="540"
+        MinWidth="600" MinHeight="400"
+        WindowStartupLocation="CenterOwner"
+        Title="Batch rename">
+  <Grid Margin="12" RowDefinitions="Auto,Auto,Auto,*,Auto">
+
+    <TextBlock Grid.Row="0" Text="Rename selected files using a metadata-aware template."
+               FontWeight="SemiBold" Margin="0,0,0,8" />
+
+    <Grid Grid.Row="1" ColumnDefinitions="Auto,*" Margin="0,0,0,4">
+      <TextBlock Grid.Column="0" Text="Template:" VerticalAlignment="Center" Margin="0,0,8,0" />
+      <TextBox  Grid.Column="1" x:Name="TemplateBox" Text="{}{date:yyyy-MM-dd}_{name}"
+                ToolTip.Tip="Tokens expand from each file's metadata. Unknown tokens pass through verbatim so you can spot typos." />
+    </Grid>
+
+    <Border Grid.Row="2" Background="{DynamicResource SubtlePanelBrush}" BorderBrush="{DynamicResource PanelBorderBrush}" BorderThickness="1" CornerRadius="4" Padding="8" Margin="0,0,0,8">
+      <TextBlock TextWrapping="Wrap" FontSize="11" Opacity="0.8"
+                 Text="Tokens: {name} {ext} {date:fmt} {time:fmt} {year} {month} {day} {hour} {minute} {second} {rating} {label} {city} {country} {countrycode} {state} {location} {title} {caption} {creator} {index:000} {total}. Format suffix uses standard .NET formatting (e.g., {date:yyyy-MM-dd}, {index:000})." />
+    </Border>
+
+    <DataGrid Grid.Row="3" x:Name="PreviewGrid" x:DataType="views:RenameRow"
+              IsReadOnly="True" CanUserResizeColumns="True"
+              GridLinesVisibility="Horizontal" HeadersVisibility="Column"
+              AutoGenerateColumns="False">
+      <DataGrid.Columns>
+        <DataGridTextColumn Header="Current name" Binding="{Binding CurrentName}" Width="*" />
+        <DataGridTextColumn Header="New name"     Binding="{Binding NewName}"     Width="*" />
+        <DataGridTextColumn Header="Status"       Binding="{Binding Status}"      Width="160" />
+      </DataGrid.Columns>
+    </DataGrid>
+
+    <Grid Grid.Row="4" ColumnDefinitions="Auto,*,Auto,Auto" Margin="0,8,0,0">
+      <CheckBox Grid.Column="0" x:Name="OverwriteCheck" Content="Overwrite existing files"
+                ToolTip.Tip="If unchecked, name collisions are skipped (you'll see them flagged in the Status column)." />
+      <TextBlock Grid.Column="1" x:Name="StatusText" Opacity="0.7" VerticalAlignment="Center" Margin="12,0" />
+      <Button   Grid.Column="2" Content="✅ Apply"  Click="OnApplyClick"  FontWeight="Bold" Margin="0,0,6,0" />
+      <Button   Grid.Column="3" Content="❌ Cancel" Click="OnCancelClick" IsCancel="True" />
+    </Grid>
+  </Grid>
+</Window>

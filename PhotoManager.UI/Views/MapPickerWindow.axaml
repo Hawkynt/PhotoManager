@@ -36,8 +36,8 @@
     <Grid Grid.Row="3" ColumnDefinitions="*,Auto,Auto" Margin="10">
       <TextBlock Grid.Column="0" x:Name="HelpText" Opacity="0.6" VerticalAlignment="Center"
                  Text="Double-click the map to place the pin. Right-click clears it." />
-      <Button Grid.Column="1" x:Name="OkButton" Content="OK" Width="80" IsEnabled="False" Margin="0,0,6,0" Click="OnOkClick" />
-      <Button Grid.Column="2" Content="Cancel" Width="80" Click="OnCancelClick" />
+      <Button Grid.Column="1" x:Name="OkButton" Content="✅ OK" Width="80" IsEnabled="False" Margin="0,0,6,0" Click="OnOkClick" />
+      <Button Grid.Column="2" Content="❌ Cancel" Width="80" Click="OnCancelClick" />
     </Grid>
   </Grid>
 </Window>

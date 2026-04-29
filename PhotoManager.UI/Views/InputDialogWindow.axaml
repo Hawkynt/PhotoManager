@@ -11,8 +11,8 @@
     <TextBlock x:Name="PromptText" TextWrapping="Wrap" />
     <TextBox x:Name="InputBox" />
     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="6" Margin="0,4,0,0">
-      <Button Content="Cancel" Click="OnCancelClick" IsCancel="True" />
-      <Button Content="OK" Click="OnOkClick" IsDefault="True" FontWeight="Bold" />
+      <Button Content="❌ Cancel" Click="OnCancelClick" IsCancel="True" />
+      <Button Content="✅ OK" Click="OnOkClick" IsDefault="True" FontWeight="Bold" />
     </StackPanel>
   </StackPanel>
 </Window>

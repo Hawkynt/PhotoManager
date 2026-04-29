@@ -7,6 +7,8 @@ public class FileItemModel : INotifyPropertyChanged {
   private string _fileName = string.Empty;
   private string _targetLocation = string.Empty;
   private string _sourcePath = string.Empty;
+  private bool _isPick;
+  private bool _isReject;
 
   public string FileName {
     get => this._fileName;
@@ -45,6 +47,21 @@ public class FileItemModel : INotifyPropertyChanged {
   [Browsable(false)]
   public string? ColorLabel { get; set; }
 
+  /// <summary>Picasa-style cull flag (xmp:Pick=true). Mutually exclusive with <see cref="IsReject"/>.</summary>
+  public bool IsPick {
+    get => this._isPick;
+    set => this.SetProperty(ref this._isPick, value);
+  }
+
+  /// <summary>Picasa-style cull flag (xmp:Reject=true). Mutually exclusive with <see cref="IsPick"/>.</summary>
+  public bool IsReject {
+    get => this._isReject;
+    set => this.SetProperty(ref this._isReject, value);
+  }
+
+  /// <summary>Composite glyph for the pick/reject column. Empty when neither flag is set.</summary>
+  public string PickRejectGlyph => this._isPick ? "✅" : this._isReject ? "❌" : string.Empty;
+
   public event PropertyChangedEventHandler? PropertyChanged;
 
   private void SetProperty<T>(ref T field, T value, [CallerMemberName] string? propertyName = null) {
@@ -53,5 +70,7 @@ public class FileItemModel : INotifyPropertyChanged {
 
     field = value;
     this.PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+    if (propertyName is nameof(IsPick) or nameof(IsReject))
+      this.PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(this.PickRejectGlyph)));
   }
 }

@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
@@ -20,7 +21,10 @@ namespace PhotoManager.UI.Views;
 public partial class SearchWindow : Window {
   private readonly MetadataCache _cache = new();
   private readonly LibraryIndex _index;
-  private readonly List<SearchHitViewModel> _results = new();
+  // ObservableCollection so ItemsControl's container generator updates incrementally
+  // — re-assigning ItemsSource on every search races with WrapPanel layout and can
+  // throw IndexOutOfRange inside Avalonia's CompiledBinding visitor.
+  private readonly ObservableCollection<SearchHitViewModel> _results = new();
   private CancellationTokenSource? _scanCts;
   private CancellationTokenSource? _thumbCts;
 
@@ -45,10 +49,22 @@ public partial class SearchWindow : Window {
   }
 
   private async void OnIndexClick(object? sender, RoutedEventArgs e) {
+    await this.EnsureIndexedAsync(force: true);
+  }
+
+  /// <summary>
+  /// Walks the folder once and populates <see cref="MetadataCache"/>. Returns
+  /// true when the cache is non-empty afterwards. Skips the work when the
+  /// cache is already populated unless <paramref name="force"/> is set.
+  /// </summary>
+  private async Task<bool> EnsureIndexedAsync(bool force) {
+    if (!force && this._cache.Count > 0)
+      return true;
+
     var folder = this.FindControl<TextBox>("FolderBox")?.Text;
     if (string.IsNullOrWhiteSpace(folder) || !Directory.Exists(folder)) {
       this.SetStatus("Pick a folder first.");
-      return;
+      return false;
     }
 
     this._scanCts?.Cancel();
@@ -67,14 +83,15 @@ public partial class SearchWindow : Window {
       count = await this._index.ScanAsync(new DirectoryInfo(folder), recursive, progress, token);
     } catch (OperationCanceledException) {
       this.SetStatus("Indexing cancelled.");
-      return;
+      return false;
     } catch (Exception ex) {
       this.SetStatus($"Indexing failed: {ex.Message}");
-      return;
+      return false;
     }
 
     this.SetStatus($"Indexed {count} file(s). Ready to search.");
     this.PopulateAutoComplete();
+    return count > 0;
   }
 
   private void PopulateAutoComplete() {
@@ -86,7 +103,23 @@ public partial class SearchWindow : Window {
       keywordBox.ItemsSource = this._index.DistinctKeywords();
   }
 
-  private void OnSearchClick(object? sender, RoutedEventArgs e) => this.RunSearch();
+  private async void OnSearchClick(object? sender, RoutedEventArgs e) {
+    // First-time search: build the in-memory index transparently so the user
+    // doesn't have to remember to click "Index" first. Re-runs are cheap because
+    // the cache short-circuits unchanged files.
+    if (this._cache.Count == 0 && !await this.EnsureIndexedAsync(force: false))
+      return;
+
+    try {
+      this.RunSearch();
+    } catch (Exception ex) {
+      // Surface the full chain so the next error-report names the root cause
+      // (Avalonia binding errors are often wrapped twice).
+      var inner = ex;
+      while (inner.InnerException != null) inner = inner.InnerException;
+      this.SetStatus($"Search failed: {inner.GetType().Name}: {inner.Message}");
+    }
+  }
 
   private void RunSearch() {
     var query = new LibrarySearchQuery(
@@ -100,11 +133,6 @@ public partial class SearchWindow : Window {
     this._results.Clear();
     foreach (var hit in hits)
       this._results.Add(new SearchHitViewModel(hit));
-
-    if (this.FindControl<ItemsControl>("ResultsList") is { } list) {
-      list.ItemsSource = null;
-      list.ItemsSource = this._results;
-    }
 
     this.SetStatus(query.IsEmpty
       ? $"Showing all {hits.Count} indexed file(s)."
@@ -129,7 +157,9 @@ public partial class SearchWindow : Window {
           continue;
         using var ms = new MemoryStream(bytes, writable: false);
         var bitmap = new Bitmap(ms);
-        vm.Thumbnail = bitmap;
+        // Setting the property raises PropertyChanged which the Image binding
+        // observes — Avalonia rejects cross-thread updates, so marshal back.
+        await Dispatcher.UIThread.InvokeAsync(() => vm.Thumbnail = bitmap);
       } catch (OperationCanceledException) {
         return;
       } catch {

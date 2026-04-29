@@ -6,6 +6,8 @@ using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using PhotoManager.Core.Develop;
+using PhotoManager.Core.Models;
+using PhotoManager.Core.Segmentation;
 using PhotoManager.UI.Controls;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
@@ -33,6 +35,9 @@ public partial class EditImageWindow : Window {
   private readonly DevelopTemplateStore _templates = new();
   private Image<Rgba32>? _previewSource;  // downscaled copy for live preview
   private Image<Rgba32>? _developedPreview;  // last preview render — sampled by eyedroppers
+  private Bitmap? _baselinePreview;  // baseline render with default settings, recomputed only on file load / "Reset all"
+  private readonly CompareModeState _compareState = new();
+  private OnnxSegmentationDetector? _subjectSegmenter;
   private DispatcherTimer? _updateTimer;
   private DevelopSettings _settings = new();
   private bool _suppressTemplateSelect;
@@ -172,6 +177,9 @@ public partial class EditImageWindow : Window {
     // settings; it just yells when the user drags a point.
     if (this.FindControl<ToneCurveEditor>("CurveEditor") is { } curve)
       curve.CurveChanged += this.OnCurveChanged;
+
+    if (this.FindControl<Avalonia.Controls.Image>("PreviewImageSlider") is { } sliderImg)
+      sliderImg.SizeChanged += (_, _) => this.UpdateSliderClip();
 
     if (sourceFile is not null)
       _ = this.LoadPreviewAsync();
@@ -1093,6 +1101,7 @@ public partial class EditImageWindow : Window {
       this.SetStatus($"Resumed embedded develop settings for {file.Name}.");
     }
     this.UpdatePreview();
+    this.InvalidateBaseline();
   }
 
   private void OnSettingsChanged(object? sender, RangeBaseValueChangedEventArgs e) {
@@ -1120,6 +1129,7 @@ public partial class EditImageWindow : Window {
   private void OnResetAllClick(object? sender, RoutedEventArgs e) {
     this.ApplySettingsToUi(new DevelopSettings());
     this.UpdatePreview();
+    this.InvalidateBaseline();
   }
 
   private void SchedulePreviewUpdate() {
@@ -1155,6 +1165,10 @@ public partial class EditImageWindow : Window {
       var bitmap = new Bitmap(ms);
       if (this.FindControl<Avalonia.Controls.Image>("PreviewImage") is { } img)
         img.Source = bitmap;
+      if (this.FindControl<Avalonia.Controls.Image>("PreviewImageSplit") is { } imgSplit)
+        imgSplit.Source = bitmap;
+      if (this.FindControl<Avalonia.Controls.Image>("PreviewImageSlider") is { } imgSlider)
+        imgSlider.Source = bitmap;
 
       this.RenderHistogram(developed);
 
@@ -1548,9 +1562,158 @@ public partial class EditImageWindow : Window {
       : $"Rendered {written}; {failed} failed.");
   }
 
+  private async void OnDetectSubjectClick(object? sender, RoutedEventArgs e) {
+    if (this._sourceFile is not { } src || !src.Exists) {
+      this.SetStatus("No source image loaded.");
+      return;
+    }
+
+    if (!await this.EnsureModelAsync(ModelRegistry.SubjectMaskMODNet, "subject mask"))
+      return;
+
+    this.SetStatus("Detecting subject…");
+    try {
+      this._subjectSegmenter?.Dispose();
+      this._subjectSegmenter = new OnnxSegmentationDetector(ModelRegistry.SubjectMaskMODNet.ResolveDestination());
+      if (!this._subjectSegmenter.IsAvailable) {
+        this.SetStatus("Subject mask model failed to load.");
+        return;
+      }
+
+      using var alpha = await this._subjectSegmenter.SegmentAsync(src);
+      if (alpha is null) {
+        this.SetStatus("Subject detection returned no result.");
+        return;
+      }
+
+      var dabs = BrushDabsFromAlphaMask.Build(alpha);
+      if (dabs.Count == 0) {
+        this.SetStatus("No subject pixels found above the threshold.");
+        return;
+      }
+
+      var current = (this._settings.LocalAdjustments ?? Array.Empty<LocalAdjustment>()).ToList();
+      current.Add(new LocalAdjustment(
+        Mask: new LocalMask(Type: LocalMaskType.Brush, BrushDabs: dabs),
+        Name: "Subject"));
+      this._settings = this._settings with { LocalAdjustments = current };
+      this.RefreshLocalAdjustmentsList(selectIndex: current.Count - 1);
+      this.UpdatePreview();
+      this.SetStatus($"Subject mask added ({dabs.Count} dabs).");
+    } catch (Exception ex) {
+      this.SetStatus($"Subject detection failed: {ex.Message}");
+    }
+  }
+
+  /// Mirror of MainWindow's EnsureModelAsync: prompts the user via the
+  /// ModelDownloadWindow if the requested model isn't installed, returning
+  /// true when the file is present after the dialog closes.
+  private async Task<bool> EnsureModelAsync(ModelInfo model, string friendlyName) {
+    if (model.IsInstalled())
+      return true;
+
+    this.SetStatus($"The {friendlyName} model isn't installed yet — opening the downloader.");
+
+    var window = new ModelDownloadWindow();
+    await window.ShowDialog(this);
+
+    if (model.IsInstalled())
+      return true;
+
+    this.SetStatus($"{friendlyName} model still not installed — click Download or Install from file and try again.");
+    return false;
+  }
+
+  // ---------- Compare mode (After / Split / Slider) ----------
+
+  private void OnCompareToggleClick(object? sender, RoutedEventArgs e) {
+    this._compareState.Cycle();
+    this.ApplyCompareModeUi();
+    if (this._compareState.NeedsBaseline && this._baselinePreview is null)
+      _ = this.RebuildBaselineAsync();
+  }
+
+  private void OnCompareSliderChanged(object? sender, RangeBaseValueChangedEventArgs e) {
+    if (this._compareState.Mode == CompareMode.Slider)
+      this.UpdateSliderClip();
+  }
+
+  private void ApplyCompareModeUi() {
+    if (this.FindControl<Avalonia.Controls.Image>("PreviewImage") is { } single)
+      single.IsVisible = this._compareState.IsAfterVisible;
+    if (this.FindControl<Grid>("SplitPanel") is { } split)
+      split.IsVisible = this._compareState.IsSplitVisible;
+    if (this.FindControl<Grid>("SliderPanel") is { } slider)
+      slider.IsVisible = this._compareState.IsSliderVisible;
+    if (this.FindControl<Button>("CompareToggleButton") is { } btn) {
+      btn.Content = this._compareState.ButtonContent;
+      ToolTip.SetTip(btn, this._compareState.ButtonTooltip);
+    }
+    if (this._compareState.Mode == CompareMode.Slider) {
+      this.UpdateSliderClip();
+      Dispatcher.UIThread.Post(this.UpdateSliderClip, DispatcherPriority.Loaded);
+    }
+  }
+
+  private void UpdateSliderClip() {
+    if (this.FindControl<Avalonia.Controls.Image>("PreviewImageSlider") is not { } preview)
+      return;
+    if (this.FindControl<Slider>("CompareSlider") is not { } slider)
+      return;
+    var width  = preview.Bounds.Width;
+    var height = preview.Bounds.Height;
+    if (width <= 0 || height <= 0) {
+      preview.Clip = null;
+      return;
+    }
+    var t = Math.Clamp(slider.Value, 0.0, 1.0);
+    preview.Clip = new Avalonia.Media.RectangleGeometry(
+      new Avalonia.Rect(t * width, 0, width - t * width, height));
+  }
+
+  private async Task RebuildBaselineAsync() {
+    if (this._previewSource is not { } src)
+      return;
+
+    var clone = src.Clone();
+    Bitmap? bitmap = null;
+    try {
+      await Task.Run(() => {
+        using var rendered = ImageDeveloper.Apply(clone, new DevelopSettings());
+        using var ms = new MemoryStream();
+        rendered.SaveAsJpeg(ms);
+        ms.Position = 0;
+        bitmap = new Bitmap(ms);
+      });
+    } finally {
+      clone.Dispose();
+    }
+
+    if (bitmap is null)
+      return;
+
+    Dispatcher.UIThread.Post(() => {
+      this._baselinePreview?.Dispose();
+      this._baselinePreview = bitmap;
+      if (this.FindControl<Avalonia.Controls.Image>("BaselineImageSplit") is { } a)
+        a.Source = bitmap;
+      if (this.FindControl<Avalonia.Controls.Image>("BaselineImageSlider") is { } b)
+        b.Source = bitmap;
+    });
+  }
+
+  private void InvalidateBaseline() {
+    this._baselinePreview?.Dispose();
+    this._baselinePreview = null;
+    if (this._compareState.NeedsBaseline)
+      _ = this.RebuildBaselineAsync();
+  }
+
   private void OnCloseClick(object? sender, RoutedEventArgs e) {
     this._previewSource?.Dispose();
     this._developedPreview?.Dispose();
+    this._baselinePreview?.Dispose();
+    this._subjectSegmenter?.Dispose();
     this.Close();
   }
 

@@ -19,8 +19,8 @@
     <Grid Grid.Row="1" ColumnDefinitions="Auto,*,Auto,Auto,Auto" Margin="0,0,0,6">
       <TextBlock Grid.Column="0" Text="Folder:" VerticalAlignment="Center" Margin="0,0,6,0" />
       <TextBox Grid.Column="1" x:Name="FolderBox" Watermark="Path to library root" />
-      <Button Grid.Column="2" Content="Browse..." Margin="6,0,0,0" Click="OnBrowseClick" />
-      <Button Grid.Column="3" Content="Index" Margin="6,0,0,0" Click="OnIndexClick" FontWeight="Bold" />
+      <Button Grid.Column="2" Content="📂 Browse..." Margin="6,0,0,0" Click="OnBrowseClick" />
+      <Button Grid.Column="3" Content="🔄 Re-index" Margin="6,0,0,0" Click="OnIndexClick" ToolTip.Tip="Rebuild the in-memory index. Done automatically on first search." />
       <CheckBox Grid.Column="4" x:Name="RecursiveBox" Content="Recursive" IsChecked="True" Margin="12,0,0,0" VerticalAlignment="Center" />
     </Grid>
 
@@ -32,10 +32,10 @@
       <AutoCompleteBox Grid.Column="4" x:Name="LocationBox" Watermark="Location/City/Country" FilterMode="ContainsOrdinal" />
       <TextBlock Grid.Column="5" VerticalAlignment="Center" Margin="6,0" Opacity="0.5" Text="|" />
       <AutoCompleteBox Grid.Column="6" x:Name="KeywordBox" Watermark="Keyword" Width="160" FilterMode="ContainsOrdinal" />
-      <Button Grid.Column="7" Content="Search" Margin="6,0,0,0" Click="OnSearchClick" />
+      <Button Grid.Column="7" Content="🔍 Search" Margin="6,0,0,0" Click="OnSearchClick" FontWeight="Bold" />
     </Grid>
 
-    <Border Grid.Row="3" BorderBrush="#DDD" BorderThickness="1" CornerRadius="4">
+    <Border Grid.Row="3" BorderBrush="{DynamicResource PanelBorderBrush}" BorderThickness="1" CornerRadius="4">
       <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
         <ItemsControl x:Name="ResultsList" Padding="6">
           <ItemsControl.ItemsPanel>
@@ -45,10 +45,10 @@
           </ItemsControl.ItemsPanel>
           <ItemsControl.ItemTemplate>
             <DataTemplate DataType="models:SearchHitViewModel">
-              <Border Width="180" Margin="4" BorderBrush="#BBB" BorderThickness="1" CornerRadius="4" Background="White"
+              <Border Width="180" Margin="4" BorderBrush="{DynamicResource TileBorderBrush}" BorderThickness="1" CornerRadius="4" Background="{DynamicResource TileSurfaceBrush}"
                       DoubleTapped="OnResultDoubleTapped">
                 <StackPanel>
-                  <Border Height="140" Background="#F7F7F7">
+                  <Border Height="140" Background="{DynamicResource ThumbBackgroundBrush}">
                     <Image Source="{CompiledBinding Thumbnail}" Stretch="Uniform" />
                   </Border>
                   <StackPanel Margin="6" Spacing="2">

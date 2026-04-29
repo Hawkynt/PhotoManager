@@ -277,6 +277,8 @@ public sealed class CompositeMetadataWriter : IMetadataWriter {
     CountryCode    = edit.CountryCode.HasValue    ? edit.CountryCode.Value    : current.CountryCode,
     Rating         = edit.Rating.HasValue         ? edit.Rating.Value         : current.Rating,
     ColorLabel     = edit.ColorLabel.HasValue     ? edit.ColorLabel.Value     : current.ColorLabel,
+    IsPick         = edit.IsPick.HasValue         ? edit.IsPick.Value         : current.IsPick,
+    IsReject       = edit.IsReject.HasValue       ? edit.IsReject.Value       : current.IsReject,
     Keywords       = edit.Keywords.HasValue       ? edit.Keywords.Value ?? Array.Empty<string>() : current.Keywords,
     Title          = edit.Title.HasValue          ? edit.Title.Value          : current.Title,
     Caption        = edit.Caption.HasValue        ? edit.Caption.Value        : current.Caption,

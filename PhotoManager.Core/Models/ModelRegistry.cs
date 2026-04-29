@@ -44,7 +44,21 @@ public static class ModelRegistry {
     ApproximateSizeBytes: 261_036_388
   );
 
-  public static readonly IReadOnlyList<ModelInfo> All = [YoloV8n, UltraFaceRfb320, ArcFace];
+  /// <summary>MODNet — lightweight portrait/subject alpha matting (~25 MB ONNX).</summary>
+  public static readonly ModelInfo SubjectMaskMODNet = new(
+    Name: "modnet-subject",
+    FileName: "modnet_photographic_portrait_matting.onnx",
+    DisplayName: "MODNet — Subject mask",
+    Description: "Lightweight portrait/subject alpha matting for the AI Subject mask in develop. ~25 MB, ONNX, MIT licence.",
+    // ZHKKKe/MODNet does not publish ONNX in its GitHub releases — the
+    // canonical mirror is the Xenova/modnet HuggingFace repo, which
+    // hosts the ONNX export of the official photographic-portrait-matting
+    // checkpoint (input "input": 1x3xHxW dynamic, output "output": 1x1xHxW).
+    DownloadUrl: "https://huggingface.co/Xenova/modnet/resolve/main/onnx/model.onnx?download=true",
+    ApproximateSizeBytes: 25_900_000
+  );
+
+  public static readonly IReadOnlyList<ModelInfo> All = [YoloV8n, UltraFaceRfb320, ArcFace, SubjectMaskMODNet];
 
   public static ModelInfo? FindByName(string name) =>
     All.FirstOrDefault(m => string.Equals(m.Name, name, StringComparison.OrdinalIgnoreCase));

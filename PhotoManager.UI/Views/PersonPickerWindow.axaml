@@ -22,9 +22,9 @@
               IsChecked="True" VerticalAlignment="Top" Margin="0,8,0,0" />
 
     <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="6">
-      <Button Content="Remove label" Click="OnClearClick" />
-      <Button Content="Cancel" Click="OnCancelClick" IsCancel="True" />
-      <Button Content="OK" Click="OnOkClick" IsDefault="True" FontWeight="Bold" />
+      <Button Content="🗑️ Remove label" Click="OnClearClick" />
+      <Button Content="❌ Cancel" Click="OnCancelClick" IsCancel="True" />
+      <Button Content="✅ OK" Click="OnOkClick" IsDefault="True" FontWeight="Bold" />
     </StackPanel>
   </Grid>
 </Window>

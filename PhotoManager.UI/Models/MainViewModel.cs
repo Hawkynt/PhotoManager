@@ -19,6 +19,7 @@ public class MainViewModel : INotifyPropertyChanged {
   private BrowseMode _browseMode = BrowseMode.Sources;
   private List<TreeViewPathData> _treeViewPaths = new();
   private List<SavedSearchData> _savedSearches = new();
+  private ThemeVariantPreference _theme = ThemeVariantPreference.System;
 
   public string SourceDirectory {
     get => this._sourceDirectory;
@@ -106,6 +107,13 @@ public class MainViewModel : INotifyPropertyChanged {
   public List<SavedSearchData> SavedSearches {
     get => this._savedSearches;
     set => this.SetProperty(this.OnPropertyChanged, ref this._savedSearches, value);
+  }
+
+  /// Persisted Light/Dark/System preference. Mapped to
+  /// Application.Current.RequestedThemeVariant at apply time.
+  public ThemeVariantPreference Theme {
+    get => this._theme;
+    set => this.SetProperty(this.OnPropertyChanged, ref this._theme, value);
   }
 
   public event PropertyChangedEventHandler? PropertyChanged;

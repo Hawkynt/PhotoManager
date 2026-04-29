@@ -129,24 +129,46 @@
   <Grid RowDefinitions="Auto,*,Auto,Auto">
     <Menu Grid.Row="0">
       <MenuItem Header="_File">
-        <MenuItem Header="_Add folder..." Click="OnAddPathClick" InputGesture="Ctrl+O" />
-        <MenuItem Header="Select _output..." Click="OnBrowseDestinationClick" />
+        <MenuItem Header="📁 _Add folder..." Click="OnAddPathClick" InputGesture="Ctrl+O" />
+        <MenuItem Header="📂 Select _output..." Click="OnBrowseDestinationClick" />
         <Separator />
-        <MenuItem Header="E_xit" Click="OnExitClick" InputGesture="Alt+F4" />
+        <MenuItem Header="🚪 E_xit" Click="OnExitClick" InputGesture="Alt+F4" />
+      </MenuItem>
+      <MenuItem Header="_View">
+        <MenuItem Header="🎨 _Theme">
+          <MenuItem Header="☀ _Light" ToggleType="Radio" GroupName="theme"
+                    x:Name="ThemeLightItem" Click="OnThemeLightClick" />
+          <MenuItem Header="🌙 _Dark" ToggleType="Radio" GroupName="theme"
+                    x:Name="ThemeDarkItem" Click="OnThemeDarkClick" />
+          <MenuItem Header="🖥 _System default" ToggleType="Radio" GroupName="theme"
+                    x:Name="ThemeSystemItem" Click="OnThemeSystemClick" />
+        </MenuItem>
       </MenuItem>
       <MenuItem Header="_Tools">
-        <MenuItem Header="_Search library..." Click="OnOpenSearchClick" InputGesture="Ctrl+F" />
+        <MenuItem Header="🔍 _Search library..." Click="OnOpenSearchClick" InputGesture="Ctrl+F" />
+        <MenuItem Header="🔁 Find _duplicates..." Click="OnOpenDuplicatesClick"
+                  ToolTip.Tip="Scan a folder for visually similar photos via 64-bit perceptual hash. Hashes live in memory only; no DB on disk." />
+        <MenuItem Header="✏️ Batch _rename..." Click="OnOpenBatchRenameClick"
+                  ToolTip.Tip="Rename every selected file using a metadata-aware template like {date:yyyy-MM-dd}_{city}_{name}." />
+        <MenuItem Header="🕒 Batch date _shift..." Click="OnOpenBatchDateShiftClick"
+                  ToolTip.Tip="Shift the EXIF capture timestamp on every selected JPEG by a fixed offset. Use when the camera clock was wrong (timezone, DST, drift)." />
         <Separator />
-        <MenuItem Header="Geotag from _GPX..." Click="OnOpenGpxClick" />
-        <MenuItem Header="_World map..." Click="OnOpenWorldMapClick" />
-        <MenuItem Header="_Face gallery..." Click="OnOpenFaceGalleryClick" />
-        <MenuItem Header="_Develop image..." Click="OnOpenDevelopClick" InputGesture="Ctrl+E"
+        <MenuItem Header="📍 Geotag from _GPX..." Click="OnOpenGpxClick" />
+        <MenuItem Header="🌍 _World map..." Click="OnOpenWorldMapClick" />
+        <MenuItem Header="🗺️ Map _bookmarks..." Click="OnOpenMapBookmarksClick"
+                  ToolTip.Tip="Save named places (lat/lon + city/country fields) and apply them to a selection in one click." />
+        <MenuItem Header="🌐 Reverse-geocode _selection..." Click="OnReverseGeocodeSelectionClick"
+                  ToolTip.Tip="Resolve city/country/state for every selected photo's GPS coordinate in one batch." />
+        <MenuItem Header="📤 Export _KML..." Click="OnExportKmlClick"
+                  ToolTip.Tip="Save every geotagged photo's coordinates to a single .kml file (Google Earth / GPX viewers)." />
+        <MenuItem Header="👤 _Face gallery..." Click="OnOpenFaceGalleryClick" />
+        <MenuItem Header="🎨 _Develop image..." Click="OnOpenDevelopClick" InputGesture="Ctrl+E"
                   IsEnabled="{Binding HasSelectedFile}" />
         <Separator />
-        <MenuItem Header="_Download detection models..." Click="OnOpenModelsDialogClick" />
+        <MenuItem Header="🤖 _Download detection models..." Click="OnOpenModelsDialogClick" />
       </MenuItem>
       <MenuItem Header="_Help">
-        <MenuItem Header="_About..." Click="OnAboutClick" />
+        <MenuItem Header="ℹ️ _About..." Click="OnAboutClick" />
       </MenuItem>
     </Menu>
 
@@ -176,13 +198,14 @@
             <TextBlock Text="(walking recursively)" Opacity="0.55" FontStyle="Italic" FontSize="11" />
           </StackPanel>
           <TreeView Grid.Row="2" x:Name="SourceTree" SelectionMode="Single" Padding="4"
-                    IsVisible="{Binding IsSourceMode}">
+                    IsVisible="{Binding IsSourceMode}"
+                    DragDrop.AllowDrop="True">
             <TreeView.ContextMenu>
               <ContextMenu>
-                <MenuItem Header="Add Path..." Click="OnAddPathClick" />
-                <MenuItem Header="Remove Path" Click="OnRemovePathClick" />
+                <MenuItem Header="📁 Add Path..." Click="OnAddPathClick" />
+                <MenuItem Header="❌ Remove Path" Click="OnRemovePathClick" />
                 <Separator />
-                <MenuItem Header="Toggle Recursive" Click="OnToggleRecursiveClick" />
+                <MenuItem Header="🔁 Toggle Recursive" Click="OnToggleRecursiveClick" />
               </ContextMenu>
             </TreeView.ContextMenu>
             <TreeView.ItemTemplate>
@@ -207,7 +230,7 @@
           <Grid ColumnDefinitions="120,*,Auto">
             <TextBlock Grid.Column="0" Text="Output:" VerticalAlignment="Center" />
             <TextBox Grid.Column="1" Text="{Binding DestinationDirectory, Mode=TwoWay}" Watermark="(organize in-place if empty)" />
-            <Button Grid.Column="2" Content="Select Output..." Margin="6,0,0,0" Click="OnBrowseDestinationClick" />
+            <Button Grid.Column="2" Content="📂 Select Output..." Margin="6,0,0,0" Click="OnBrowseDestinationClick" />
           </Grid>
           <Grid ColumnDefinitions="120,Auto,Auto,*">
             <TextBlock Grid.Column="0" Text="Duplicates:" VerticalAlignment="Center" />
@@ -218,7 +241,7 @@
           </Grid>
         </StackPanel>
 
-        <Border Grid.Row="1" BorderBrush="#DDD" BorderThickness="1" CornerRadius="4" Background="White">
+        <Border Grid.Row="1" BorderBrush="{DynamicResource PanelBorderBrush}" BorderThickness="1" CornerRadius="4" Background="{DynamicResource ThumbBackgroundBrush}">
           <!-- Image + Canvas share the same Grid cell with explicit
                Stretch alignment — TryGetImageRenderBounds assumes they have
                matching layout bounds so the overlay rectangles track the
@@ -256,7 +279,7 @@
                     PlaceholderText="(saved searches)"
                     SelectionChanged="OnSavedSearchSelected"
                     ToolTip.Tip="Pick a previously saved filter to re-apply" />
-          <Button Grid.Column="4" Content="Save…" Margin="4,0,0,0" Click="OnSaveSearchClick"
+          <Button Grid.Column="4" Content="💾 Save…" Margin="4,0,0,0" Click="OnSaveSearchClick"
                   ToolTip.Tip="Bookmark the current text + chip filter under a name" />
         </Grid>
 
@@ -275,6 +298,13 @@
           <ToggleButton x:Name="LabelGreen"  Content="Green"  Padding="6,2" FontSize="11" Click="OnLabelFilterClick" Tag="Green"  Foreground="#1E8449" FontWeight="SemiBold" />
           <ToggleButton x:Name="LabelBlue"   Content="Blue"   Padding="6,2" FontSize="11" Click="OnLabelFilterClick" Tag="Blue"   Foreground="#2471A3" FontWeight="SemiBold" />
           <ToggleButton x:Name="LabelPurple" Content="Purple" Padding="6,2" FontSize="11" Click="OnLabelFilterClick" Tag="Purple" Foreground="#7D3C98" FontWeight="SemiBold" />
+          <Border Width="1" Background="#CCC" Margin="6,2,6,2" />
+          <!-- Picasa-style cull chip: cycles Show all → Hide rejects →
+               Picks only → Rejects only → back. Hotkeys P/X/U on the grid
+               flag the selection without leaving the keyboard. -->
+          <Button x:Name="PickFilterChip" Padding="6,2" FontSize="11" Click="OnPickFilterChipClick"
+                  Content="🚩 Show all"
+                  ToolTip.Tip="Cull filter — click to cycle Show all → Hide rejects → Picks only → Rejects only. Grid hotkeys: P=Pick, X=Reject, U=Clear flags." />
         </StackPanel>
 
         <DataGrid Grid.Row="5" x:Name="FilesGrid"
@@ -283,16 +313,29 @@
                   GridLinesVisibility="Horizontal"
                   IsReadOnly="True"
                   SelectionMode="Extended"
-                  SelectionChanged="OnFileSelectionChanged">
+                  DragDrop.AllowDrop="True"
+                  SelectionChanged="OnFileSelectionChanged"
+                  KeyDown="OnFilesGridKeyDown">
           <DataGrid.ContextMenu>
             <ContextMenu>
-              <MenuItem Header="_Properties..." Click="OnFilePropertiesClick" />
+              <MenuItem Header="📋 _Properties..." Click="OnFilePropertiesClick" />
               <Separator />
-              <MenuItem Header="Open in default _viewer" Click="OnOpenInViewerClick" />
-              <MenuItem Header="Show in _folder" Click="OnRevealInFolderClick" />
+              <MenuItem Header="✅ Mark as _Pick (P)" Click="OnContextMarkPickClick" />
+              <MenuItem Header="❌ Mark as _Reject (X)" Click="OnContextMarkRejectClick" />
+              <MenuItem Header="⚪ _Unflag (U)" Click="OnContextClearFlagClick" />
+              <Separator />
+              <MenuItem Header="🌐 Reverse-geocode selection..." Click="OnReverseGeocodeSelectionClick" />
+              <Separator />
+              <MenuItem Header="🖼️ Open in default _viewer" Click="OnOpenInViewerClick" />
+              <MenuItem Header="📂 Show in _folder" Click="OnRevealInFolderClick" />
             </ContextMenu>
           </DataGrid.ContextMenu>
           <DataGrid.Columns>
+            <DataGridTextColumn Header="🚩"
+                                Binding="{CompiledBinding PickRejectGlyph, DataType=models:FileItemModel}"
+                                Width="36"
+                                CanUserSort="True"
+                                CanUserResize="False" />
             <DataGridTextColumn Header="File Name" Binding="{CompiledBinding FileName, DataType=models:FileItemModel}" Width="*" />
             <DataGridTextColumn Header="Target Location" Binding="{CompiledBinding TargetLocation, DataType=models:FileItemModel}" Width="2*" />
             <DataGridTextColumn Header="Source Path" Binding="{CompiledBinding SourcePath, DataType=models:FileItemModel}" Width="*" />
@@ -334,9 +377,9 @@
                       <DataTemplate DataType="models:RegionThumbnailViewModel">
                         <Border Width="180" Margin="4" Padding="0"
                                 BorderBrush="{CompiledBinding CategoryColor}" BorderThickness="2" CornerRadius="4"
-                                Background="White">
+                                Background="{DynamicResource TileSurfaceBrush}">
                           <StackPanel>
-                            <Border Height="120" Background="#F7F7F7">
+                            <Border Height="120" Background="{DynamicResource ThumbBackgroundBrush}">
                               <Image Source="{CompiledBinding Thumbnail}" Stretch="Uniform" />
                             </Border>
                             <StackPanel Margin="6" Spacing="3">
@@ -373,7 +416,7 @@
           <Grid RowDefinitions="Auto,Auto,*">
             <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="8,6,8,2">
               <TextBlock Grid.Column="0" Text="Metadata" FontWeight="SemiBold" />
-              <Button Grid.Column="1" Content="All properties…" Padding="6,2" FontSize="11"
+              <Button Grid.Column="1" Content="📋 All properties…" Padding="6,2" FontSize="11"
                       Click="OnShowPropertiesForCurrentFileClick"
                       IsEnabled="{Binding HasSelectedFile}"
                       ToolTip.Tip="Open the full Properties dialog — edit every IPTC / XMP / EXIF tag the library supports" />
@@ -574,18 +617,18 @@
     </Grid>
 
     <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="8,8,8,0" Spacing="6">
-      <Button Content="Scan Files"       Click="OnScanClick"         IsEnabled="{Binding !IsProcessing}"
+      <Button Content="🔍 Scan Files"       Click="OnScanClick"         IsEnabled="{Binding !IsProcessing}"
               ToolTip.Tip="Populate the grid from the active browse mode (Sources tree or Target directory)" />
       <!-- Run / Run-on-Directory only make sense when browsing the source
            tree — they ORGANIZE files into the target. Hidden in Target
            mode where the files are already organised. -->
-      <Button Content="Run"  FontWeight="Bold" Click="OnRunClick"    IsEnabled="{Binding !IsProcessing}"
+      <Button Content="▶ Run"  FontWeight="Bold" Click="OnRunClick"    IsEnabled="{Binding !IsProcessing}"
               IsVisible="{Binding IsSourceMode}"
               ToolTip.Tip="Organize the files currently listed in the grid by date" />
-      <Button Content="Run on Directory" Click="OnRunDirectoryClick" IsEnabled="{Binding !IsProcessing}"
+      <Button Content="▶▶ Run on Directory" Click="OnRunDirectoryClick" IsEnabled="{Binding !IsProcessing}"
               IsVisible="{Binding IsSourceMode}"
               ToolTip.Tip="Walk every checked source directly, no pre-scan required" />
-      <Button Content="Cancel"           Click="OnCancelClick"       IsEnabled="{Binding IsProcessing}" />
+      <Button Content="⏹ Cancel"           Click="OnCancelClick"       IsEnabled="{Binding IsProcessing}" />
       <CheckBox Content="Recursive (Run on Directory)" Margin="24,0,0,0"
                 IsChecked="{Binding Recursive, Mode=TwoWay}"
                 IsVisible="{Binding IsSourceMode}" />
