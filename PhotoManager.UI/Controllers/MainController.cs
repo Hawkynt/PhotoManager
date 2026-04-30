@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using PhotoManager.Core;
+using PhotoManager.Core.Develop;
 using PhotoManager.Core.Enums;
 using PhotoManager.Core.Geocoding;
 using PhotoManager.Core.Interfaces;
@@ -617,12 +618,29 @@ public class MainController(
           TargetLocation = "Calculating...",
           SourcePath = sourcePath,
           FileInfo = fileInfo,
+          CopyIndex = 0,
         };
         // Seed the search index with filename + source path so the search bar
         // is useful the instant the scan finishes — before background XMP
         // reads populate the full index.
         item.SearchIndex = BuildInitialSearchIndex(item);
         fileItemsList.Add(item);
+
+        // Surface every basename.copyN.xmp sidecar as its own grid row right
+        // after the source so virtual copies are first-class citizens —
+        // selecting one opens it in the develop window with the alternate
+        // settings instead of the embedded ones.
+        foreach (var (copyIndex, _) in VirtualCopyDiscovery.Enumerate(fileInfo)) {
+          var copyItem = new FileItemModel {
+            FileName = $"{fileInfo.Name} (copy {copyIndex})",
+            TargetLocation = "(virtual copy)",
+            SourcePath = sourcePath,
+            FileInfo = fileInfo,
+            CopyIndex = copyIndex,
+          };
+          copyItem.SearchIndex = BuildInitialSearchIndex(copyItem);
+          fileItemsList.Add(copyItem);
+        }
       }
 
       var fileItems = new ObservableCollection<FileItemModel>(fileItemsList);
@@ -708,6 +726,8 @@ public class MainController(
                 itemWithIndex.Item.ColorLabel = metadata.ColorLabel;
                 itemWithIndex.Item.IsPick = metadata.IsPick == true;
                 itemWithIndex.Item.IsReject = metadata.IsReject == true;
+                itemWithIndex.Item.CapturedDate = metadata.DateCreated;
+                itemWithIndex.Item.CachedMetadata = metadata;
               } catch {
                 // Bad metadata on one file shouldn't invalidate the whole index.
               }
@@ -755,6 +775,8 @@ public class MainController(
     item.ColorLabel = metadata.ColorLabel;
     item.IsPick = metadata.IsPick == true;
     item.IsReject = metadata.IsReject == true;
+    item.CapturedDate = metadata.DateCreated;
+    item.CachedMetadata = metadata;
   }
 
   /// <summary>

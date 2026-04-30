@@ -1,0 +1,41 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:models="using:PhotoManager.UI.Models"
+        mc:Ignorable="d" d:DesignWidth="520" d:DesignHeight="520"
+        x:Class="PhotoManager.UI.Views.EditHistoryWindow"
+        Width="520" Height="520"
+        MinWidth="380" MinHeight="320"
+        WindowStartupLocation="CenterOwner"
+        Title="Edit history">
+  <Grid RowDefinitions="Auto,*,Auto" Margin="12">
+    <TextBlock Grid.Row="0" x:Name="HeaderText" Text="Develop snapshots" FontWeight="SemiBold" Margin="0,0,0,8" />
+
+    <Border Grid.Row="1" BorderBrush="{DynamicResource PanelBorderBrush}" BorderThickness="1" CornerRadius="4">
+      <ListBox x:Name="SnapshotList" Background="Transparent">
+        <ListBox.ItemTemplate>
+          <DataTemplate DataType="models:HistorySnapshotRow">
+            <Grid ColumnDefinitions="Auto,*" Margin="2">
+              <Border Grid.Column="0" Width="80" Height="60" Background="{DynamicResource ThumbBackgroundBrush}" CornerRadius="2"
+                      Margin="0,0,8,0">
+                <Image Source="{Binding Thumbnail}" Stretch="Uniform" />
+              </Border>
+              <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                <TextBlock Text="{Binding TimestampText}" FontFamily="Consolas" FontSize="11" Opacity="0.75" />
+                <TextBlock Text="{Binding LabelText}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+              </StackPanel>
+            </Grid>
+          </DataTemplate>
+        </ListBox.ItemTemplate>
+      </ListBox>
+    </Border>
+
+    <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="6" Margin="0,8,0,0">
+      <TextBlock x:Name="StatusText" VerticalAlignment="Center" Opacity="0.7" Margin="0,0,8,0" />
+      <Button Content="🗑 Delete" Click="OnDeleteClick" />
+      <Button Content="↩️ Restore" Click="OnRestoreClick" FontWeight="Bold" />
+      <Button Content="🚪 Close" Click="OnCloseClick" IsCancel="True" />
+    </StackPanel>
+  </Grid>
+</Window>

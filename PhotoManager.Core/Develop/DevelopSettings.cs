@@ -199,7 +199,19 @@ public sealed record DevelopSettings(
   string? WatermarkText = null,
   double WatermarkOpacity = 0.5,
   string WatermarkPosition = "BottomRight",
-  int WatermarkFontSize = 24
+  int WatermarkFontSize = 24,
+  /// <summary>AI denoise strength 0..1; 0 = off. Runs BEFORE the sharpening pass.</summary>
+  double AiDenoiseStrength = 0,
+  /// <summary>Optional model file-name override for the denoiser; null = default ("denoise.onnx").</summary>
+  string? AiDenoiseModel = null,
+  /// <summary>AI upscale factor — 1 = off, 2 / 4 / 16 / 64 = output dimensions multiplied. Runs AFTER tone/curves/HSL, BEFORE crop.</summary>
+  int AiUpscaleFactor = 1,
+  /// <summary>Optional model file-name override for the upscaler; null = default ("upscale.onnx"). Lets the user pick between Real-ESRGAN / SwinIR / etc.</summary>
+  string? AiUpscaleModel = null,
+  /// <summary>AI colorize blend 0..1; 0 = off (B&amp;W untouched), 1 = full colorised. Runs BEFORE creative look so LUTs operate on the colorised image.</summary>
+  double AiColorizeAmount = 0,
+  /// <summary>Optional model file-name override for the colorizer; null = default ("colorize-deoldify-artistic.onnx"). Pick between DeOldify Artistic / Stable / etc.</summary>
+  string? AiColorizeModel = null
 ) {
   public bool IsIdentity =>
     this.RotationDegrees == 0
@@ -279,6 +291,9 @@ public sealed record DevelopSettings(
     && Math.Abs(this.ColorEnhancement) < 1e-6
     && string.IsNullOrEmpty(this.LookName)
     && string.IsNullOrEmpty(this.WatermarkText)
+    && Math.Abs(this.AiDenoiseStrength) < 1e-6
+    && this.AiUpscaleFactor <= 1
+    && Math.Abs(this.AiColorizeAmount) < 1e-6
     && this.IsCurveIdentity
     && IsChannelCurveIdentity(this.RedCurvePoints)
     && IsChannelCurveIdentity(this.GreenCurvePoints)

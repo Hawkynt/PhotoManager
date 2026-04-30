@@ -62,21 +62,20 @@ public static class DevelopMetadataStore {
     double BlueGain = 0,
     CurveInterpolation ToneCurveInterpolation = CurveInterpolation.Linear,
     IReadOnlyList<CurvePoint>? ToneCurvePoints = null,
-    // Per-channel curves are also emitted to crs:ToneCurvePV2012Red/Green/Blue
-    // (lossy 16-step LUT) for 3rd-party tools, but the lossless point lists
-    // live here so PhotoManager round-trips users' control points exactly.
     IReadOnlyList<CurvePoint>? RedCurvePoints = null,
     IReadOnlyList<CurvePoint>? GreenCurvePoints = null,
     IReadOnlyList<CurvePoint>? BlueCurvePoints = null,
-    // Creative-look opacity has no Adobe analogue — Adobe stores LookName but
-    // not its opacity. 1.0 default = full strength, matching the slider default.
     double LookOpacity = 1.0,
-    // Watermark layer — text + opacity + position + font size. No Adobe
-    // analogue; lives entirely in pm:developSettings.
     string? WatermarkText = null,
     double WatermarkOpacity = 0.5,
     string WatermarkPosition = "BottomRight",
-    int WatermarkFontSize = 24
+    int WatermarkFontSize = 24,
+    double AiDenoiseStrength = 0,
+    string? AiDenoiseModel = null,
+    int AiUpscaleFactor = 1,
+    string? AiUpscaleModel = null,
+    double AiColorizeAmount = 0,
+    string? AiColorizeModel = null
   ) {
     public bool IsEmpty =>
       this.RotationDegrees == 0
@@ -89,7 +88,9 @@ public static class DevelopMetadataStore {
       && IsTrivialPoints(this.GreenCurvePoints)
       && IsTrivialPoints(this.BlueCurvePoints)
       && Math.Abs(this.LookOpacity - 1.0) < 1e-6
-      && string.IsNullOrEmpty(this.WatermarkText);
+      && string.IsNullOrEmpty(this.WatermarkText)
+      && Math.Abs(this.AiDenoiseStrength) < 1e-6
+      && this.AiUpscaleFactor <= 1;
 
     public static DevelopExtras From(DevelopSettings s) => new(
       s.RotationDegrees,
@@ -97,7 +98,9 @@ public static class DevelopMetadataStore {
       s.ToneCurveInterpolation, s.ToneCurvePoints,
       s.RedCurvePoints, s.GreenCurvePoints, s.BlueCurvePoints,
       s.LookOpacity,
-      s.WatermarkText, s.WatermarkOpacity, s.WatermarkPosition, s.WatermarkFontSize);
+      s.WatermarkText, s.WatermarkOpacity, s.WatermarkPosition, s.WatermarkFontSize,
+      s.AiDenoiseStrength, s.AiDenoiseModel, s.AiUpscaleFactor, s.AiUpscaleModel,
+      s.AiColorizeAmount, s.AiColorizeModel);
 
     private static bool IsTrivialPoints(IReadOnlyList<CurvePoint>? p)
       => p is null || p.Count < 2;
@@ -113,26 +116,16 @@ public static class DevelopMetadataStore {
   /// XMP, or null when no edits are recorded / the container isn't supported /
   /// the parsed settings are identity.
   /// </summary>
-  public static async Task<DevelopSettings?> LoadAsync(FileInfo file, CancellationToken cancellationToken = default) {
-    if (!SupportsContainer(file) || !file.Exists)
-      return null;
+  public static Task<DevelopSettings?> LoadAsync(FileInfo file, CancellationToken cancellationToken = default)
+    => LoadAsync(file, copyIndex: 0, cancellationToken);
 
-    byte[] bytes;
-    try {
-      bytes = await File.ReadAllBytesAsync(file.FullName, cancellationToken);
-    } catch {
-      return null;
-    }
-
-    var xmpBytes = JpegSegmentSurgery.TryReadXmpSegment(bytes);
-    if (xmpBytes == null)
-      return null;
-
-    XDocument doc;
-    try { doc = XDocument.Parse(Encoding.UTF8.GetString(xmpBytes)); }
-    catch { return null; }
-
-    var description = doc.Descendants(Rdf + "Description").FirstOrDefault();
+  /// <summary>
+  /// Copy-aware load. Copy 0 reads the embedded XMP packet inside
+  /// <paramref name="file"/>; copy N (&gt; 0) reads the <c>basename.copyN.xmp</c>
+  /// sidecar next to it.
+  /// </summary>
+  public static async Task<DevelopSettings?> LoadAsync(FileInfo file, int copyIndex, CancellationToken cancellationToken = default) {
+    var description = await LoadXmpDescriptionAsync(file, copyIndex, cancellationToken);
     if (description is null)
       return null;
 
@@ -145,17 +138,124 @@ public static class DevelopMetadataStore {
   }
 
   /// <summary>
+  /// Returns the prior-snapshot stack persisted alongside the develop
+  /// settings for the given copy. Newest first; empty when nothing has
+  /// been saved yet. Identity / unparseable entries are skipped.
+  /// </summary>
+  public static async Task<IReadOnlyList<DevelopSnapshot>> LoadHistoryAsync(FileInfo file, int copyIndex = 0, CancellationToken cancellationToken = default) {
+    var description = await LoadXmpDescriptionAsync(file, copyIndex, cancellationToken);
+    if (description is null)
+      return Array.Empty<DevelopSnapshot>();
+    return ReadHistory(description);
+  }
+
+  /// <summary>Lists copy sidecars next to <paramref name="file"/>; copy 0 is implicit (embedded).</summary>
+  public static IReadOnlyList<int> EnumerateVirtualCopies(FileInfo file)
+    => VirtualCopyDiscovery.EnumerateIndices(file);
+
+  /// <summary>
+  /// Replace the develop-history stack persisted with <paramref name="file"/>'s
+  /// current settings (does NOT touch the live <c>pm:developSettings</c> /
+  /// <c>crs:</c> values). Used by the EditHistoryWindow's Delete action.
+  /// </summary>
+  public static async Task<bool> RewriteHistoryAsync(
+      FileInfo file, int copyIndex, IReadOnlyList<DevelopSnapshot> history,
+      CancellationToken cancellationToken = default) {
+    ArgumentNullException.ThrowIfNull(history);
+    if (file is null || !file.Exists || copyIndex < 0)
+      return false;
+
+    if (copyIndex == 0) {
+      if (!SupportsContainer(file))
+        return false;
+      byte[] bytes;
+      try {
+        bytes = await File.ReadAllBytesAsync(file.FullName, cancellationToken);
+      } catch {
+        return false;
+      }
+      var existingXmp = JpegSegmentSurgery.TryReadXmpSegment(bytes);
+      XDocument doc;
+      if (existingXmp is null) {
+        doc = MakeEmptyXmp();
+      } else {
+        try { doc = XDocument.Parse(Encoding.UTF8.GetString(existingXmp)); }
+        catch { doc = MakeEmptyXmp(); }
+      }
+      var description = EnsureDescription(doc);
+      WriteHistory(description, history);
+      var newXmpBytes = SerializeUtf8(doc);
+      try {
+        var output = JpegSegmentSurgery.ReplaceXmpSegment(bytes, newXmpBytes);
+        await AtomicMetadataWrite.WriteAsync(file, output, cancellationToken);
+        return true;
+      } catch {
+        return false;
+      }
+    }
+
+    var sidecar = VirtualCopyDiscovery.SidecarFor(file, copyIndex);
+    XDocument sidecarDoc;
+    if (sidecar.Exists) {
+      try {
+        var text = await File.ReadAllTextAsync(sidecar.FullName, cancellationToken);
+        sidecarDoc = XDocument.Parse(text);
+      } catch {
+        sidecarDoc = MakeEmptyXmp();
+      }
+    } else {
+      sidecarDoc = MakeEmptyXmp();
+    }
+    var sidecarDescription = EnsureDescription(sidecarDoc);
+    WriteHistory(sidecarDescription, history);
+    try {
+      sidecar.Directory?.Create();
+      await File.WriteAllBytesAsync(sidecar.FullName, SerializeUtf8(sidecarDoc), cancellationToken);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /// <summary>
   /// Writes <paramref name="settings"/> into <paramref name="file"/>'s XMP.
   /// Existing XMP is preserved (only the develop-related elements are
   /// added/replaced/removed). Identity settings strip every develop element
-  /// so a reset leaves no stale state behind.
-  /// Returns false when the container isn't supported / the rewrite failed.
+  /// so a reset leaves no stale state behind. Returns false when the
+  /// container isn't supported / the rewrite failed.
   /// </summary>
-  public static async Task<bool> SaveAsync(FileInfo file, DevelopSettings settings, CancellationToken cancellationToken = default) {
+  public static Task<bool> SaveAsync(FileInfo file, DevelopSettings settings, CancellationToken cancellationToken = default)
+    => SaveAsync(file, settings, copyIndex: 0, snapshotLabel: null, cancellationToken);
+
+  /// <summary>
+  /// Copy + history aware save. Writes <paramref name="settings"/> into the
+  /// embedded XMP (when <paramref name="copyIndex"/> = 0) or the
+  /// <c>basename.copyN.xmp</c> sidecar (when N &gt; 0). When
+  /// <paramref name="snapshotLabel"/> is non-null, the prior settings (if
+  /// any) are pushed onto the develop-history stack with that label before
+  /// being overwritten — null means a silent autosave that leaves the stack
+  /// alone. Identity-only saves with no snapshot still strip stale state.
+  /// </summary>
+  public static async Task<bool> SaveAsync(
+      FileInfo file,
+      DevelopSettings settings,
+      int copyIndex,
+      string? snapshotLabel,
+      CancellationToken cancellationToken = default) {
     ArgumentNullException.ThrowIfNull(settings);
-    if (!SupportsContainer(file) || !file.Exists)
+    if (file is null || !file.Exists)
+      return false;
+    if (copyIndex == 0 && !SupportsContainer(file))
+      return false;
+    if (copyIndex < 0)
       return false;
 
+    if (copyIndex == 0)
+      return await SaveEmbeddedAsync(file, settings, snapshotLabel, cancellationToken);
+    return await SaveSidecarAsync(file, copyIndex, settings, snapshotLabel, cancellationToken);
+  }
+
+  private static async Task<bool> SaveEmbeddedAsync(FileInfo file, DevelopSettings settings, string? snapshotLabel, CancellationToken cancellationToken) {
     byte[] bytes;
     try {
       bytes = await File.ReadAllBytesAsync(file.FullName, cancellationToken);
@@ -164,7 +264,7 @@ public static class DevelopMetadataStore {
     }
 
     var existingXmp = JpegSegmentSurgery.TryReadXmpSegment(bytes);
-    if (existingXmp is null && settings.IsIdentity)
+    if (existingXmp is null && settings.IsIdentity && snapshotLabel is null)
       return true;
 
     XDocument doc;
@@ -175,15 +275,66 @@ public static class DevelopMetadataStore {
       doc = MakeEmptyXmp();
     }
 
-    var description = doc.Descendants(Rdf + "Description").FirstOrDefault();
-    if (description is null) {
-      description = new XElement(Rdf + "Description", new XAttribute(Rdf + "about", string.Empty));
-      var rdf = doc.Descendants(Rdf + "RDF").FirstOrDefault();
-      if (rdf is null) {
+    var description = EnsureDescription(doc);
+    UpdateDescriptionPayload(description, settings, snapshotLabel);
+
+    var newXmpBytes = SerializeUtf8(doc);
+    byte[] output;
+    try {
+      output = JpegSegmentSurgery.ReplaceXmpSegment(bytes, newXmpBytes);
+    } catch (InvalidDataException) {
+      return false;
+    } catch (InvalidOperationException) {
+      return false;
+    }
+
+    try {
+      await AtomicMetadataWrite.WriteAsync(file, output, cancellationToken);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  private static async Task<bool> SaveSidecarAsync(FileInfo file, int copyIndex, DevelopSettings settings, string? snapshotLabel, CancellationToken cancellationToken) {
+    var sidecar = VirtualCopyDiscovery.SidecarFor(file, copyIndex);
+    XDocument doc;
+    if (sidecar.Exists) {
+      try {
+        var text = await File.ReadAllTextAsync(sidecar.FullName, cancellationToken);
+        doc = XDocument.Parse(text);
+      } catch {
         doc = MakeEmptyXmp();
-        description = doc.Descendants(Rdf + "Description").First();
-      } else {
-        rdf.Add(description);
+      }
+    } else {
+      doc = MakeEmptyXmp();
+    }
+
+    var description = EnsureDescription(doc);
+    UpdateDescriptionPayload(description, settings, snapshotLabel);
+
+    try {
+      var bytes = SerializeUtf8(doc);
+      sidecar.Directory?.Create();
+      await File.WriteAllBytesAsync(sidecar.FullName, bytes, cancellationToken);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /// <summary>
+  /// Apply the develop payload (crs: tags + pm:developSettings + history) to
+  /// the given <c>rdf:Description</c>, pushing the previous settings onto
+  /// the snapshot stack when <paramref name="snapshotLabel"/> is non-null.
+  /// </summary>
+  private static void UpdateDescriptionPayload(XElement description, DevelopSettings settings, string? snapshotLabel) {
+    if (snapshotLabel is not null) {
+      var priorSettings = ReadEffectiveSettings(description);
+      if (priorSettings is not null) {
+        var existingHistory = ReadHistory(description);
+        var pushed = DevelopHistory.Push(existingHistory, priorSettings, snapshotLabel);
+        WriteHistory(description, pushed);
       }
     }
 
@@ -203,27 +354,79 @@ public static class DevelopMetadataStore {
       var extras = DevelopExtras.From(settings);
       if (!extras.IsEmpty) {
         EnsureNamespace(description, "pm", Pm);
-        var json = JsonSerializer.Serialize(extras, JsonOptions);
-        description.Add(new XElement(Pm + "developSettings", json));
+        description.Add(new XElement(Pm + "developSettings", JsonSerializer.Serialize(extras, JsonOptions)));
+      }
+    }
+  }
+
+  private static XElement EnsureDescription(XDocument doc) {
+    var description = doc.Descendants(Rdf + "Description").FirstOrDefault();
+    if (description is not null)
+      return description;
+    description = new XElement(Rdf + "Description", new XAttribute(Rdf + "about", string.Empty));
+    var rdf = doc.Descendants(Rdf + "RDF").FirstOrDefault();
+    if (rdf is null) {
+      // No RDF root at all — replace with a fresh skeleton.
+      doc.RemoveNodes();
+      var fresh = MakeEmptyXmp();
+      foreach (var node in fresh.Nodes())
+        doc.Add(node);
+      return doc.Descendants(Rdf + "Description").First();
+    }
+    rdf.Add(description);
+    return description;
+  }
+
+  /// <summary>
+  /// Re-derive the current effective <see cref="DevelopSettings"/> from the
+  /// XMP description (crs: + pm:developSettings + locals). Used to capture
+  /// the prior state before a snapshot-pushing save.
+  /// </summary>
+  private static DevelopSettings? ReadEffectiveSettings(XElement description) {
+    var fromCrs = ReadCrsElements(description);
+    var locals = ReadLocalAdjustments(description);
+    fromCrs = fromCrs with { LocalAdjustments = locals };
+    var extras = ReadExtras(description);
+    var combined = ApplyExtras(fromCrs, extras);
+    return combined.IsIdentity ? null : combined;
+  }
+
+  /// <summary>
+  /// Resolves the <c>rdf:Description</c> for the given file + copy. Copy 0
+  /// reads from the JPEG XMP packet; copy N (&gt; 0) reads the
+  /// <c>basename.copyN.xmp</c> sidecar. Returns null when nothing is found.
+  /// </summary>
+  private static async Task<XElement?> LoadXmpDescriptionAsync(FileInfo file, int copyIndex, CancellationToken cancellationToken) {
+    if (file is null || !file.Exists || copyIndex < 0)
+      return null;
+    string xmlText;
+    if (copyIndex == 0) {
+      if (!SupportsContainer(file))
+        return null;
+      byte[] bytes;
+      try {
+        bytes = await File.ReadAllBytesAsync(file.FullName, cancellationToken);
+      } catch {
+        return null;
+      }
+      var xmpBytes = JpegSegmentSurgery.TryReadXmpSegment(bytes);
+      if (xmpBytes is null)
+        return null;
+      xmlText = Encoding.UTF8.GetString(xmpBytes);
+    } else {
+      var sidecar = VirtualCopyDiscovery.SidecarFor(file, copyIndex);
+      if (!sidecar.Exists)
+        return null;
+      try {
+        xmlText = await File.ReadAllTextAsync(sidecar.FullName, cancellationToken);
+      } catch {
+        return null;
       }
     }
 
-    var newXmpBytes = SerializeUtf8(doc);
-    byte[] output;
-    try {
-      output = JpegSegmentSurgery.ReplaceXmpSegment(bytes, newXmpBytes);
-    } catch (InvalidDataException) {
-      return false;
-    } catch (InvalidOperationException) {
-      return false;
-    }
-
-    try {
-      await AtomicMetadataWrite.WriteAsync(file, output, cancellationToken);
-      return true;
-    } catch {
-      return false;
-    }
+    XDocument doc;
+    try { doc = XDocument.Parse(xmlText); } catch { return null; }
+    return doc.Descendants(Rdf + "Description").FirstOrDefault();
   }
 
   /// <summary>Outcome of a thumbnail-bake attempt.</summary>
@@ -379,7 +582,7 @@ public static class DevelopMetadataStore {
       "ColorEnhancement"
       // Note: crs:LookName is intentionally NOT in this list. It's preserved
       // as a foreign tag (so 3rd-party-tool values aren't clobbered) and
-      // only emitted by AddCrsElements when settings.LookName is non-null.
+      // only emitted below when settings.LookName is non-null.
     }
     .Concat(HslBandNames.Select(n => "HueAdjustment" + n))
     .Concat(HslBandNames.Select(n => "SaturationAdjustment" + n))
@@ -1135,8 +1338,54 @@ public static class DevelopMetadataStore {
       WatermarkText = string.IsNullOrEmpty(extras.WatermarkText) ? null : extras.WatermarkText,
       WatermarkOpacity = extras.WatermarkOpacity,
       WatermarkPosition = string.IsNullOrEmpty(extras.WatermarkPosition) ? "BottomRight" : extras.WatermarkPosition,
-      WatermarkFontSize = extras.WatermarkFontSize <= 0 ? 24 : extras.WatermarkFontSize
+      WatermarkFontSize = extras.WatermarkFontSize <= 0 ? 24 : extras.WatermarkFontSize,
+      AiDenoiseStrength = extras.AiDenoiseStrength,
+      AiDenoiseModel = extras.AiDenoiseModel,
+      AiUpscaleFactor = extras.AiUpscaleFactor < 1 ? 1 : extras.AiUpscaleFactor,
+      AiUpscaleModel = extras.AiUpscaleModel,
+      AiColorizeAmount = Math.Clamp(extras.AiColorizeAmount, 0, 1),
+      AiColorizeModel = extras.AiColorizeModel
     };
+
+  // ---------- pm:developHistory (snapshot stack) ----------
+
+  /// <summary>JSON shape for one history entry. We round-trip the entire
+  /// <see cref="DevelopSettings"/> rather than diffing — readers stay simple,
+  /// and the cap (20 entries) keeps the XMP packet bounded in size.</summary>
+  private sealed record HistoryEntryDto(string TimestampUtc, string? Label, DevelopSettings Settings);
+
+  private static IReadOnlyList<DevelopSnapshot> ReadHistory(XElement description) {
+    var element = description.Element(Pm + "developHistory");
+    var json = element?.Value;
+    if (string.IsNullOrWhiteSpace(json))
+      return Array.Empty<DevelopSnapshot>();
+    try {
+      var dto = JsonSerializer.Deserialize<List<HistoryEntryDto>>(json, JsonOptions);
+      if (dto is null)
+        return Array.Empty<DevelopSnapshot>();
+      var result = new List<DevelopSnapshot>(dto.Count);
+      foreach (var entry in dto) {
+        if (!DateTime.TryParse(entry.TimestampUtc, CultureInfo.InvariantCulture,
+              DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var ts))
+          continue;
+        result.Add(new DevelopSnapshot(ts, entry.Label, entry.Settings));
+      }
+      return result;
+    } catch {
+      return Array.Empty<DevelopSnapshot>();
+    }
+  }
+
+  private static void WriteHistory(XElement description, IReadOnlyList<DevelopSnapshot> history) {
+    description.Element(Pm + "developHistory")?.Remove();
+    if (history.Count == 0)
+      return;
+    EnsureNamespace(description, "pm", Pm);
+    var dto = history
+      .Select(s => new HistoryEntryDto(s.TimestampUtc.ToUniversalTime().ToString("o", CultureInfo.InvariantCulture), s.Label, s.Settings))
+      .ToList();
+    description.Add(new XElement(Pm + "developHistory", JsonSerializer.Serialize(dto, JsonOptions)));
+  }
 
   // ---------- helpers ----------
 

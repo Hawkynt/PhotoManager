@@ -18,15 +18,24 @@
                     ToolTip.Tip="Click to compare against baseline (Split view)" />
           </StackPanel>
           <Grid Grid.Row="1" x:Name="CompareRoot">
-            <Image x:Name="PreviewImage" Stretch="Uniform" StretchDirection="DownOnly" />
+            <!-- Stretch="Uniform" with no DownOnly limit + NearestNeighbor
+                 sampling so the preview always fills the available area
+                 keeping aspect ratio, and pixel differences (sharpening,
+                 noise, AI denoise) are visible 1:1 when zoomed. -->
+            <Image x:Name="PreviewImage" Stretch="Uniform"
+                   RenderOptions.BitmapInterpolationMode="None" />
             <Grid x:Name="SplitPanel" IsVisible="False" ColumnDefinitions="*,3,*">
-              <Image x:Name="BaselineImageSplit" Grid.Column="0" Stretch="Uniform" StretchDirection="DownOnly" />
+              <Image x:Name="BaselineImageSplit" Grid.Column="0" Stretch="Uniform"
+                     RenderOptions.BitmapInterpolationMode="None" />
               <GridSplitter Grid.Column="1" Background="#888" Width="3" ResizeDirection="Columns" />
-              <Image x:Name="PreviewImageSplit"  Grid.Column="2" Stretch="Uniform" StretchDirection="DownOnly" />
+              <Image x:Name="PreviewImageSplit"  Grid.Column="2" Stretch="Uniform"
+                     RenderOptions.BitmapInterpolationMode="None" />
             </Grid>
             <Grid x:Name="SliderPanel" IsVisible="False">
-              <Image x:Name="BaselineImageSlider" Stretch="Uniform" StretchDirection="DownOnly" />
-              <Image x:Name="PreviewImageSlider"  Stretch="Uniform" StretchDirection="DownOnly" />
+              <Image x:Name="BaselineImageSlider" Stretch="Uniform"
+                     RenderOptions.BitmapInterpolationMode="None" />
+              <Image x:Name="PreviewImageSlider"  Stretch="Uniform"
+                     RenderOptions.BitmapInterpolationMode="None" />
               <Slider x:Name="CompareSlider" Minimum="0" Maximum="1" Value="0.5"
                       VerticalAlignment="Stretch" HorizontalAlignment="Stretch"
                       Background="Transparent"
@@ -34,6 +43,25 @@
             </Grid>
             <controls:MaskOverlayCanvas x:Name="MaskOverlay" IsVisible="False" IsHitTestVisible="False" />
             <controls:CropOverlayCanvas x:Name="CropOverlay" IsVisible="False" IsHitTestVisible="False" />
+            <!-- AI render in flight: dim the preview, show a spinner +
+                 status. Cancelled and re-shown on every settings change. -->
+            <Border x:Name="AiProgressOverlay" IsVisible="False" IsHitTestVisible="False"
+                    Background="#80000000" CornerRadius="0">
+              <Border Background="#CC1B1B1B" BorderBrush="#666" BorderThickness="1" CornerRadius="6"
+                      Padding="14,10" HorizontalAlignment="Center" VerticalAlignment="Center">
+                <StackPanel Orientation="Horizontal" Spacing="10">
+                  <TextBlock Text="🤖" FontSize="18" VerticalAlignment="Center" />
+                  <StackPanel Spacing="2" VerticalAlignment="Center">
+                    <TextBlock x:Name="AiProgressText" Foreground="White"
+                               Text="Computing AI preview…" FontWeight="SemiBold" />
+                    <TextBlock Foreground="#CCC" FontSize="11"
+                               Text="Cancels automatically when you change a setting." />
+                  </StackPanel>
+                  <ProgressBar IsIndeterminate="True" Width="120" Height="6"
+                               VerticalAlignment="Center" Margin="6,0,0,0" />
+                </StackPanel>
+              </Border>
+            </Border>
           </Grid>
         </Grid>
       </Border>
@@ -89,6 +117,8 @@
                     ToolTip.Tip="Detect the dominant edge angle (Sobel-gradient histogram, ±15°) and rotate so horizontals are level. Great for tilted scans of pages or receipts." />
             <Button Content="✂️ Auto-crop"  Click="OnAutoCropClick"
                     ToolTip.Tip="Find the bounding box of non-blank content and crop to it. Strips whitespace from scans / photographed paper." />
+            <Button Content="🎯 Auto-crop suggestions" Click="OnAutoCropSuggestionsClick"
+                    ToolTip.Tip="Saliency-driven crop options at common aspect ratios — pick one to apply." />
             <Button Content="🏛️ Upright"    Click="OnUprightAutoClick"
                     ToolTip.Tip="Combined deskew + perspective hint. Today this matches Auto-level; full keystone auto-detect is a follow-up." />
           </StackPanel>
@@ -677,6 +707,73 @@
 
           <Border Height="1" Background="#DDD" />
 
+          <!-- AI enhancement: ONNX-backed denoise + upscale stages. The
+               sliders prompt for a model download when one isn't on disk
+               yet — no silent no-op. -->
+          <Border BorderBrush="{DynamicResource PanelBorderBrush}" BorderThickness="1" CornerRadius="4" Padding="8">
+            <StackPanel Spacing="6">
+              <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Grid.Column="0" Text="AI enhancement" FontWeight="SemiBold" Opacity="0.85"
+                           VerticalAlignment="Center" />
+                <Button Grid.Column="1" Content="📥 Download models…" Padding="6,2" FontSize="11"
+                        Click="OnDetectAiModelsClick"
+                        ToolTip.Tip="Open the model download dialog so you can grab denoise / upscale ONNX files." />
+              </Grid>
+              <Grid ColumnDefinitions="120,*,40">
+                <TextBlock Grid.Column="0" Text="🤖 AI denoise"
+                           ToolTip.Tip="Tile-based ONNX denoise / restoration. 0 = source pixels, 1 = full restored. Pick the model below — different ones suit different jobs (general, despeckling, motion deblur, low-light)." />
+                <Slider Grid.Column="1" x:Name="AiDenoiseSlider" Minimum="0" Maximum="1" Value="0"
+                        TickFrequency="0.05" SmallChange="0.05" LargeChange="0.1"
+                        ValueChanged="OnAiDenoiseChanged" />
+                <TextBlock Grid.Column="2" x:Name="AiDenoiseValue" Opacity="0.7" TextAlignment="Right" Text="0.0" />
+              </Grid>
+              <Grid ColumnDefinitions="120,*">
+                <TextBlock Grid.Column="0" Text="  Model"
+                           ToolTip.Tip="Which restoration ONNX to use. Each option maps to a separate file under the app's models folder." />
+                <ComboBox Grid.Column="1" x:Name="AiDenoiseModelCombo"
+                          SelectionChanged="OnAiDenoiseModelChanged" />
+              </Grid>
+              <Grid ColumnDefinitions="120,*,40">
+                <TextBlock Grid.Column="0" Text="🔍 AI upscale"
+                           ToolTip.Tip="ONNX upscaler. 1× = off, 2× / 4× / 16× / 64× — output resolution multipliers; 16× and 64× chain 4× passes. Per-model picker below." />
+                <ComboBox Grid.Column="1" x:Name="AiUpscaleCombo" SelectedIndex="0"
+                          SelectionChanged="OnAiUpscaleChanged">
+                  <ComboBoxItem Content="1× (off)" />
+                  <ComboBoxItem Content="2×" />
+                  <ComboBoxItem Content="4×" />
+                  <ComboBoxItem Content="16× (4× × 2)" />
+                  <ComboBoxItem Content="64× (4× × 3)" />
+                </ComboBox>
+                <TextBlock Grid.Column="2" x:Name="AiUpscaleValue" Opacity="0.7" TextAlignment="Right" Text="1×" />
+              </Grid>
+              <Grid ColumnDefinitions="120,*">
+                <TextBlock Grid.Column="0" Text="  Model"
+                           ToolTip.Tip="Which ONNX upscaler to use. Each option maps to a separate model file under the app's models folder. Picking a model that isn't installed prompts the download dialog." />
+                <ComboBox Grid.Column="1" x:Name="AiUpscaleModelCombo"
+                          SelectionChanged="OnAiUpscaleModelChanged" />
+              </Grid>
+              <TextBlock x:Name="AiUpscaleHint" FontSize="10" Opacity="0.6" TextWrapping="Wrap"
+                         Text="Upscale factors that would push the output past 32 768 px on either side are disabled. 16× / 64× chain 4× passes; expect minute-scale renders on big sources." />
+              <Border Height="1" Background="{DynamicResource PanelBorderBrush}" Margin="0,4" />
+              <Grid ColumnDefinitions="120,*,40">
+                <TextBlock Grid.Column="0" Text="🎨 AI colorize"
+                           ToolTip.Tip="Restores colour to B&amp;W / desaturated photos via DeOldify. 0 = source pixels, 1 = full colourisation. The model sees a 256-px copy and blends its colour cast onto the source's full-resolution luminance so detail is preserved." />
+                <Slider Grid.Column="1" x:Name="AiColorizeSlider" Minimum="0" Maximum="1" Value="0"
+                        TickFrequency="0.05" SmallChange="0.05" LargeChange="0.1"
+                        ValueChanged="OnAiColorizeChanged" />
+                <TextBlock Grid.Column="2" x:Name="AiColorizeValue" Opacity="0.7" TextAlignment="Right" Text="0.0" />
+              </Grid>
+              <Grid ColumnDefinitions="120,*">
+                <TextBlock Grid.Column="0" Text="  Model"
+                           ToolTip.Tip="DeOldify Artistic = bolder colours / more variety; Stable = subdued, safer for portraits. Both downloads are multi-file (graph + 244–833 MB external weights)." />
+                <ComboBox Grid.Column="1" x:Name="AiColorizeModelCombo"
+                          SelectionChanged="OnAiColorizeModelChanged" />
+              </Grid>
+            </StackPanel>
+          </Border>
+
+          <Border Height="1" Background="#DDD" />
+
           <!-- Lens corrections: manual distortion + per-channel CA + defringe.
                These run BEFORE the develop sliders so colour adjustments
                operate on a geometrically-corrected image. -->
@@ -1076,7 +1173,7 @@
       </ScrollViewer>
     </Grid>
 
-    <Grid Grid.Row="1" ColumnDefinitions="*,Auto,Auto,Auto" Margin="0,12,0,0">
+    <Grid Grid.Row="1" ColumnDefinitions="*,Auto,Auto,Auto,Auto,Auto" Margin="0,12,0,0">
       <TextBlock Grid.Column="0" x:Name="StatusText" VerticalAlignment="Center" Opacity="0.75" />
       <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center"
                   ToolTip.Tip="Embedded thumbnail long-edge size and JPEG quality. The other edge is computed from the preview's aspect ratio. If the request exceeds the 64 KB EXIF segment cap, PhotoManager auto-shrinks to the highest-PSNR fit.">
@@ -1087,8 +1184,12 @@
         <Button Content="🖼 Bake thumbnail" Click="OnBakeThumbnailClick" Margin="6,0,0,0"
                 ToolTip.Tip="Replace the JPEG's embedded EXIF thumbnail with the current developed preview at the long-edge size and quality set on the left. Pixel data of the main image is not changed." />
       </StackPanel>
-      <Button Grid.Column="2" Content="💾 Save as..." Click="OnSaveAsClick" FontWeight="Bold" Margin="6,0,0,0" />
-      <Button Grid.Column="3" Content="🚪 Close" Click="OnCloseClick" IsCancel="True" Margin="6,0,0,0" />
+      <Button Grid.Column="2" Content="🕒 Edit history" Click="OnEditHistoryClick" Margin="6,0,0,0"
+              ToolTip.Tip="Browse the snapshot stack for this file and roll back to a previous state. Each Save As… pushes the prior settings onto the stack (cap 20)." />
+      <Button Grid.Column="3" Content="📋 Create virtual copy" Click="OnCreateVirtualCopyClick" Margin="6,0,0,0"
+              ToolTip.Tip="Save the current sliders as a new alternate version (basename.copyN.xmp) without duplicating pixels. The window then targets the copy." />
+      <Button Grid.Column="4" Content="💾 Save as..." Click="OnSaveAsClick" FontWeight="Bold" Margin="6,0,0,0" />
+      <Button Grid.Column="5" Content="🚪 Close" Click="OnCloseClick" IsCancel="True" Margin="6,0,0,0" />
     </Grid>
   </Grid>
 </Window>

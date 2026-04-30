@@ -88,9 +88,9 @@
     </Grid>
 
     <StackPanel Grid.Row="9" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right" Margin="0,8,0,0">
-      <Button Content="Extract" x:Name="ExtractButton" FontWeight="Bold" Click="OnExtractClick" />
-      <Button Content="Cancel" x:Name="CancelButton" Click="OnCancelClick" IsVisible="False" />
-      <Button Content="Open output folder" x:Name="OpenFolderButton" Click="OnOpenOutputClick" IsEnabled="False" />
+      <Button Content="🎬 Extract" x:Name="ExtractButton" FontWeight="Bold" Click="OnExtractClick" />
+      <Button Content="❌ Cancel" x:Name="CancelButton" Click="OnCancelClick" IsVisible="False" />
+      <Button Content="📂 Open output folder" x:Name="OpenFolderButton" Click="OnOpenOutputClick" IsEnabled="False" />
       <Button Content="🖼 Send to Panorama stitch" x:Name="SendPanoramaButton" Click="OnSendToPanoramaClick" IsEnabled="False" />
       <Button Content="🌐 Send to 360° spherical stitch" x:Name="SendSphericalButton" Click="OnSendToSphericalClick" IsEnabled="False" />
       <Button Content="Close" Click="OnCloseClick" IsCancel="True" />

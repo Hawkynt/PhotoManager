@@ -25,6 +25,14 @@ PhotoManager helps photographers and photo enthusiasts:
 ## Features
 
 ### What's new (April 2026)
+- 🤖 **AI denoise + AI upscale** in the develop pipeline — NAFNet-SIDD ONNX denoiser (slider 0…1) and Real-ESRGAN-x4 upscaler (1×/2×/4×). Tile-based, lazy-downloaded via the same model registry as MODNet/YOLO; degrades to a no-op when the model isn't installed.
+- 🏷️ **Auto-keyword tagging** via SigLIP — `Tools → Auto-keyword scan…` runs CLIP-style image+text embeddings against a 700+-word vocabulary and writes the top-K hits as flat `dc:subject` keywords. Library-scan flow with progress + per-file preview.
+- 🎯 **Auto-crop suggestions** — saliency-driven crop candidates at common aspect ratios (1:1, 4:5, 3:2, 16:9, 2:3, 5:7), ranked by Sobel-edge density. Pop the flyout from the develop window's auto-tools row, click a thumbnail to apply.
+- 🕒 **Edit history / version stack** — every Save As… pushes the prior `pm:developSettings` onto a `pm:developHistory[]` list (cap 20). The 🕒 Edit history button browses snapshots and rolls back any one.
+- 📋 **Virtual copies** — sibling `IMG.copyN.xmp` sidecars hold alternate develop variants without duplicating pixels. Each copy surfaces as its own grid row; right-click → Promote copy to original. Open in Develop targets the copy.
+- 📅 **Timeline scrubber** — horizontal histogram of photos-per-day (auto-bucketed Day/Week/Month) above the grid; click a bar to filter to that bucket. Toggle the strip with 📅 in the search row.
+- 📌 **Quick collection** (Lightroom-style) — B-key on a grid row toggles in/out of a per-session bucket. 📌 Quick toggle filters to the bucket; Tools → Quick collection submenu offers Clear / Select-in-grid / Open-in-Develop-apply-to-selection. ★-badge column on the grid.
+- ✨ **Memories** — `Tools → ✨ Memories…` surfaces "on this day" / "on this trip" photos relative to the selected anchor: same-month/day across years, plus same-bookmark-area within ±N km.
 - 🧠 **Smart Patch Selection** in panorama stitchers — per-frame Laplacian-variance sharpness mask with adaptive median threshold; blurry / obstructed regions are excluded so they don't bleed into the panorama. Drives all three stitcher backends (mask-zeroed BGR for OpenCV, weight-scaled feathering for tripod). Toggle via checkbox; ~1s per frame extra.
 - 🎬 **Video → frames extractor (ffmpeg)** — drop a video sweep into PhotoManager and ffmpeg splits it into JPEG frames at user-pickable FPS / quality / time-window. Frames pipe straight into the panorama stitcher with one click. Friendly install banner (`winget`/`brew`/`apt`) when ffmpeg isn't on PATH.
 - 🌐 **Spherical (360°) stitcher** — third mode in the panorama stitcher: feed N overlapping frames, get a 2:1 equirectangular canvas straight into the 360° viewer (no save round-trip). OpenCvSharp4-backed.
@@ -64,6 +72,10 @@ PhotoManager helps photographers and photo enthusiasts:
 - ✅ Video → frames extractor (ffmpeg subprocess; cancellable; pipes into the panorama stitcher)
 - ✅ 360° equirectangular spherical-photo viewer with drag-pan + scroll-zoom
 - ✅ Lightroom-lite develop pipeline (~all non-AI Adobe parameters), non-destructive via XMP `pm:developSettings` round-trip
+- ✅ Edit history snapshot stack (`pm:developHistory[]`, cap 20) + virtual copies (`IMG.copyN.xmp` sibling sidecars) — multiple develop variants per source file with one-click promote-to-original
+- ✅ AI denoise (NAFNet-SIDD ONNX) + AI upscale (Real-ESRGAN-x4 ONNX) develop-pipeline stages, lazy-downloaded via model registry
+- ✅ Auto-keyword tagging via SigLIP (CLIP-style image+text embeddings against a 700+-word vocabulary, library-scan flow)
+- ✅ Saliency-driven auto-crop suggestions at common aspect ratios (Sobel-edge density)
 - ✅ 3D LUT (.cube / .3dl) creative-look picker with opacity blend and `crs:LookName` round-trip
 - ✅ Watermark layer (text + opacity + position + font-size) rendered at output time only
 - ✅ Develop preset auto-applied to newly-imported files (via Settings)
@@ -77,6 +89,9 @@ PhotoManager helps photographers and photo enthusiasts:
 - ✅ Library search (in-memory index, no DB), saved searches, smart-album rule builder (composable clauses)
 - ✅ Hierarchical keyword tree flattens to flat `dc:subject` on write
 - ✅ Calendar view (photos by capture date in a month grid) and burst-stacks detector
+- ✅ Timeline scrubber strip (auto-bucketed Day/Week/Month histogram of photos-per-day, click-to-filter)
+- ✅ Quick collection (per-session bucket; B-hotkey toggle, ★ badge, filter mode, batch-edit just the bucket)
+- ✅ Memories window (on-this-day / on-this-trip discovery relative to the selected anchor)
 - ✅ Side-by-side compare (After / Split / Slider) inside the develop window
 - ✅ Picasa-style picks/rejects (`xmp:Pick`/`xmp:Reject`) with P/X/U hotkeys; quality-flag scan tags blurry / over- / under-exposed photos
 - ✅ Perceptual-hash duplicate detection
@@ -89,7 +104,7 @@ PhotoManager helps photographers and photo enthusiasts:
 - ✅ Multiple date source detection (EXIF SubIFD, IFD0, GPS, filename, file system) with reliability scoring
 - ✅ Folder structure organisation (`yyyy/yyyyMMdd/HHmmss`); duplicate handling with sequential numbering
 - ✅ Command-line interface for automation (preview/dry-run, recursive)
-- ✅ MVC pattern (UI), atomic metadata writes (preserved mtime), comprehensive unit + integration tests (766 passing)
+- ✅ MVC pattern (UI), atomic metadata writes (preserved mtime), comprehensive unit + integration tests (826 passing)
 
 ### Planned Features
 - [ ] AI sky mask using a dedicated ONNX model (heuristic version is shipped)

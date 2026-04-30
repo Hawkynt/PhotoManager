@@ -1,0 +1,20 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="60"
+             x:Class="PhotoManager.UI.Controls.TimelineScrubber">
+  <Border BorderBrush="#DDD" BorderThickness="1" CornerRadius="3" Background="#FAFAFA">
+    <Grid RowDefinitions="*,Auto">
+      <Canvas Grid.Row="0" x:Name="BarsCanvas" Background="Transparent" Height="44" />
+      <Grid Grid.Row="1" ColumnDefinitions="*,*,*">
+        <TextBlock Grid.Column="0" x:Name="StartLabel" Margin="6,0,0,2"
+                   FontSize="10" Opacity="0.6" HorizontalAlignment="Left" />
+        <TextBlock Grid.Column="1" x:Name="GranularityLabel" FontSize="10" Opacity="0.6"
+                   HorizontalAlignment="Center" />
+        <TextBlock Grid.Column="2" x:Name="EndLabel" Margin="0,0,6,2"
+                   FontSize="10" Opacity="0.6" HorizontalAlignment="Right" />
+      </Grid>
+    </Grid>
+  </Border>
+</UserControl>

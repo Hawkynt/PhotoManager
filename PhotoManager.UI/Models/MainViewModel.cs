@@ -212,6 +212,28 @@ public class MainViewModel : INotifyPropertyChanged {
 
   public bool HasCurrentOperation => this._currentOperation is not null;
 
+  private readonly QuickCollection _quickCollection = new();
+  private bool _quickCollectionFilterActive;
+  private bool _timelineCollapsed = true;
+
+  /// Per-session bucket of files the user is curating (Lightroom-style quick collection).
+  public QuickCollection QuickCollection => this._quickCollection;
+
+  public bool QuickCollectionFilterActive {
+    get => this._quickCollectionFilterActive;
+    set => this.SetProperty(this.OnPropertyChanged, ref this._quickCollectionFilterActive, value);
+  }
+
+  public bool TimelineCollapsed {
+    get => this._timelineCollapsed;
+    set {
+      this.SetProperty(this.OnPropertyChanged, ref this._timelineCollapsed, value);
+      this.OnPropertyChanged(nameof(this.TimelineExpanded));
+    }
+  }
+
+  public bool TimelineExpanded => !this._timelineCollapsed;
+
   public event PropertyChangedEventHandler? PropertyChanged;
 
   protected virtual void OnPropertyChanged([CallerMemberName] string? propertyName = null) => this.PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));

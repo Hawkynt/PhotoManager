@@ -60,6 +60,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <EmbeddedResource Include="Ml\AutoKeywordVocabulary.txt" />
+  </ItemGroup>
+
+  <ItemGroup>
     <None Include="README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
 

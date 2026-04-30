@@ -1,0 +1,65 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:models="using:PhotoManager.UI.Models"
+        mc:Ignorable="d" d:DesignWidth="900" d:DesignHeight="640"
+        x:Class="PhotoManager.UI.Views.AutoKeywordScanWindow"
+        Width="900" Height="640"
+        MinWidth="720" MinHeight="480"
+        WindowStartupLocation="CenterOwner"
+        Title="Auto-keyword scan (CLIP)">
+  <Grid RowDefinitions="Auto,Auto,Auto,Auto,*,Auto" Margin="12">
+    <StackPanel Grid.Row="0" Spacing="4" Margin="0,0,0,8">
+      <TextBlock Text="Auto-keyword tagging" FontSize="16" FontWeight="SemiBold" />
+      <TextBlock Opacity="0.75" TextWrapping="Wrap"
+                 Text="Walks every image in the chosen folder, embeds it with a CLIP/SigLIP vision model, and matches the embedding against the configured vocabulary. The top-K results above the similarity threshold are written to dc:subject (existing keywords are preserved)." />
+    </StackPanel>
+
+    <Grid Grid.Row="1" ColumnDefinitions="Auto,*,Auto,Auto" Margin="0,0,0,6">
+      <TextBlock Grid.Column="0" Text="Folder:" VerticalAlignment="Center" Margin="0,0,6,0" />
+      <TextBox Grid.Column="1" x:Name="FolderBox" Watermark="Path to a photo folder" />
+      <Button Grid.Column="2" Content="📂 Browse…" Margin="6,0,0,0" Click="OnBrowseFolderClick" />
+      <CheckBox Grid.Column="3" x:Name="RecursiveBox" Content="Recursive" IsChecked="True" Margin="12,0,0,0" VerticalAlignment="Center" />
+    </Grid>
+
+    <Grid Grid.Row="2" ColumnDefinitions="Auto,Auto,Auto,Auto,Auto,*" Margin="0,0,0,6">
+      <TextBlock Grid.Column="0" Text="Top-K:" VerticalAlignment="Center" Margin="0,0,4,0" />
+      <NumericUpDown Grid.Column="1" x:Name="TopKBox" Value="5" Minimum="1" Maximum="15" Increment="1" Width="100" />
+      <TextBlock Grid.Column="2" Text="  Min similarity:" VerticalAlignment="Center" Margin="12,0,4,0" />
+      <Slider Grid.Column="3" x:Name="MinSimSlider" Width="200" Minimum="0.15" Maximum="0.50" Value="0.22"
+              ValueChanged="OnMinSimChanged" />
+      <TextBlock Grid.Column="4" x:Name="MinSimLabel" Text="0.22" VerticalAlignment="Center" Margin="6,0,0,0" Width="40" />
+    </Grid>
+
+    <Border Grid.Row="3" BorderBrush="{DynamicResource PanelBorderBrush}" BorderThickness="1" CornerRadius="4" Padding="8" Margin="0,0,0,6">
+      <Grid ColumnDefinitions="Auto,*,Auto,Auto">
+        <TextBlock Grid.Column="0" Text="Vocabulary:" VerticalAlignment="Center" Margin="0,0,8,0" FontWeight="SemiBold" />
+        <TextBlock Grid.Column="1" x:Name="VocabSummary" VerticalAlignment="Center" Opacity="0.75" />
+        <Button Grid.Column="2" Content="📂 Reload from file…" Margin="6,0,0,0" Click="OnReloadVocabClick" />
+        <Button Grid.Column="3" Content="↩️ Restore default" Margin="6,0,0,0" Click="OnRestoreDefaultVocabClick" />
+      </Grid>
+    </Border>
+
+    <Border Grid.Row="4" BorderBrush="{DynamicResource PanelBorderBrush}" BorderThickness="1" CornerRadius="4">
+      <DataGrid x:Name="ResultsGrid"
+                AutoGenerateColumns="False"
+                CanUserResizeColumns="True"
+                GridLinesVisibility="Horizontal"
+                IsReadOnly="True">
+        <DataGrid.Columns>
+          <DataGridTextColumn Header="File" Binding="{Binding FileName, DataType=models:AutoKeywordRow}" Width="*" />
+          <DataGridTextColumn Header="Top keywords (score)" Binding="{Binding Keywords, DataType=models:AutoKeywordRow}" Width="2*" />
+          <DataGridTextColumn Header="Status" Binding="{Binding Status, DataType=models:AutoKeywordRow}" Width="100" />
+        </DataGrid.Columns>
+      </DataGrid>
+    </Border>
+
+    <Grid Grid.Row="5" ColumnDefinitions="*,Auto,Auto,Auto" Margin="0,8,0,0">
+      <TextBlock Grid.Column="0" x:Name="StatusText" VerticalAlignment="Center" Opacity="0.75" />
+      <Button Grid.Column="1" Content="🔍 Scan" Margin="6,0,0,0" FontWeight="Bold" Click="OnScanClick" />
+      <Button Grid.Column="2" Content="🏷️ Apply tags" Margin="6,0,0,0" Click="OnApplyTagsClick" />
+      <Button Grid.Column="3" Content="🚪 Close" Margin="6,0,0,0" Click="OnCloseClick" IsCancel="True" />
+    </Grid>
+  </Grid>
+</Window>

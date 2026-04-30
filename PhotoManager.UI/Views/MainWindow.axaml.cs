@@ -11,6 +11,7 @@ using Avalonia.LogicalTree;
 using Avalonia.VisualTree;
 using PhotoManager.Core;
 using PhotoManager.Core.Detection;
+using PhotoManager.Core.Develop;
 using PhotoManager.Core.Enums;
 using PhotoManager.Core.Faces;
 using PhotoManager.Core.Geocoding;
@@ -142,7 +143,48 @@ public partial class MainWindow : Window {
     }
 
     this.Opened += this.OnWindowOpened;
+
+    if (this.FindControl<PhotoManager.UI.Controls.TimelineScrubber>("TimelineStrip") is { } strip)
+      strip.BucketClicked += this.OnTimelineBucketClicked;
+
+    // B hotkey toggles the focused-row file in / out of the quick collection.
+    this.KeyDown += this.OnMainKeyDown;
   }
+
+  private void OnTimelineBucketClicked(object? sender, PhotoManager.Core.Library.TimelineBar bar) {
+    var (from, to) = PhotoManager.UI.Controls.TimelineScrubber.BucketRange(bar);
+    this._timelineDayFilter = (from, to);
+    this.ApplySearchFilter();
+    this._controller.ViewModel.StatusMessage =
+      $"Timeline filter: {from:yyyy-MM-dd} ({bar.Count} photo{(bar.Count == 1 ? "" : "s")} in this {bar.Granularity.ToString().ToLowerInvariant()}).";
+  }
+
+  private void OnMainKeyDown(object? sender, KeyEventArgs e) {
+    if (e.Key != Key.B || e.KeyModifiers != KeyModifiers.None)
+      return;
+    // Don't steal B from text fields — a typing user expects letters to
+    // land in the input rather than toggling the quick collection.
+    if (this.FocusManager?.GetFocusedElement() is TextBox or NumericUpDown or DatePicker or TimePicker or AutoCompleteBox)
+      return;
+    if (this.FindControl<DataGrid>("FilesGrid") is not { } grid
+        || grid.SelectedItem is not FileItemModel { FileInfo: { Exists: true } file } item)
+      return;
+
+    var added = this._controller.ViewModel.QuickCollection.Toggle(file);
+    item.IsInQuickCollection = added;
+    this._controller.ViewModel.StatusMessage = added
+      ? $"Added {file.Name} to quick collection ({this._controller.ViewModel.QuickCollection.Count} total)."
+      : $"Removed {file.Name} from quick collection ({this._controller.ViewModel.QuickCollection.Count} remaining).";
+    if (this._controller.ViewModel.QuickCollectionFilterActive)
+      this.ApplySearchFilter();
+    e.Handled = true;
+  }
+
+  /// <summary>
+  /// Active timeline-bucket filter. Set by clicking a bar in the timeline
+  /// scrubber; cleared by clearing the search filter or toggling off.
+  /// </summary>
+  private (DateTime From, DateTime To)? _timelineDayFilter;
 
   private void InitializeEditorOptions() {
     // Rating + label are now chip rows (one click sets the value); no
@@ -543,10 +585,37 @@ public partial class MainWindow : Window {
 
       if (grid != null)
         grid.ItemsSource = items;
+
+      this.RefreshTimelineStrip();
+
+      // Capture-date populates lazily after the controller's metadata pass,
+      // so re-render the strip a few times as data lands.
+      _ = this.ScheduleTimelineRefreshesAsync();
     } finally {
       this._controller.ViewModel.CurrentOperation = null;
       cts.Dispose();
     }
+  }
+
+  private async Task ScheduleTimelineRefreshesAsync() {
+    foreach (var delayMs in new[] { 300, 1000, 3000, 8000 }) {
+      await Task.Delay(delayMs);
+      await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(this.RefreshTimelineStrip);
+    }
+  }
+
+  private void RefreshTimelineStrip() {
+    if (this.FindControl<PhotoManager.UI.Controls.TimelineScrubber>("TimelineStrip") is not { } strip)
+      return;
+    if (this._currentFileItems is null) {
+      strip.SetPhotos(Array.Empty<(DateTime, FileInfo)>());
+      return;
+    }
+    var photos = this._currentFileItems
+      .Where(i => i.FileInfo is { Exists: true } && i.CapturedDate.HasValue)
+      .Select(i => (i.CapturedDate!.Value, i.FileInfo!))
+      .ToList();
+    strip.SetPhotos(photos);
   }
 
   private async void OnBrowseModeChanged(object? sender, RoutedEventArgs e) {
@@ -590,6 +659,7 @@ public partial class MainWindow : Window {
   private void OnClearSearchClick(object? sender, RoutedEventArgs e) {
     if (this.FindControl<TextBox>("SearchBox") is { } box)
       box.Text = string.Empty;
+    this._timelineDayFilter = null;
     this.ApplySearchFilter();
   }
 
@@ -871,6 +941,9 @@ public partial class MainWindow : Window {
 
     var minStars = this.GetActiveMinStars();
     var requiredLabel = this.GetActiveLabel();
+    var quickOnly = this._controller.ViewModel.QuickCollectionFilterActive;
+    var quickCollection = this._controller.ViewModel.QuickCollection;
+    var dayFilter = this._timelineDayFilter;
 
     // Always assign a fresh collection — DataGrid no-ops when ItemsSource
     // is re-set to the same reference, which made post-edit Rating /
@@ -883,7 +956,10 @@ public partial class MainWindow : Window {
         && (minStars is null || (item.Rating ?? 0) >= minStars.Value)
         && (requiredLabel is null
             || string.Equals(item.ColorLabel, requiredLabel, StringComparison.OrdinalIgnoreCase))
-        && PickRejectFilter.Matches(item, pickMode))
+        && PickRejectFilter.Matches(item, pickMode)
+        && (!quickOnly || (item.FileInfo is { } fi && quickCollection.Contains(fi)))
+        && (dayFilter is null
+            || (item.CapturedDate is { } cd && cd >= dayFilter.Value.From && cd < dayFilter.Value.To)))
     );
     grid.ItemsSource = filtered;
   }
@@ -1318,6 +1394,21 @@ public partial class MainWindow : Window {
     await window.ShowDialog(this);
   }
 
+  /// <summary>
+  /// Open the restoration window on the currently-selected file. The
+  /// window detects faces asynchronously and runs the restoration
+  /// pipeline (GFPGAN + denoise + colorize + upscale) live as the user
+  /// twiddles sliders or picks presets.
+  /// </summary>
+  private async void OnOpenRestoreClick(object? sender, RoutedEventArgs e) {
+    if (this._currentFile is not { Exists: true } file) {
+      this._controller.ViewModel.StatusMessage = "Select a photo first.";
+      return;
+    }
+    var window = new RestoreWindow(file);
+    await window.ShowDialog(this);
+  }
+
   private async void OnOpenHdrMergeClick(object? sender, RoutedEventArgs e) {
     var seed = this.FindControl<DataGrid>("FilesGrid")?.SelectedItems
       .OfType<FileItemModel>()
@@ -1364,6 +1455,110 @@ public partial class MainWindow : Window {
     => await new PanoramaViewerWindow(this.PickContextFile()).ShowDialog(this);
 
   private void OnExitClick(object? sender, RoutedEventArgs e) => this.Close();
+
+  // ---------- F3 auto-keyword scan ----------
+
+  private async void OnOpenAutoKeywordScanClick(object? sender, RoutedEventArgs e) {
+    var seedFolder = this.SeedFolderFromTree();
+    var window = seedFolder == null ? new AutoKeywordScanWindow() : new AutoKeywordScanWindow(seedFolder);
+    await window.ShowDialog(this);
+  }
+
+  // ---------- F5+I1+I3+G4 UX/discovery ----------
+
+  private async void OnOpenMemoriesClick(object? sender, RoutedEventArgs e) {
+    var photos = this._currentFileItems?
+      .Where(i => i.FileInfo is { Exists: true } && i.CachedMetadata != null)
+      .Select(i => (i.FileInfo!, i.CachedMetadata!))
+      .ToList() ?? new List<(FileInfo, FullMetadata)>();
+    (FileInfo File, FullMetadata Metadata)? anchor = this._currentFile != null && this._currentMetadata != null
+      ? (this._currentFile, this._currentMetadata)
+      : null;
+    var window = new MemoriesWindow(photos, anchor);
+    await window.ShowDialog(this);
+  }
+
+  private void OnQuickCollectionClearClick(object? sender, RoutedEventArgs e) {
+    this._controller.ViewModel.QuickCollection.Clear();
+    if (this._currentFileItems is { } items)
+      foreach (var item in items)
+        item.IsInQuickCollection = false;
+    this._controller.ViewModel.StatusMessage = "Quick collection cleared.";
+  }
+
+  private void OnQuickCollectionSelectInGridClick(object? sender, RoutedEventArgs e) {
+    if (this.FindControl<DataGrid>("FilesGrid") is not { } grid)
+      return;
+    var quick = this._controller.ViewModel.QuickCollection;
+    grid.SelectedItems.Clear();
+    if (this._currentFileItems is { } items)
+      foreach (var i in items)
+        if (i.FileInfo is { } fi && quick.Contains(fi))
+          grid.SelectedItems.Add(i);
+  }
+
+  private async void OnQuickCollectionDevelopClick(object? sender, RoutedEventArgs e) {
+    this.OnQuickCollectionSelectInGridClick(sender, e);
+    var quick = this._controller.ViewModel.QuickCollection.Items;
+    if (quick.Count == 0) {
+      this._controller.ViewModel.StatusMessage = "Quick collection is empty.";
+      return;
+    }
+    var first = quick[0];
+    var window = new EditImageWindow(first, quick.ToList());
+    await window.ShowDialog(this);
+  }
+
+  private void OnQuickCollectionToggleClick(object? sender, RoutedEventArgs e) {
+    if (sender is not ToggleButton tb)
+      return;
+    this._controller.ViewModel.QuickCollectionFilterActive = tb.IsChecked == true;
+    this.ApplySearchFilter();
+  }
+
+  private void OnTimelineStripToggleClick(object? sender, RoutedEventArgs e) {
+    if (sender is not ToggleButton tb)
+      return;
+    this._controller.ViewModel.TimelineCollapsed = tb.IsChecked != true;
+    if (!this._controller.ViewModel.TimelineCollapsed)
+      this.RefreshTimelineStrip();
+  }
+
+  // ---------- G1+G2 virtual-copy promote ----------
+
+  private async void OnPromoteCopyClick(object? sender, RoutedEventArgs e) {
+    var target = this.PickContextFile();
+    var item = this.PickContextFileItem();
+    if (target is null || item is null || !item.IsVirtualCopy) {
+      this._controller.ViewModel.StatusMessage = "Right-click a virtual copy first.";
+      return;
+    }
+    try {
+      var copySettings = await DevelopMetadataStore.LoadAsync(target, item.CopyIndex);
+      if (copySettings is null) {
+        this._controller.ViewModel.StatusMessage = "Couldn't load the copy's settings.";
+        return;
+      }
+      await DevelopMetadataStore.SaveAsync(target, copySettings, copyIndex: 0, snapshotLabel: $"Promoted from copy {item.CopyIndex}");
+      var sidecar = VirtualCopyDiscovery.SidecarFor(target, item.CopyIndex);
+      if (sidecar.Exists) sidecar.Delete();
+      await this.RescanIfPossibleAsync();
+      this._controller.ViewModel.StatusMessage = $"Promoted copy {item.CopyIndex} to original.";
+    } catch (Exception ex) {
+      this._controller.ViewModel.StatusMessage = $"Promote failed: {ex.Message}";
+    }
+  }
+
+  private FileItemModel? PickContextFileItem() {
+    if (this.FindControl<DataGrid>("FilesGrid") is not { } grid)
+      return null;
+    if (grid.SelectedItem is FileItemModel direct)
+      return direct;
+    foreach (var s in grid.SelectedItems)
+      if (s is FileItemModel item)
+        return item;
+    return null;
+  }
 
   private async void OnOpenSettingsClick(object? sender, RoutedEventArgs e) {
     var window = new SettingsWindow(this._controller);

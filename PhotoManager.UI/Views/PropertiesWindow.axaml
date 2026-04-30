@@ -136,7 +136,7 @@
             <TextBlock Grid.Column="0" Text="Date created:" VerticalAlignment="Center" />
             <DatePicker Grid.Column="1" x:Name="DateCreatedPicker" Margin="0,0,8,0" />
             <TimePicker Grid.Column="2" x:Name="TimeCreatedPicker" ClockIdentifier="24HourClock" />
-            <Button Grid.Column="3" Content="Clear" Click="OnClearDateClick" Margin="8,0,0,0" />
+            <Button Grid.Column="3" Content="✕ Clear" Click="OnClearDateClick" Margin="8,0,0,0" />
           </Grid>
 
           <Separator Margin="0,8" />
@@ -233,7 +233,7 @@
           </Grid>
 
           <StackPanel Orientation="Horizontal" Spacing="8">
-            <Button Content="Resolve address from GPS" Click="OnResolveAddressClick"
+            <Button Content="🌍 Resolve address from GPS" Click="OnResolveAddressClick"
                     ToolTip.Tip="Look up city/state/country from current lat/lon via OpenStreetMap" />
           </StackPanel>
 
@@ -313,7 +313,7 @@
             <TextBlock Text="Triangulate from the photo" FontWeight="SemiBold" />
             <TextBlock Opacity="0.7" TextWrapping="Wrap"
                        Text="Open a window where you click two landmarks in the photo, pin each on a map, and we compute heading + target. Also supports 3-landmark full resection when camera GPS is unknown." />
-            <Button Content="Triangulate from photo..." Click="OnTriangulateFromPhotoClick" HorizontalAlignment="Left" />
+            <Button Content="📐 Triangulate from photo…" Click="OnTriangulateFromPhotoClick" HorizontalAlignment="Left" />
           </StackPanel>
         </StackPanel>
       </TabItem>
@@ -468,9 +468,9 @@
 
     <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="6" Margin="0,8,0,0">
       <TextBlock x:Name="StatusText" VerticalAlignment="Center" Opacity="0.75" Margin="0,0,12,0" />
-      <Button Content="Revert" Click="OnRevertClick" />
-      <Button Content="Cancel" Click="OnCancelClick" IsCancel="True" />
-      <Button Content="Save" Click="OnSaveClick" IsDefault="True" FontWeight="Bold" />
+      <Button Content="↩️ Revert" Click="OnRevertClick" />
+      <Button Content="❌ Cancel" Click="OnCancelClick" IsCancel="True" />
+      <Button Content="💾 Save" Click="OnSaveClick" IsDefault="True" FontWeight="Bold" />
     </StackPanel>
   </Grid>
 </Window>

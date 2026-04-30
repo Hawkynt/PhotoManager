@@ -62,6 +62,27 @@ public class FileItemModel : INotifyPropertyChanged {
   /// <summary>Composite glyph for the pick/reject column. Empty when neither flag is set.</summary>
   public string PickRejectGlyph => this._isPick ? "✅" : this._isReject ? "❌" : string.Empty;
 
+  /// Capture date pulled from metadata; feeds the timeline scrubber.
+  public DateTime? CapturedDate { get; set; }
+
+  /// Cached metadata snapshot from the post-scan pass; feeds Memories' "on this trip" lookup.
+  public PhotoManager.Core.Metadata.FullMetadata? CachedMetadata { get; set; }
+
+  private bool _isInQuickCollection;
+  /// True when this row is in the Quick Collection bucket.
+  public bool IsInQuickCollection {
+    get => this._isInQuickCollection;
+    set {
+      this.SetProperty(ref this._isInQuickCollection, value);
+      this.PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(this.QuickCollectionBadge)));
+    }
+  }
+  public string QuickCollectionBadge => this._isInQuickCollection ? "★" : string.Empty;
+
+  /// 0 for the source file's main XMP; >0 for a sibling IMG.copyN.xmp virtual copy.
+  public int CopyIndex { get; set; }
+  public bool IsVirtualCopy => this.CopyIndex > 0;
+
   public event PropertyChangedEventHandler? PropertyChanged;
 
   private void SetProperty<T>(ref T field, T value, [CallerMemberName] string? propertyName = null) {

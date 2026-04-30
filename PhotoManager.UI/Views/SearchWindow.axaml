@@ -65,7 +65,7 @@
 
     <Grid Grid.Row="4" ColumnDefinitions="*,Auto" Margin="0,8,0,0">
       <TextBlock Grid.Column="0" x:Name="StatusText" VerticalAlignment="Center" Opacity="0.75" />
-      <Button Grid.Column="1" Content="Close" Click="OnCloseClick" IsCancel="True" />
+      <Button Grid.Column="1" Content="🚪 Close" Click="OnCloseClick" IsCancel="True" />
     </Grid>
   </Grid>
 </Window>

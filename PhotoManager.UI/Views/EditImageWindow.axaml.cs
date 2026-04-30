@@ -10,6 +10,7 @@ using PhotoManager.Core.Models;
 using PhotoManager.Core.Segmentation;
 using PhotoManager.UI.Controls;
 using PhotoManager.UI.Models;
+using PhotoManager.UI.Services;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
@@ -45,6 +46,11 @@ public partial class EditImageWindow : Window {
   private bool _suppressTemplateSelect;
   private bool _suppressSliderEvents;
   private string? _activeEyedropper;
+  /// <summary>0 = original (embedded XMP), N &gt; 0 = the basename.copyN.xmp sidecar this window edits.</summary>
+  private int _copyIndex;
+  /// <summary>Full-resolution source dimensions (before preview downscale). Used to gate AI-upscale factors against the 32K cap.</summary>
+  private int _sourceFullWidth;
+  private int _sourceFullHeight;
 
   /// <summary>List of slider name → DevelopSettings field accessor pairs so
   /// we can iterate them once for read/write/reset/dirty-track instead of
@@ -117,6 +123,8 @@ public partial class EditImageWindow : Window {
     ("RedGainSlider",    "RedGainValue",     s => s.RedGain,            (s, v) => s with { RedGain   = v },          "+0;-0;0"),
     ("GreenGainSlider",  "GreenGainValue",   s => s.GreenGain,          (s, v) => s with { GreenGain = v },          "+0;-0;0"),
     ("BlueGainSlider",   "BlueGainValue",    s => s.BlueGain,           (s, v) => s with { BlueGain  = v },          "+0;-0;0"),
+    ("AiDenoiseSlider",  "AiDenoiseValue",   s => s.AiDenoiseStrength,  (s, v) => s with { AiDenoiseStrength = v },  "0.00"),
+    ("AiColorizeSlider", "AiColorizeValue",  s => s.AiColorizeAmount,   (s, v) => s with { AiColorizeAmount = v },   "0.00"),
   };
 
   /// <summary>
@@ -142,15 +150,18 @@ public partial class EditImageWindow : Window {
   /// <summary>Index of the active sub-mask within the active local adjustment, or -1 = primary.</summary>
   private int _activeSubMaskIndex = -1;
 
-  public EditImageWindow() : this(null, Array.Empty<FileInfo>(), null) { }
+  public EditImageWindow() : this(null, Array.Empty<FileInfo>(), null, copyIndex: 0) { }
 
   public EditImageWindow(FileInfo sourceFile)
-    : this(sourceFile, Array.Empty<FileInfo>(), null) { }
+    : this(sourceFile, Array.Empty<FileInfo>(), null, copyIndex: 0) { }
 
   public EditImageWindow(FileInfo? sourceFile, IReadOnlyList<FileInfo> selectionForApplyAll)
-    : this(sourceFile, selectionForApplyAll, null) { }
+    : this(sourceFile, selectionForApplyAll, null, copyIndex: 0) { }
 
-  public EditImageWindow(FileInfo? sourceFile, IReadOnlyList<FileInfo> selectionForApplyAll, Action<OperationProgress?>? setHostOperation) {
+  public EditImageWindow(FileInfo? sourceFile, IReadOnlyList<FileInfo> selectionForApplyAll, Action<OperationProgress?>? setHostOperation)
+    : this(sourceFile, selectionForApplyAll, setHostOperation, copyIndex: 0) { }
+
+  public EditImageWindow(FileInfo? sourceFile, IReadOnlyList<FileInfo> selectionForApplyAll, Action<OperationProgress?>? setHostOperation, int copyIndex) {
     // Suppress the slider/combobox-change cascade while the visual tree is
     // built. Avalonia raises SelectionChanged for ComboBox SelectedIndex set
     // in XAML, and ValueChanged for sliders whose value defaults are loaded —
@@ -165,7 +176,12 @@ public partial class EditImageWindow : Window {
     this._sourceFile = sourceFile;
     this._selectionForApplyAll = selectionForApplyAll ?? Array.Empty<FileInfo>();
     this._setHostOperation = setHostOperation;
+    this._copyIndex = Math.Max(0, copyIndex);
+    this.UpdateCopyTitle();
 
+    this.PopulateUpscaleModelCombo();
+    this.PopulateDenoiseModelCombo();
+    this.PopulateColorizeModelCombo();
     this.RefreshTemplateList();
 
     // Hook eyedropper sampling on the preview image.
@@ -251,6 +267,314 @@ public partial class EditImageWindow : Window {
     if (this.FindControl<ToneCurveEditor>("CurveEditor") is { } curve)
       curve.SetInterpolation(mode);
     this.UpdatePreview();
+  }
+
+  // ---------- AI enhancement (denoise + upscale) ----------
+
+  /// <summary>
+  /// Fires whenever the AI denoise slider moves. The first time the slider
+  /// goes above 0 we check the NAFNet ONNX is on disk; if not, we prompt
+  /// the user immediately (per UI conventions) and reset the slider so they
+  /// don't think the feature silently no-ops.
+  /// </summary>
+  private async void OnAiDenoiseChanged(object? sender, RangeBaseValueChangedEventArgs e) {
+    if (this._suppressSliderEvents)
+      return;
+    if (sender is not Slider slider)
+      return;
+
+    // Resolve which denoise model is active so the prompt targets the right
+    // file — the picker below the slider lets the user swap between NAFNet,
+    // SCUNet, etc.
+    var modelIdx = this.FindControl<ComboBox>("AiDenoiseModelCombo") is { } modelCombo
+      ? Math.Max(0, modelCombo.SelectedIndex)
+      : 0;
+    if (modelIdx >= ModelRegistry.Denoisers.Count)
+      modelIdx = 0;
+    var model = ModelRegistry.Denoisers[modelIdx];
+
+    if (slider.Value > 0 && !model.IsInstalled()) {
+      this._suppressSliderEvents = true;
+      try { slider.Value = 0; }
+      finally { this._suppressSliderEvents = false; }
+      var ok = await ModelPrompt.EnsureInstalledAsync(this, model, $"AI denoise ({model.DisplayName})");
+      if (!ok)
+        return;
+    }
+    this.SchedulePreviewUpdate();
+  }
+
+  /// <summary>Seed the denoise model picker once, in <see cref="ModelRegistry.Denoisers"/> order.</summary>
+  private void PopulateDenoiseModelCombo() {
+    if (this.FindControl<ComboBox>("AiDenoiseModelCombo") is not { } combo)
+      return;
+    this._suppressSliderEvents = true;
+    try {
+      combo.Items.Clear();
+      foreach (var model in ModelRegistry.Denoisers)
+        combo.Items.Add(new ComboBoxItem { Content = model.DisplayName, Tag = model.FileName });
+      combo.SelectedIndex = 0;
+    } finally {
+      this._suppressSliderEvents = false;
+    }
+  }
+
+  /// <summary>Maps model filename → combo index for the denoise picker.</summary>
+  private static int DenoiseModelToComboIndex(string? fileName) {
+    var pick = string.IsNullOrWhiteSpace(fileName) ? ModelRegistry.Denoisers[0].FileName : fileName;
+    for (var i = 0; i < ModelRegistry.Denoisers.Count; i++)
+      if (string.Equals(ModelRegistry.Denoisers[i].FileName, pick, StringComparison.OrdinalIgnoreCase))
+        return i;
+    return 0;
+  }
+
+  /// <summary>
+  /// Picking a different denoise model: write the model's filename onto
+  /// <see cref="DevelopSettings.AiDenoiseModel"/>, prompt for download if
+  /// the file is missing while the slider is non-zero, and re-render so
+  /// the user sees the new model's character.
+  /// </summary>
+  private async void OnAiDenoiseModelChanged(object? sender, SelectionChangedEventArgs e) {
+    if (this._suppressSliderEvents)
+      return;
+    if (sender is not ComboBox combo)
+      return;
+    var idx = combo.SelectedIndex;
+    if (idx < 0 || idx >= ModelRegistry.Denoisers.Count)
+      return;
+    var model = ModelRegistry.Denoisers[idx];
+
+    var newName = idx == 0 ? null : model.FileName;
+    this._settings = this._settings with { AiDenoiseModel = newName };
+
+    if (this._settings.AiDenoiseStrength > 1e-6 && !model.IsInstalled())
+      await ModelPrompt.EnsureInstalledAsync(this, model, $"AI denoise ({model.DisplayName})");
+
+    this.SchedulePreviewUpdate();
+  }
+
+  // ---------- AI colorize ----------
+
+  /// <summary>
+  /// Fires whenever the AI colorize slider moves. Mirrors the denoise
+  /// pattern: model-presence prompt the first time the slider goes above 0.
+  /// </summary>
+  private async void OnAiColorizeChanged(object? sender, RangeBaseValueChangedEventArgs e) {
+    if (this._suppressSliderEvents)
+      return;
+    if (sender is not Slider slider)
+      return;
+
+    var modelIdx = this.FindControl<ComboBox>("AiColorizeModelCombo") is { } modelCombo
+      ? Math.Max(0, modelCombo.SelectedIndex)
+      : 0;
+    if (modelIdx >= ModelRegistry.Colorizers.Count)
+      modelIdx = 0;
+    var model = ModelRegistry.Colorizers[modelIdx];
+
+    if (slider.Value > 0 && !model.IsInstalled()) {
+      this._suppressSliderEvents = true;
+      try { slider.Value = 0; }
+      finally { this._suppressSliderEvents = false; }
+      var ok = await ModelPrompt.EnsureInstalledAsync(this, model, $"AI colorize ({model.DisplayName})");
+      if (!ok)
+        return;
+    }
+    this.SchedulePreviewUpdate();
+  }
+
+  private void PopulateColorizeModelCombo() {
+    if (this.FindControl<ComboBox>("AiColorizeModelCombo") is not { } combo)
+      return;
+    this._suppressSliderEvents = true;
+    try {
+      combo.Items.Clear();
+      foreach (var model in ModelRegistry.Colorizers)
+        combo.Items.Add(new ComboBoxItem { Content = model.DisplayName, Tag = model.FileName });
+      combo.SelectedIndex = 0;
+    } finally {
+      this._suppressSliderEvents = false;
+    }
+  }
+
+  private static int ColorizeModelToComboIndex(string? fileName) {
+    var pick = string.IsNullOrWhiteSpace(fileName) ? ModelRegistry.Colorizers[0].FileName : fileName;
+    for (var i = 0; i < ModelRegistry.Colorizers.Count; i++)
+      if (string.Equals(ModelRegistry.Colorizers[i].FileName, pick, StringComparison.OrdinalIgnoreCase))
+        return i;
+    return 0;
+  }
+
+  private async void OnAiColorizeModelChanged(object? sender, SelectionChangedEventArgs e) {
+    if (this._suppressSliderEvents)
+      return;
+    if (sender is not ComboBox combo)
+      return;
+    var idx = combo.SelectedIndex;
+    if (idx < 0 || idx >= ModelRegistry.Colorizers.Count)
+      return;
+    var model = ModelRegistry.Colorizers[idx];
+
+    var newName = idx == 0 ? null : model.FileName;
+    this._settings = this._settings with { AiColorizeModel = newName };
+
+    if (this._settings.AiColorizeAmount > 1e-6 && !model.IsInstalled())
+      await ModelPrompt.EnsureInstalledAsync(this, model, $"AI colorize ({model.DisplayName})");
+
+    this.SchedulePreviewUpdate();
+  }
+
+  /// <summary>Combo-index → upscale factor. Inverse of <see cref="UpscaleFactorToComboIndex"/>.</summary>
+  private static int ComboIndexToUpscaleFactor(int index) => index switch {
+    1 => 2,
+    2 => 4,
+    3 => 16,
+    4 => 64,
+    _ => 1
+  };
+
+  private static int UpscaleFactorToComboIndex(int factor) => factor switch {
+    >= 64 => 4,
+    >= 16 => 3,
+    >= 4 => 2,
+    2 => 1,
+    _ => 0
+  };
+
+  /// <summary>Seed the model picker once, in <see cref="ModelRegistry.Upscalers"/> order.</summary>
+  private void PopulateUpscaleModelCombo() {
+    if (this.FindControl<ComboBox>("AiUpscaleModelCombo") is not { } combo)
+      return;
+    this._suppressSliderEvents = true;
+    try {
+      combo.Items.Clear();
+      foreach (var model in ModelRegistry.Upscalers)
+        combo.Items.Add(new ComboBoxItem { Content = model.DisplayName, Tag = model.FileName });
+      combo.SelectedIndex = 0;
+    } finally {
+      this._suppressSliderEvents = false;
+    }
+  }
+
+  /// <summary>Maps model filename ("upscale.onnx", "upscale-128.onnx", ...) → combo index.</summary>
+  private static int UpscaleModelToComboIndex(string? fileName) {
+    var pick = string.IsNullOrWhiteSpace(fileName) ? ModelRegistry.Upscalers[0].FileName : fileName;
+    for (var i = 0; i < ModelRegistry.Upscalers.Count; i++)
+      if (string.Equals(ModelRegistry.Upscalers[i].FileName, pick, StringComparison.OrdinalIgnoreCase))
+        return i;
+    return 0;
+  }
+
+  /// <summary>
+  /// Picking a different upscale model: write the model's filename onto
+  /// <see cref="DevelopSettings.AiUpscaleModel"/>, prompt for download if
+  /// the file is missing, and re-render the preview so the user sees the
+  /// new model's character.
+  /// </summary>
+  private async void OnAiUpscaleModelChanged(object? sender, SelectionChangedEventArgs e) {
+    if (this._suppressSliderEvents)
+      return;
+    if (sender is not ComboBox combo)
+      return;
+    var idx = combo.SelectedIndex;
+    if (idx < 0 || idx >= ModelRegistry.Upscalers.Count)
+      return;
+    var model = ModelRegistry.Upscalers[idx];
+
+    // Write null when the user picks the default — keeps XMP packets small
+    // and matches how prior versions of PhotoManager wrote them.
+    var newName = idx == 0 ? null : model.FileName;
+    this._settings = this._settings with { AiUpscaleModel = newName };
+
+    // If the user picked a missing model AND the upscale stage is currently
+    // active (factor > 1), prompt them to download it now — otherwise the
+    // pipeline would silently fall through to no-op on Save As.
+    if (this._settings.AiUpscaleFactor > 1 && !model.IsInstalled())
+      await ModelPrompt.EnsureInstalledAsync(this, model, $"AI upscale ({model.DisplayName})");
+
+    this.SchedulePreviewUpdate();
+  }
+
+  private async void OnAiUpscaleChanged(object? sender, SelectionChangedEventArgs e) {
+    if (this._suppressSliderEvents)
+      return;
+    if (sender is not ComboBox combo)
+      return;
+    var factor = ComboIndexToUpscaleFactor(combo.SelectedIndex);
+
+    // Resolve which upscale model is active — picker default is index 0 if
+    // unset / unrecognised. The presence prompt below targets that model.
+    var modelIdx = this.FindControl<ComboBox>("AiUpscaleModelCombo") is { } modelCombo
+      ? Math.Max(0, modelCombo.SelectedIndex)
+      : 0;
+    if (modelIdx >= ModelRegistry.Upscalers.Count)
+      modelIdx = 0;
+    var model = ModelRegistry.Upscalers[modelIdx];
+
+    if (factor > 1 && !model.IsInstalled()) {
+      var requestedIndex = combo.SelectedIndex;
+      this._suppressSliderEvents = true;
+      try { combo.SelectedIndex = 0; }
+      finally { this._suppressSliderEvents = false; }
+      if (this.FindControl<TextBlock>("AiUpscaleValue") is { } resetLabel)
+        resetLabel.Text = "1×";
+      this._settings = this._settings with { AiUpscaleFactor = 1 };
+      var ok = await ModelPrompt.EnsureInstalledAsync(this, model, $"AI upscale ({model.DisplayName})");
+      if (!ok)
+        return;
+      // Re-apply the requested factor now that the model is in place.
+      this._suppressSliderEvents = true;
+      try { combo.SelectedIndex = requestedIndex; }
+      finally { this._suppressSliderEvents = false; }
+    }
+
+    this._settings = this._settings with { AiUpscaleFactor = factor };
+    if (this.FindControl<TextBlock>("AiUpscaleValue") is { } label)
+      label.Text = factor.ToString(CultureInfo.InvariantCulture) + "×";
+    this.SchedulePreviewUpdate();
+  }
+
+  /// <summary>
+  /// Disable combo entries whose target dimensions would exceed Avalonia /
+  /// most encoder caps (32 768 px on either side) on the FULL-RESOLUTION
+  /// source — that's what Save As will feed to the upscaler. Called every
+  /// time a new source loads so the gating reflects the current image's
+  /// pixels.
+  /// </summary>
+  private void RefreshUpscaleComboAvailability() {
+    if (this.FindControl<ComboBox>("AiUpscaleCombo") is not { } combo)
+      return;
+    var w = this._sourceFullWidth;
+    var h = this._sourceFullHeight;
+    if (w <= 0 || h <= 0)
+      return;
+    // ComboBoxItems are declared inline in XAML, so they appear directly
+    // in Items. ContainerFromIndex isn't reliable while the dropdown is
+    // closed (containers may be virtualised), but Items is always populated.
+    for (var i = 0; i < combo.Items.Count; i++) {
+      if (combo.Items[i] is not ComboBoxItem item)
+        continue;
+      var factor = ComboIndexToUpscaleFactor(i);
+      var fits = (long)w * factor <= OnnxUpscaler.MaxOutputDimension
+              && (long)h * factor <= OnnxUpscaler.MaxOutputDimension;
+      item.IsEnabled = fits;
+    }
+    // If the currently-selected factor no longer fits, snap back to 1×.
+    var currentFits = (long)w * this._settings.AiUpscaleFactor <= OnnxUpscaler.MaxOutputDimension
+                   && (long)h * this._settings.AiUpscaleFactor <= OnnxUpscaler.MaxOutputDimension;
+    if (!currentFits) {
+      this._suppressSliderEvents = true;
+      try { combo.SelectedIndex = 0; }
+      finally { this._suppressSliderEvents = false; }
+      if (this.FindControl<TextBlock>("AiUpscaleValue") is { } label)
+        label.Text = "1×";
+      this._settings = this._settings with { AiUpscaleFactor = 1 };
+    }
+  }
+
+  private async void OnDetectAiModelsClick(object? sender, RoutedEventArgs e) {
+    var window = new ModelDownloadWindow();
+    await window.ShowDialog(this);
   }
 
   // ---------- HSL color mixer ----------
@@ -1057,6 +1381,125 @@ public partial class EditImageWindow : Window {
     this.SetStatus($"Auto-crop: bounded to ({next.CropLeft:0.00},{next.CropTop:0.00}) → ({next.CropRight:0.00},{next.CropBottom:0.00}).");
   }
 
+  /// <summary>
+  /// Pop a small flyout showing one preview tile per default aspect ratio,
+  /// scored by Sobel-edge density. Clicking a tile applies its crop to the
+  /// develop settings without touching any other slider.
+  /// </summary>
+  private async void OnAutoCropSuggestionsClick(object? sender, RoutedEventArgs e) {
+    if (this._developedPreview is not { } src) {
+      this.SetStatus("No preview to analyse yet.");
+      return;
+    }
+    if (sender is not Button anchor)
+      return;
+
+    this.SetStatus("Computing crop suggestions…");
+    IReadOnlyList<CropSuggestion> suggestions;
+    try {
+      // The suggester is CPU-bound but cheap on the downscaled preview;
+      // jumping to a worker thread keeps the UI responsive on big images.
+      suggestions = await Task.Run(() => AutoCropSuggester.Suggest(src, AutoCropSuggester.DefaultAspectRatios));
+    } catch (Exception ex) {
+      this.SetStatus($"Auto-crop suggestions failed: {ex.Message}");
+      return;
+    }
+
+    if (suggestions.Count == 0) {
+      this.SetStatus("Auto-crop suggestions: image too small to analyse.");
+      return;
+    }
+
+    var popup = new Avalonia.Controls.Primitives.Popup {
+      PlacementTarget = anchor,
+      Placement = PlacementMode.Bottom,
+      IsLightDismissEnabled = true
+    };
+
+    var panel = new WrapPanel { Orientation = Avalonia.Layout.Orientation.Horizontal, Margin = new Avalonia.Thickness(6) };
+    foreach (var s in suggestions)
+      panel.Children.Add(this.BuildSuggestionTile(src, s, popup));
+
+    popup.Child = new Border {
+      Background = Avalonia.Media.Brushes.White,
+      BorderBrush = Avalonia.Media.Brushes.Gray,
+      BorderThickness = new Avalonia.Thickness(1),
+      CornerRadius = new Avalonia.CornerRadius(4),
+      Padding = new Avalonia.Thickness(6),
+      Child = panel
+    };
+    ((ISetLogicalParent)popup).SetParent(this);
+    popup.IsOpen = true;
+    this.SetStatus($"Auto-crop suggestions: {suggestions.Count} aspect ratio(s) ranked by edge density. Click a tile to apply.");
+  }
+
+  private Control BuildSuggestionTile(Image<Rgba32> src, CropSuggestion s, Avalonia.Controls.Primitives.Popup popup) {
+    var thumb = new Avalonia.Controls.Image {
+      Stretch = Avalonia.Media.Stretch.Uniform,
+      Width = 140,
+      Height = 100
+    };
+
+    // Render the suggested crop into a thumbnail bitmap so the user sees
+    // exactly what they'd get on apply.
+    try {
+      using var clone = src.Clone();
+      var x = (int)Math.Round(s.Left * clone.Width);
+      var y = (int)Math.Round(s.Top * clone.Height);
+      var w = Math.Max(1, (int)Math.Round((s.Right - s.Left) * clone.Width));
+      var h = Math.Max(1, (int)Math.Round((s.Bottom - s.Top) * clone.Height));
+      clone.Mutate(c => c.Crop(new SixLabors.ImageSharp.Rectangle(x, y, w, h))
+                          .Resize(140, 100, SixLabors.ImageSharp.Processing.KnownResamplers.Bicubic));
+      using var ms = new MemoryStream();
+      clone.SaveAsJpeg(ms);
+      ms.Position = 0;
+      thumb.Source = new Bitmap(ms);
+    } catch {
+      // Tile shows blank if cropping fails — non-fatal.
+    }
+
+    var tile = new Border {
+      BorderBrush = Avalonia.Media.Brushes.LightGray,
+      BorderThickness = new Avalonia.Thickness(1),
+      CornerRadius = new Avalonia.CornerRadius(3),
+      Margin = new Avalonia.Thickness(4),
+      Padding = new Avalonia.Thickness(4),
+      Child = new StackPanel {
+        Spacing = 2,
+        Children = {
+          thumb,
+          new TextBlock {
+            Text = FormatAspectLabel(s.AspectRatio),
+            FontWeight = Avalonia.Media.FontWeight.SemiBold,
+            FontSize = 11,
+            HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center
+          }
+        }
+      },
+      Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand)
+    };
+    tile.PointerPressed += (_, _) => {
+      this._settings = this._settings with {
+        CropLeft = s.Left, CropTop = s.Top, CropRight = s.Right, CropBottom = s.Bottom
+      };
+      this.ApplySettingsToUi(this._settings);
+      this.UpdatePreview();
+      this.SetStatus($"Auto-crop applied: {FormatAspectLabel(s.AspectRatio)} ({s.Left:0.00},{s.Top:0.00})→({s.Right:0.00},{s.Bottom:0.00}).");
+      popup.IsOpen = false;
+    };
+    return tile;
+  }
+
+  private static string FormatAspectLabel(double aspect) => aspect switch {
+    var a when Math.Abs(a - 1.0)   < 0.01 => "1:1",
+    var a when Math.Abs(a - 0.8)   < 0.01 => "4:5",
+    var a when Math.Abs(a - 1.5)   < 0.01 => "3:2",
+    var a when Math.Abs(a - 1.778) < 0.01 => "16:9",
+    var a when Math.Abs(a - 0.667) < 0.01 => "2:3",
+    var a when Math.Abs(a - 1.5 / (5.0 / 7.0)) < 0.01 => "5:7",
+    _ => $"{aspect:0.00}:1"
+  };
+
   private void OnUprightAutoClick(object? sender, RoutedEventArgs e) {
     if (this._developedPreview is not { } src)
       return;
@@ -1088,6 +1531,10 @@ public partial class EditImageWindow : Window {
       // (FileFormat.CameraRaw + FileFormat.Dng) and falls through to
       // ImageSharp for JPEG / PNG / TIFF / etc.
       var image = await RawImageLoader.LoadAsync(file);
+      // Track full-resolution dimensions so the upscale combo can gate
+      // factors against the file the Save As pass will actually see.
+      this._sourceFullWidth = image.Width;
+      this._sourceFullHeight = image.Height;
       var longest = Math.Max(image.Width, image.Height);
       if (longest > PreviewMaxEdgePixels) {
         var scale = (double)PreviewMaxEdgePixels / longest;
@@ -1100,6 +1547,8 @@ public partial class EditImageWindow : Window {
     }
 
     this.SetStatus($"{this._sourceFile.Name} ({this._previewSource.Width}×{this._previewSource.Height} preview)");
+    // Disable upscale factors that would exceed the 32K cap on this source.
+    this.RefreshUpscaleComboAvailability();
     if (this.FindControl<MaskOverlayCanvas>("MaskOverlay") is { } overlay) {
       overlay.ImageWidth  = this._previewSource.Width;
       overlay.ImageHeight = this._previewSource.Height;
@@ -1109,13 +1558,16 @@ public partial class EditImageWindow : Window {
       cropOverlay.ImageHeight = this._previewSource.Height;
     }
 
-    // Pick up any develop edits embedded in the file's XMP so the user
-    // resumes mid-edit instead of starting from defaults each time.
+    // Pick up any develop edits embedded in the file's XMP (copy 0) or the
+    // selected virtual-copy sidecar so the user resumes mid-edit instead of
+    // starting from defaults each time.
     DevelopSettings? embedded = null;
-    try { embedded = await DevelopMetadataStore.LoadAsync(file); } catch { /* best-effort */ }
+    try { embedded = await DevelopMetadataStore.LoadAsync(file, this._copyIndex); } catch { /* best-effort */ }
     if (embedded is not null) {
       this.ApplySettingsToUi(embedded);
-      this.SetStatus($"Resumed embedded develop settings for {file.Name}.");
+      this.SetStatus(this._copyIndex == 0
+        ? $"Resumed embedded develop settings for {file.Name}."
+        : $"Resumed copy {this._copyIndex} settings for {file.Name}.");
     }
     this.UpdatePreview();
     this.InvalidateBaseline();
@@ -1161,6 +1613,13 @@ public partial class EditImageWindow : Window {
     this.UpdatePreview();
   }
 
+  /// <summary>
+  /// Cancellation source for the most recent in-flight AI preview render.
+  /// Cancelled and replaced on every <see cref="UpdatePreview"/> call so a
+  /// slider drag doesn't have to wait for the previous AI pass to finish.
+  /// </summary>
+  private CancellationTokenSource? _aiPreviewCts;
+
   private void UpdatePreview() {
     this._settings = this.ReadSettingsFromUi();
     this.RefreshValueLabels();
@@ -1168,37 +1627,112 @@ public partial class EditImageWindow : Window {
     if (this._previewSource is null)
       return;
 
+    // Always cancel an in-flight AI render before kicking a new pipeline —
+    // settings changed, so the in-flight result is stale.
+    var prevCts = Interlocked.Exchange(ref this._aiPreviewCts, null);
+    prevCts?.Cancel();
+    prevCts?.Dispose();
+
+    Image<Rgba32> fastDeveloped;
     try {
-      // Keep a long-lived developed preview so eyedroppers can sample it
-      // without re-running the entire pipeline. Replaced (and old one
-      // disposed) on every preview update.
-      var developed = ImageDeveloper.Apply(this._previewSource, this._settings);
-      this._developedPreview?.Dispose();
-      this._developedPreview = developed;
-
-      using var ms = new MemoryStream();
-      developed.SaveAsJpeg(ms);
-      ms.Position = 0;
-      var bitmap = new Bitmap(ms);
-      if (this.FindControl<Avalonia.Controls.Image>("PreviewImage") is { } img)
-        img.Source = bitmap;
-      if (this.FindControl<Avalonia.Controls.Image>("PreviewImageSplit") is { } imgSplit)
-        imgSplit.Source = bitmap;
-      if (this.FindControl<Avalonia.Controls.Image>("PreviewImageSlider") is { } imgSlider)
-        imgSlider.Source = bitmap;
-
-      this.RenderHistogram(developed);
-
-      // Persist the current edits inside the file's XMP packet so the
-      // workflow stays non-destructive — the pixel data on disk is never
-      // touched, but the user's slider state travels with the photo.
-      // UpdatePreview is already debounced via _updateTimer, so disk I/O
-      // is effectively coalesced for slider drags.
-      if (this._sourceFile is { } src && DevelopMetadataStore.SupportsContainer(src))
-        _ = DevelopMetadataStore.SaveAsync(src, this._settings);
+      // Fast pass: full develop pipeline minus AI stages. Keeps slider
+      // drags responsive on the UI thread. AI runs off-thread below.
+      fastDeveloped = ImageDeveloper.Apply(this._previewSource, this._settings, previewMode: true);
     } catch (Exception ex) {
       this.SetStatus($"Preview failed: {ex.Message}");
+      return;
     }
+
+    this._developedPreview?.Dispose();
+    this._developedPreview = fastDeveloped;
+    this.PaintPreviewImages(fastDeveloped);
+    this.RenderHistogram(fastDeveloped);
+
+    // Persist the current edits inside the file's XMP packet (or the active
+    // copy sidecar) so the workflow stays non-destructive — the pixel data
+    // on disk is never touched, but the user's slider state travels with
+    // the photo. Auto-saves leave the snapshot stack alone (snapshotLabel
+    // null); explicit Save As… and create-virtual-copy paths push history.
+    if (this._sourceFile is { } src && (this._copyIndex > 0 || DevelopMetadataStore.SupportsContainer(src)))
+      _ = DevelopMetadataStore.SaveAsync(src, this._settings, this._copyIndex, snapshotLabel: null);
+
+    var wantsDenoise = this._settings.AiDenoiseStrength > 1e-6;
+    var wantsUpscale = this._settings.AiUpscaleFactor > 1;
+    var wantsColorize = this._settings.AiColorizeAmount > 1e-6;
+    if (!wantsDenoise && !wantsUpscale && !wantsColorize) {
+      this.SetAiOverlayVisible(false);
+      return;
+    }
+
+    // Hand the AI pass off to a background task. Cancellation flows through
+    // to the tile loops in OnnxDenoiser / OnnxUpscaler / OnnxColorizer so
+    // a follow-up settings change unblocks within the next tile.
+    var stages = new List<string>();
+    if (wantsDenoise)  stages.Add("denoise");
+    if (wantsColorize) stages.Add("colorize");
+    if (wantsUpscale)  stages.Add("upscale");
+    var label = $"Computing AI {string.Join(" + ", stages)}…";
+    this.SetAiOverlayLabel(label);
+    this.SetAiOverlayVisible(true);
+
+    var cts = new CancellationTokenSource();
+    this._aiPreviewCts = cts;
+    var capturedSettings = this._settings;
+    var capturedSourceClone = this._previewSource.Clone();
+
+    _ = Task.Run(() => {
+      try {
+        return ImageDeveloper.Apply(capturedSourceClone, capturedSettings, previewMode: false, ct: cts.Token);
+      } catch (OperationCanceledException) {
+        return null;
+      } catch {
+        return null;
+      } finally {
+        capturedSourceClone.Dispose();
+      }
+    }, cts.Token).ContinueWith(t => {
+      var aiResult = t.Status == TaskStatus.RanToCompletion ? t.Result : null;
+      Avalonia.Threading.Dispatcher.UIThread.Post(() => {
+        // Newer call already cancelled and replaced us, or our token was
+        // cancelled mid-flight — discard the result either way.
+        if (cts.IsCancellationRequested || !ReferenceEquals(this._aiPreviewCts, cts)) {
+          aiResult?.Dispose();
+          return;
+        }
+        if (aiResult is null) {
+          this.SetAiOverlayVisible(false);
+          return;
+        }
+        this._developedPreview?.Dispose();
+        this._developedPreview = aiResult;
+        this.PaintPreviewImages(aiResult);
+        this.RenderHistogram(aiResult);
+        this.SetAiOverlayVisible(false);
+      });
+    });
+  }
+
+  private void PaintPreviewImages(Image<Rgba32> developed) {
+    using var ms = new MemoryStream();
+    developed.SaveAsJpeg(ms);
+    ms.Position = 0;
+    var bitmap = new Bitmap(ms);
+    if (this.FindControl<Avalonia.Controls.Image>("PreviewImage") is { } img)
+      img.Source = bitmap;
+    if (this.FindControl<Avalonia.Controls.Image>("PreviewImageSplit") is { } imgSplit)
+      imgSplit.Source = bitmap;
+    if (this.FindControl<Avalonia.Controls.Image>("PreviewImageSlider") is { } imgSlider)
+      imgSlider.Source = bitmap;
+  }
+
+  private void SetAiOverlayVisible(bool visible) {
+    if (this.FindControl<Border>("AiProgressOverlay") is { } overlay)
+      overlay.IsVisible = visible;
+  }
+
+  private void SetAiOverlayLabel(string text) {
+    if (this.FindControl<TextBlock>("AiProgressText") is { } label)
+      label.Text = text;
   }
 
   /// <summary>
@@ -1396,6 +1930,17 @@ public partial class EditImageWindow : Window {
           CurveInterpolation.Bezier     => 2,
           _                             => 0
         };
+      if (this.FindControl<ComboBox>("AiUpscaleCombo") is { } upscaleCombo)
+        upscaleCombo.SelectedIndex = UpscaleFactorToComboIndex(target.AiUpscaleFactor);
+      if (this.FindControl<TextBlock>("AiUpscaleValue") is { } upscaleLabel)
+        upscaleLabel.Text = (target.AiUpscaleFactor <= 1 ? 1 : target.AiUpscaleFactor)
+          .ToString(CultureInfo.InvariantCulture) + "×";
+      if (this.FindControl<ComboBox>("AiUpscaleModelCombo") is { } upscaleModelCombo)
+        upscaleModelCombo.SelectedIndex = UpscaleModelToComboIndex(target.AiUpscaleModel);
+      if (this.FindControl<ComboBox>("AiDenoiseModelCombo") is { } denoiseModelCombo)
+        denoiseModelCombo.SelectedIndex = DenoiseModelToComboIndex(target.AiDenoiseModel);
+      if (this.FindControl<ComboBox>("AiColorizeModelCombo") is { } colorizeModelCombo)
+        colorizeModelCombo.SelectedIndex = ColorizeModelToComboIndex(target.AiColorizeModel);
       // Crop edges
       if (this.FindControl<NumericUpDown>("CropLeftBox")   is { } leftBox)   leftBox.Value   = (decimal)target.CropLeft;
       if (this.FindControl<NumericUpDown>("CropTopBox")    is { } topBox)    topBox.Value    = (decimal)target.CropTop;
@@ -1504,6 +2049,11 @@ public partial class EditImageWindow : Window {
     this.SetStatus("Rendering...");
     try {
       await ImageDeveloper.RenderToJpegAsync(source, new FileInfo(destination), this._settings);
+      // Snapshot the develop settings as they stood at this Save As so the
+      // user can roll back to the version they exported.
+      if (this._copyIndex > 0 || DevelopMetadataStore.SupportsContainer(source))
+        await DevelopMetadataStore.SaveAsync(source, this._settings, this._copyIndex,
+          snapshotLabel: $"Save As {Path.GetFileName(destination)}");
       this.SetStatus($"Saved {Path.GetFileName(destination)}.");
     } catch (Exception ex) {
       this.SetStatus($"Save failed: {ex.Message}");
@@ -1848,11 +2398,68 @@ public partial class EditImageWindow : Window {
   }
 
   private void OnCloseClick(object? sender, RoutedEventArgs e) {
+    // Stop any in-flight AI render so the background task drops out
+    // promptly instead of writing to a disposed preview reference.
+    var cts = Interlocked.Exchange(ref this._aiPreviewCts, null);
+    cts?.Cancel();
+    cts?.Dispose();
     this._previewSource?.Dispose();
     this._developedPreview?.Dispose();
     this._baselinePreview?.Dispose();
     this._subjectSegmenter?.Dispose();
     this.Close();
+  }
+
+  // ---------- Edit history ----------
+
+  private async void OnEditHistoryClick(object? sender, RoutedEventArgs e) {
+    if (this._sourceFile is not { Exists: true } file) {
+      this.SetStatus("Open a file first.");
+      return;
+    }
+    IReadOnlyList<DevelopSnapshot> history;
+    try {
+      history = await DevelopMetadataStore.LoadHistoryAsync(file, this._copyIndex);
+    } catch (Exception ex) {
+      this.SetStatus($"Couldn't read history: {ex.Message}");
+      return;
+    }
+
+    var window = new EditHistoryWindow(file, this._copyIndex, this._previewSource, history);
+    await window.ShowDialog(this);
+    if (window.RestoredSnapshot is not { } picked)
+      return;
+    this.ApplySettingsToUi(picked.Settings);
+    this.UpdatePreview();
+    var label = string.IsNullOrWhiteSpace(picked.Label) ? "snapshot" : $"\"{picked.Label}\"";
+    this.SetStatus($"Restored {label} from {picked.TimestampUtc.ToLocalTime():yyyy-MM-dd HH:mm:ss}. Adjust further or Save As… to keep.");
+  }
+
+  // ---------- Virtual copies ----------
+
+  private async void OnCreateVirtualCopyClick(object? sender, RoutedEventArgs e) {
+    if (this._sourceFile is not { Exists: true } file) {
+      this.SetStatus("Open a file first.");
+      return;
+    }
+    var nextIndex = VirtualCopyDiscovery.NextAvailableIndex(file);
+    var ok = await DevelopMetadataStore.SaveAsync(file, this._settings, nextIndex,
+      snapshotLabel: "Created virtual copy");
+    if (!ok) {
+      this.SetStatus($"Failed to create virtual copy {nextIndex}.");
+      return;
+    }
+    this._copyIndex = nextIndex;
+    this.UpdateCopyTitle();
+    this.SetStatus($"Created virtual copy {nextIndex} ({file.Name}.copy{nextIndex}.xmp). Window now targets this copy.");
+  }
+
+  private void UpdateCopyTitle() {
+    if (this._sourceFile is null)
+      return;
+    this.Title = this._copyIndex == 0
+      ? $"Develop image — {this._sourceFile.Name}"
+      : $"Develop image — {this._sourceFile.Name} (copy {this._copyIndex})";
   }
 
   private void SetStatus(string message) {

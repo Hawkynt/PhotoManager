@@ -19,7 +19,12 @@ public static class ImageDeveloper {
   /// Returns a new image with <paramref name="settings"/> applied. The input
   /// is not mutated. Identity settings return a clone for interface parity.
   /// </summary>
-  public static Image<Rgba32> Apply(Image<Rgba32> source, DevelopSettings settings) {
+  /// <param name="previewMode">When true, expensive AI stages (denoise, upscale)
+  /// are skipped so live-preview slider drags stay responsive on the UI thread.
+  /// Final renders (Save As) leave this false so AI stages run.</param>
+  /// <param name="ct">Cooperatively cancels between AI tiles. Useful when a
+  /// background AI render is superseded by a newer settings change.</param>
+  public static Image<Rgba32> Apply(Image<Rgba32> source, DevelopSettings settings, bool previewMode = false, CancellationToken ct = default) {
     ArgumentNullException.ThrowIfNull(source);
     ArgumentNullException.ThrowIfNull(settings);
 
@@ -42,12 +47,45 @@ public static class ImageDeveloper {
     ApplyPerspectiveTransform(output, settings);
 
     if (!settings.IsIdentity)
-      ApplyPixelAdjustments(output, settings);
+      ApplyPixelAdjustments(output, settings, previewMode, ct);
+    else if (!previewMode && settings.AiDenoiseStrength > 1e-6)
+      // Denoise belongs inside ApplyPixelAdjustments (canonical denoise→sharpen
+      // order). When the only active edit is AI denoise, we still need that
+      // path so the stage runs. Skipped in preview mode so the UI doesn't
+      // freeze on slider drags — the live preview window runs the AI stage
+      // off-thread instead and swaps the result in when ready.
+      ApplyAiDenoiseStage(output, settings, ct);
+
+    // AI colorize: turns a B&W source into a colour image. Runs AFTER
+    // tone/curves (so the model sees the developed luminance) but BEFORE
+    // creative LUTs (which operate on the colourised pixels). Skipped in
+    // preview mode so slider drags stay responsive — the live-preview
+    // window runs the AI stage off-thread instead.
+    if (!previewMode && settings.AiColorizeAmount > 1e-6) {
+      var colorised = TryAiColorize(output, settings, ct);
+      if (colorised != null && !ReferenceEquals(colorised, output)) {
+        output.Dispose();
+        output = colorised;
+      }
+    }
 
     // Creative-look LUT — runs AFTER tone / curves so the user-shaped
     // distribution is what gets remapped, BEFORE local masks so per-mask
     // tweaks operate on the post-look image.
     ApplyCreativeLook(output, settings);
+
+    // AI upscale runs AFTER tone/curves/HSL/sharpening but BEFORE local
+    // adjustments + crop so the user has more pixels to work with when
+    // placing masks and trimming the frame. No-op when factor <= 1 or
+    // the model isn't installed; in preview mode the live-preview window
+    // runs this off-thread instead.
+    if (!previewMode && settings.AiUpscaleFactor > 1) {
+      var upscaled = TryAiUpscale(output, settings, ct);
+      if (upscaled != null && !ReferenceEquals(upscaled, output)) {
+        output.Dispose();
+        output = upscaled;
+      }
+    }
 
     // Local adjustments come AFTER the global pixel pass so they sit on
     // top of the developed image. Each adjustment has its own mask + a
@@ -63,6 +101,77 @@ public static class ImageDeveloper {
     ApplyCropRectangle(output, settings);
 
     return output;
+  }
+
+  /// AI denoise stage. Lazily opens the ONNX session via OnnxDenoiser; when
+  /// no model is installed the call is a graceful no-op. Otherwise the
+  /// source image is replaced with the denoised result, blended by
+  /// DevelopSettings.AiDenoiseStrength.
+  private static void ApplyAiDenoiseStage(Image<Rgba32> image, DevelopSettings settings, CancellationToken ct = default) {
+    if (settings.AiDenoiseStrength <= 1e-6)
+      return;
+
+    var modelFile = !string.IsNullOrWhiteSpace(settings.AiDenoiseModel)
+      ? AppDataPaths.ModelFile(settings.AiDenoiseModel!)
+      : null;
+
+    using var denoiser = new Segmentation.OnnxDenoiser(modelFile);
+    if (!denoiser.IsAvailable)
+      return;
+
+    using var denoised = denoiser.Denoise(image, settings.AiDenoiseStrength, ct);
+    if (denoised is null)
+      return;
+
+    // Copy denoised pixels back so the caller's reference stays valid
+    // (Apply tracks `output` by reference). Round-trip via a flat buffer
+    // because ImageSharp pixel accessors are ref structs.
+    var pixels = new Rgba32[denoised.Width * denoised.Height];
+    denoised.CopyPixelDataTo(pixels);
+    var width = image.Width;
+    image.ProcessPixelRows(accessor => {
+      for (var y = 0; y < accessor.Height; y++) {
+        var dst = accessor.GetRowSpan(y);
+        var srcOffset = y * width;
+        for (var x = 0; x < width; x++)
+          dst[x] = pixels[srcOffset + x];
+      }
+    });
+  }
+
+  /// AI upscale stage. Returns the upscaled image (a fresh allocation) or
+  /// the same reference when the model isn't installed / the factor was
+  /// degenerate, so the caller can decide whether to swap the buffer.
+  /// The user-picked model (settings.AiUpscaleModel) maps to a file under
+  /// the app's models directory; null falls back to the default
+  /// "upscale.onnx" which is what every prior version of PhotoManager wrote.
+  private static Image<Rgba32>? TryAiUpscale(Image<Rgba32> image, DevelopSettings settings, CancellationToken ct = default) {
+    if (settings.AiUpscaleFactor <= 1)
+      return image;
+    var modelFile = !string.IsNullOrWhiteSpace(settings.AiUpscaleModel)
+      ? AppDataPaths.ModelFile(settings.AiUpscaleModel!)
+      : null;
+    using var upscaler = new Segmentation.OnnxUpscaler(modelFile);
+    if (!upscaler.IsAvailable)
+      return image;
+    return upscaler.Upscale(image, settings.AiUpscaleFactor, ct);
+  }
+
+  /// AI colorize stage. Lazily opens the OnnxColorizer; when no model is
+  /// installed the call is a graceful no-op. Otherwise the source image
+  /// is replaced with the colorised result, blended by
+  /// <see cref="DevelopSettings.AiColorizeAmount"/>. Returns null on
+  /// failure so the caller falls back to the un-colourised image.
+  private static Image<Rgba32>? TryAiColorize(Image<Rgba32> image, DevelopSettings settings, CancellationToken ct = default) {
+    if (settings.AiColorizeAmount <= 1e-6)
+      return null;
+    var modelFile = !string.IsNullOrWhiteSpace(settings.AiColorizeModel)
+      ? AppDataPaths.ModelFile(settings.AiColorizeModel!)
+      : null;
+    using var colorizer = new Segmentation.OnnxColorizer(modelFile);
+    if (!colorizer.IsAvailable)
+      return null;
+    return colorizer.Colorize(image, settings.AiColorizeAmount, ct);
   }
 
   /// <summary>
@@ -553,7 +662,7 @@ public static class ImageDeveloper {
     await developed.SaveAsJpegAsync(destinationFile.FullName, encoder, cancellationToken);
   }
 
-  internal static void ApplyPixelAdjustments(Image<Rgba32> image, DevelopSettings settings) {
+  internal static void ApplyPixelAdjustments(Image<Rgba32> image, DevelopSettings settings, bool previewMode = false, CancellationToken ct = default) {
     var exposureMultiplier = Math.Pow(2, settings.ExposureStops);
     var contrastFactor = 1 + settings.ContrastPercent / 100.0;
     var saturationFactor = 1 + settings.SaturationPercent / 100.0;
@@ -950,6 +1059,14 @@ public static class ImageDeveloper {
       var smoothFactor = 1 + Math.Clamp(settings.ColorNrSmoothness / 100.0, 0, 1);
       ApplyChromaBlur(image, settings.ColorNoiseReduction * detailFactor * smoothFactor);
     }
+
+    // AI denoise: sits between chroma smoothing (above) and the spatial
+    // luminance smoothness blur (below), so the canonical denoise→sharpen
+    // order is preserved. No-op when the model isn't installed or we're
+    // rendering a live preview (skipping keeps slider drags responsive —
+    // the final Save As pass runs the AI stage).
+    if (!previewMode)
+      ApplyAiDenoiseStage(image, settings, ct);
 
     // Smoothness (luminance NR): Gaussian blur, applied BEFORE the
     // sharpening / texture pass so the user can take the edge off noise

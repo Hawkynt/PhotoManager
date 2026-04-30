@@ -3,34 +3,46 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:models="using:PhotoManager.UI.Models"
-        mc:Ignorable="d" d:DesignWidth="620" d:DesignHeight="420"
+        mc:Ignorable="d" d:DesignWidth="620" d:DesignHeight="500"
         x:Class="PhotoManager.UI.Views.ModelDownloadWindow"
-        Width="640" Height="440"
+        Width="700" Height="560"
         WindowStartupLocation="CenterOwner"
         Title="Download detection models">
   <Grid RowDefinitions="Auto,*,Auto" Margin="12">
     <StackPanel Grid.Row="0" Spacing="4" Margin="0,0,0,10">
-      <TextBlock Text="Detection models" FontSize="16" FontWeight="SemiBold" />
+      <Grid ColumnDefinitions="*,Auto">
+        <TextBlock Grid.Column="0" Text="Detection models" FontSize="16" FontWeight="SemiBold"
+                   VerticalAlignment="Center" />
+        <Button Grid.Column="1" x:Name="DownloadAllButton" Content="⬇️ Download all missing"
+                Click="OnDownloadAllClick"
+                ToolTip.Tip="Sequentially download every model that isn't already installed. Already-installed models are skipped." />
+      </Grid>
       <TextBlock Opacity="0.75" TextWrapping="Wrap"
-                 Text="YOLO and UltraFace power the Auto-Detect + Detect Faces buttons. Models are downloaded from public mirrors into the app's data directory; no model is required to use the rest of PhotoManager." />
+                 Text="Models power object detection, face detection / clustering, AI denoise / upscale / colorize, subject masking, auto-keyword tagging. Rows tinted green are already on disk; click Re-download to refresh them or Install from file… to point at a manual copy." />
     </StackPanel>
 
-    <ItemsControl Grid.Row="1" x:Name="EntriesList">
+    <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+    <ItemsControl x:Name="EntriesList">
       <ItemsControl.ItemTemplate>
         <DataTemplate DataType="models:ModelCatalogEntry">
-          <Border BorderBrush="#DDD" BorderThickness="1" CornerRadius="4" Padding="10" Margin="0,0,0,8">
-            <Grid RowDefinitions="Auto,Auto,Auto" ColumnDefinitions="*,Auto">
+          <Border BorderBrush="{DynamicResource PanelBorderBrush}" BorderThickness="1" CornerRadius="4" Padding="10" Margin="0,0,0,8"
+                  Background="{CompiledBinding RowBackground}">
+            <Grid RowDefinitions="Auto,Auto,Auto,Auto" ColumnDefinitions="*,Auto">
               <StackPanel Grid.Row="0" Grid.Column="0" Spacing="1">
-                <TextBlock Text="{CompiledBinding DisplayName}" FontWeight="SemiBold" />
+                <Grid ColumnDefinitions="*,Auto">
+                  <TextBlock Grid.Column="0" Text="{CompiledBinding DisplayName}" FontWeight="SemiBold" />
+                  <TextBlock Grid.Column="1" Text="{CompiledBinding StatusBadge}" FontSize="11" Opacity="0.85"
+                             VerticalAlignment="Center" Margin="6,0,0,0" />
+                </Grid>
                 <TextBlock Text="{CompiledBinding Description}" TextWrapping="Wrap" Opacity="0.8" FontSize="12" />
                 <TextBlock Text="{CompiledBinding SizeText}" Opacity="0.6" FontSize="11" />
               </StackPanel>
               <StackPanel Grid.Row="0" Grid.Column="1" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
-                <Button Content="⬇️ Download"
+                <Button Content="{CompiledBinding DownloadButtonText}"
                         IsEnabled="{CompiledBinding CanDownload}"
                         Click="OnDownloadClick"
                         Tag="{CompiledBinding Model.Name}" />
-                <Button Content="📁 Install from file..."
+                <Button Content="📁 Install from file…"
                         Click="OnInstallFromFileClick"
                         Tag="{CompiledBinding Model.Name}"
                         ToolTip.Tip="Point at a locally-downloaded ONNX (useful when the download URL is blocked)." />
@@ -46,11 +58,17 @@
                            Minimum="0" Maximum="1"
                            Value="{CompiledBinding DownloadFraction}"
                            IsVisible="{CompiledBinding IsDownloading}" />
+              <TextBlock Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="2"
+                         Margin="0,4,0,0"
+                         Text="{CompiledBinding ProgressDetail}"
+                         Opacity="0.7" FontSize="11" FontFamily="Consolas"
+                         IsVisible="{CompiledBinding IsDownloading}" />
             </Grid>
           </Border>
         </DataTemplate>
       </ItemsControl.ItemTemplate>
     </ItemsControl>
+    </ScrollViewer>
 
     <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="6" Margin="0,10,0,0">
       <Button Content="📂 Open models folder" Click="OnOpenFolderClick" />

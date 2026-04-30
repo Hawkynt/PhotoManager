@@ -28,15 +28,42 @@ public sealed class ModelDownloader : IDisposable {
 
   /// <summary>
   /// Downloads the given <paramref name="model"/> to its resolved destination
-  /// under the app-data models directory.
+  /// under the app-data models directory. For multi-file ONNX exports
+  /// (<see cref="ModelInfo.ExternalDataFiles"/> non-empty) the primary
+  /// graph file is fetched first, then each companion data file in order.
+  /// Progress is reported as cumulative bytes across all files so the
+  /// UI bar advances smoothly through the whole sequence.
   /// </summary>
-  public Task<FileInfo> DownloadAsync(
+  public async Task<FileInfo> DownloadAsync(
     ModelInfo model,
     IProgress<ModelDownloadProgress>? progress = null,
     CancellationToken cancellationToken = default
   ) {
     ArgumentNullException.ThrowIfNull(model);
-    return this.DownloadAsync(model.DownloadUrl, model.ResolveDestination(), progress, cancellationToken);
+
+    var totalAcrossAllFiles = model.TotalDownloadBytes;
+    long bytesBefore = 0;
+
+    var cumulative = progress is null ? null : new Progress<ModelDownloadProgress>(p => {
+      progress.Report(new ModelDownloadProgress(bytesBefore + p.BytesReceived, totalAcrossAllFiles));
+    });
+
+    // Primary graph file.
+    var primary = await this.DownloadAsync(model.DownloadUrl, model.ResolveDestination(), cumulative, cancellationToken);
+    bytesBefore += model.ApproximateSizeBytes;
+
+    // Companion data files (DeOldify-style external weights). ONNX Runtime
+    // resolves these by looking next to the .onnx file at session-open time,
+    // so the destination directory must match the primary's.
+    if (model.ExternalDataFiles is { Count: > 0 } files)
+      foreach (var dataFile in files) {
+        cancellationToken.ThrowIfCancellationRequested();
+        var dest = AppDataPaths.ModelFile(dataFile.FileName);
+        await this.DownloadAsync(dataFile.DownloadUrl, dest, cumulative, cancellationToken);
+        bytesBefore += dataFile.ApproximateSizeBytes;
+      }
+
+    return primary;
   }
 
   /// <summary>

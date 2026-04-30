@@ -24,8 +24,8 @@
     </Grid>
 
     <StackPanel Grid.Row="5" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="6">
-      <Button Content="Cancel" Click="OnCancelClick" IsCancel="True" />
-      <Button Content="OK" Click="OnOkClick" IsDefault="True" FontWeight="Bold" />
+      <Button Content="❌ Cancel" Click="OnCancelClick" IsCancel="True" />
+      <Button Content="✅ OK" Click="OnOkClick" IsDefault="True" FontWeight="Bold" />
     </StackPanel>
   </Grid>
 </Window>

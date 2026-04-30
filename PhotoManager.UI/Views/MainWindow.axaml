@@ -5,6 +5,7 @@
         xmlns:vm="using:PhotoManager.UI.Models"
         xmlns:models="using:PhotoManager.UI.Models"
         xmlns:mapsui="using:Mapsui.UI.Avalonia"
+        xmlns:controls="using:PhotoManager.UI.Controls"
         mc:Ignorable="d" d:DesignWidth="1280" d:DesignHeight="800"
         x:Class="PhotoManager.UI.Views.MainWindow"
         x:DataType="vm:MainViewModel"
@@ -185,6 +186,9 @@
         <MenuItem Header="👤 _Face gallery..." Click="OnOpenFaceGalleryClick" />
         <MenuItem Header="🎨 _Develop image..." Click="OnOpenDevelopClick" InputGesture="Ctrl+E"
                   IsEnabled="{Binding HasSelectedFile}" />
+        <MenuItem Header="🪄 _Restore old photo..." Click="OnOpenRestoreClick"
+                  IsEnabled="{Binding HasSelectedFile}"
+                  ToolTip.Tip="Auto-restore old / damaged photos: face restoration (GFPGAN), denoise, recolour, upscale. Pick a preset for inexperienced one-click results." />
         <Separator />
         <MenuItem Header="🌅 _HDR merge..." Click="OnOpenHdrMergeClick"
                   ToolTip.Tip="Merge a bracket of differently-exposed photos into a single HDR image via Debevec response-curve recovery + Reinhard / Drago tone mapping." />
@@ -195,6 +199,17 @@
         <MenuItem Header="🌐 _360° viewer..." Click="OnOpenPanoramaViewerClick"
                   IsEnabled="{Binding HasSelectedFile}"
                   ToolTip.Tip="Open the selected equirectangular spherical photo as a navigable 360° view (drag to look around, scroll to zoom)." />
+        <Separator />
+        <MenuItem Header="✨ _Memories..." Click="OnOpenMemoriesClick"
+                  ToolTip.Tip="On this day / on this trip — re-discover photos around today and around the selected anchor" />
+        <MenuItem Header="📌 Quick _collection">
+          <MenuItem Header="_Clear" Click="OnQuickCollectionClearClick" />
+          <Separator />
+          <MenuItem Header="Select in grid (for Batch _rename / Properties)" Click="OnQuickCollectionSelectInGridClick" />
+          <MenuItem Header="Open in Develop _apply-to-selection..." Click="OnQuickCollectionDevelopClick" />
+        </MenuItem>
+        <MenuItem Header="🏷️ _Auto-keyword scan..." Click="OnOpenAutoKeywordScanClick"
+                  ToolTip.Tip="Use a CLIP-style image embedding model to tag photos with the closest matches from a built-in vocabulary. Writes dc:subject keywords." />
         <Separator />
         <MenuItem Header="🤖 _Download detection models..." Click="OnOpenModelsDialogClick" />
       </MenuItem>
@@ -256,7 +271,7 @@
       <!-- Center pane: settings (top) + preview (middle) + file grid (bottom),
            with a sizable splitter between preview and grid so the user can
            spend most vertical space on whichever they care about. -->
-      <Grid Grid.Column="2" RowDefinitions="Auto,2*,4,Auto,Auto,*" Margin="0,8,0,0">
+      <Grid Grid.Column="2" RowDefinitions="Auto,2*,4,Auto,Auto,Auto,*" Margin="0,8,0,0">
         <StackPanel Grid.Row="0" Spacing="6" Margin="0,0,0,6">
           <Grid ColumnDefinitions="120,*,Auto">
             <TextBlock Grid.Column="0" Text="Output:" VerticalAlignment="Center" />
@@ -299,7 +314,7 @@
         <!-- Live filter over the grid. Space-separates into AND tokens; each
              token CONTAINS-matches against the file's index string (built in
              the background after scan). -->
-        <Grid Grid.Row="3" ColumnDefinitions="Auto,*,Auto,Auto,Auto" Margin="0,4,0,2">
+        <Grid Grid.Row="3" ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto,Auto" Margin="0,4,0,2">
           <TextBlock Grid.Column="0" Text="🔍" VerticalAlignment="Center" Margin="2,0,6,0" FontSize="14" />
           <TextBox Grid.Column="1" x:Name="SearchBox" TextChanged="OnSearchTextChanged"
                    Watermark="Filter: filename, folder, keyword, person, location… (space = AND)"
@@ -312,7 +327,19 @@
                     ToolTip.Tip="Pick a previously saved filter to re-apply" />
           <Button Grid.Column="4" Content="💾 Save…" Margin="4,0,0,0" Click="OnSaveSearchClick"
                   ToolTip.Tip="Bookmark the current text + chip filter under a name" />
+          <ToggleButton Grid.Column="5" x:Name="QuickCollectionToggle" Content="📌 Quick"
+                        Margin="6,0,0,0" Padding="8,2"
+                        Click="OnQuickCollectionToggleClick"
+                        ToolTip.Tip="Show only files in the quick collection (toggle membership with B on a row)" />
+          <ToggleButton Grid.Column="6" x:Name="TimelineStripToggle" Content="📅"
+                        Margin="6,0,0,0" Padding="8,2"
+                        Click="OnTimelineStripToggleClick"
+                        ToolTip.Tip="Show / hide the timeline scrubber strip above the grid" />
         </Grid>
+
+        <controls:TimelineScrubber Grid.Row="5" x:Name="TimelineStrip"
+                                   IsVisible="{Binding TimelineExpanded}"
+                                   Margin="0,2,0,4" Height="74" />
 
         <!-- Rating + color chips. Toggling them AND-combines with the search
              text; e.g. ★≥3 + Red shows only 3-star+ red-labelled files. -->
@@ -338,7 +365,7 @@
                   ToolTip.Tip="Cull filter — click to cycle Show all → Hide rejects → Picks only → Rejects only. Grid hotkeys: P=Pick, X=Reject, U=Clear flags." />
         </StackPanel>
 
-        <DataGrid Grid.Row="5" x:Name="FilesGrid"
+        <DataGrid Grid.Row="6" x:Name="FilesGrid"
                   AutoGenerateColumns="False"
                   CanUserResizeColumns="True"
                   GridLinesVisibility="Horizontal"
@@ -349,6 +376,8 @@
                   KeyDown="OnFilesGridKeyDown">
           <DataGrid.ContextMenu>
             <ContextMenu>
+              <MenuItem Header="🎨 _Develop image..." InputGesture="Ctrl+E" Click="OnOpenDevelopClick" />
+              <MenuItem Header="🪄 _Restore old photo..." Click="OnOpenRestoreClick" />
               <MenuItem Header="📋 _Properties..." Click="OnFilePropertiesClick" />
               <Separator />
               <MenuItem Header="✅ Mark as _Pick (P)" Click="OnContextMarkPickClick" />
@@ -360,6 +389,9 @@
               <MenuItem Header="🖼️ Open in default _viewer" Click="OnOpenInViewerClick" />
               <MenuItem Header="🌐 Open in 360° v_iewer" Click="OnOpenIn360ViewerClick" />
               <MenuItem Header="📂 Show in _folder" Click="OnRevealInFolderClick" />
+              <Separator />
+              <MenuItem x:Name="PromoteCopyMenuItem" Header="📋 Promote copy to original" IsVisible="False" Click="OnPromoteCopyClick"
+                        ToolTip.Tip="Replace the source's main XMP with this virtual copy's settings and remove the copy sidecar." />
             </ContextMenu>
           </DataGrid.ContextMenu>
           <DataGrid.Columns>
@@ -368,6 +400,10 @@
                                 Width="36"
                                 CanUserSort="True"
                                 CanUserResize="False" />
+            <DataGridTextColumn Header="📌"
+                                Binding="{CompiledBinding QuickCollectionBadge, DataType=models:FileItemModel}"
+                                Width="32"
+                                CanUserResize="False" CanUserSort="False" />
             <DataGridTextColumn Header="File Name" Binding="{CompiledBinding FileName, DataType=models:FileItemModel}" Width="*" />
             <DataGridTextColumn Header="Target Location" Binding="{CompiledBinding TargetLocation, DataType=models:FileItemModel}" Width="2*" />
             <DataGridTextColumn Header="Source Path" Binding="{CompiledBinding SourcePath, DataType=models:FileItemModel}" Width="*" />
