@@ -1,0 +1,63 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:models="using:PhotoManager.UI.Models"
+        mc:Ignorable="d" d:DesignWidth="980" d:DesignHeight="680"
+        x:Class="PhotoManager.UI.Views.BurstStacksWindow"
+        Width="980" Height="680"
+        MinWidth="700" MinHeight="500"
+        WindowStartupLocation="CenterOwner"
+        Title="Detect bursts">
+  <Grid RowDefinitions="Auto,Auto,*,Auto" Margin="12">
+    <StackPanel Grid.Row="0" Spacing="4" Margin="0,0,0,8">
+      <TextBlock Text="Detect bursts" FontSize="16" FontWeight="SemiBold" />
+      <TextBlock Opacity="0.75" TextWrapping="Wrap"
+                 Text="Photos taken in rapid succession with similar filenames are grouped into stacks. Edit a burst's id, tick the rows you want to label, and click Apply to write a pm:burstId keyword to every member." />
+    </StackPanel>
+
+    <Grid Grid.Row="1" ColumnDefinitions="Auto,Auto,Auto,Auto,Auto,*" Margin="0,0,0,8">
+      <TextBlock Grid.Column="0" Text="Time window (s):" VerticalAlignment="Center" />
+      <NumericUpDown Grid.Column="1" x:Name="WindowSecondsBox" Minimum="1" Maximum="600" Value="2"
+                     Margin="6,0,0,0" Width="90" />
+      <TextBlock Grid.Column="2" Text="Name distance:" VerticalAlignment="Center" Margin="16,0,0,0" />
+      <NumericUpDown Grid.Column="3" x:Name="NameDistanceBox" Minimum="0" Maximum="32" Value="3"
+                     Margin="6,0,0,0" Width="90" />
+      <Button Grid.Column="4" Content="🔄 Re-detect" Margin="16,0,0,0" Click="OnRedetectClick" />
+    </Grid>
+
+    <Border Grid.Row="2" BorderBrush="{DynamicResource PanelBorderBrush}" BorderThickness="1" CornerRadius="4">
+      <DataGrid x:Name="BurstsGrid" AutoGenerateColumns="False"
+                CanUserResizeColumns="True"
+                GridLinesVisibility="Horizontal"
+                IsReadOnly="False">
+        <DataGrid.Columns>
+          <DataGridCheckBoxColumn Header="Apply"
+                                  Binding="{CompiledBinding IsSelected, DataType=models:BurstGroupViewModel, Mode=TwoWay}"
+                                  Width="60" />
+          <DataGridTextColumn Header="Photos"
+                              Binding="{CompiledBinding CountText, DataType=models:BurstGroupViewModel}"
+                              Width="80" IsReadOnly="True" />
+          <DataGridTextColumn Header="When"
+                              Binding="{CompiledBinding RangeText, DataType=models:BurstGroupViewModel}"
+                              Width="240" IsReadOnly="True" />
+          <DataGridTextColumn Header="Burst id"
+                              Binding="{CompiledBinding BurstId, DataType=models:BurstGroupViewModel, Mode=TwoWay}"
+                              Width="180" />
+          <DataGridTextColumn Header="Files"
+                              Binding="{CompiledBinding FilesText, DataType=models:BurstGroupViewModel}"
+                              Width="*" IsReadOnly="True" />
+        </DataGrid.Columns>
+      </DataGrid>
+    </Border>
+
+    <Grid Grid.Row="3" ColumnDefinitions="*,Auto,Auto,Auto" Margin="0,8,0,0">
+      <TextBlock Grid.Column="0" x:Name="StatusText" VerticalAlignment="Center" Opacity="0.75" />
+      <Button Grid.Column="1" Content="✅ Select multi-frame bursts" Click="OnSelectMultiFrameClick"
+              ToolTip.Tip="Tick every burst with two or more members" />
+      <Button Grid.Column="2" Content="🏷 Apply burst ids" Margin="6,0,0,0" Click="OnApplyClick"
+              FontWeight="SemiBold" Padding="10,4" />
+      <Button Grid.Column="3" Content="🚪 Close" Margin="6,0,0,0" Click="OnCloseClick" IsCancel="True" />
+    </Grid>
+  </Grid>
+</Window>

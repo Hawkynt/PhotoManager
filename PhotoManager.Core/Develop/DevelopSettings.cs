@@ -181,7 +181,25 @@ public sealed record DevelopSettings(
   /// colour overall. Adobe's "Vibrance" before 2023 then became this
   /// dedicated slider. Range -100..+100.
   /// </summary>
-  double ColorEnhancement = 0
+  double ColorEnhancement = 0,
+  /// <summary>
+  /// Filename (without extension) of a 3D LUT under
+  /// <c>%APPDATA%/PhotoManager/luts/</c> applied at render time as a
+  /// "creative look". Round-trips through <c>crs:LookName</c> so 3rd-party
+  /// tools can label the look.
+  /// </summary>
+  string? LookName = null,
+  /// <summary>
+  /// Opacity (0..1) of the creative-look LUT blend. 1.0 = full LUT effect,
+  /// 0.0 = LUT skipped. Has no effect when <see cref="LookName"/> is null.
+  /// </summary>
+  double LookOpacity = 1.0,
+  // Watermark layer rendered after locals and before the crop. Null text
+  // disables the stage. No Adobe analogue — round-tripped via the pm: extras.
+  string? WatermarkText = null,
+  double WatermarkOpacity = 0.5,
+  string WatermarkPosition = "BottomRight",
+  int WatermarkFontSize = 24
 ) {
   public bool IsIdentity =>
     this.RotationDegrees == 0
@@ -259,6 +277,8 @@ public sealed record DevelopSettings(
     && (this.LocalAdjustments is null || this.LocalAdjustments.Count == 0
         || this.LocalAdjustments.All(a => a.IsZero))
     && Math.Abs(this.ColorEnhancement) < 1e-6
+    && string.IsNullOrEmpty(this.LookName)
+    && string.IsNullOrEmpty(this.WatermarkText)
     && this.IsCurveIdentity
     && IsChannelCurveIdentity(this.RedCurvePoints)
     && IsChannelCurveIdentity(this.GreenCurvePoints)

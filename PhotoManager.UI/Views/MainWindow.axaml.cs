@@ -115,6 +115,7 @@ public partial class MainWindow : Window {
     this.InitializeMiniMap();
     this.InitializeDirtyTracker();
     this.InitializeThemeMenu();
+    this.InitializeRecentFoldersMenus();
 
     // Redraw the region overlay whenever layout updates. LayoutUpdated is
     // fired after every arrange pass on the associated control, so it
@@ -523,15 +524,29 @@ public partial class MainWindow : Window {
     if (grid != null)
       grid.ItemsSource = null;
 
-    // Grid contents follow the BrowseMode toggle: sources tree (default)
-    // or recursive walk of the destination directory.
-    var items = this._controller.ViewModel.BrowseMode == BrowseMode.Target
-      ? await this._controller.ScanTargetDirectoryAsync()
-      : await this._controller.ScanCheckedSourcesAsync();
-    this._currentFileItems = items;
+    // Surface the scan in the status-bar progress strip so the user has a
+    // visible "something is happening" + a Cancel handle. Indeterminate
+    // because the file walk reports its total only after enumeration.
+    var cts = new CancellationTokenSource();
+    var op = new OperationProgress("Scanning files…", cts.Cancel) {
+      Fraction = double.NaN
+    };
+    this._controller.ViewModel.CurrentOperation = op;
 
-    if (grid != null)
-      grid.ItemsSource = items;
+    try {
+      // Grid contents follow the BrowseMode toggle: sources tree (default)
+      // or recursive walk of the destination directory.
+      var items = this._controller.ViewModel.BrowseMode == BrowseMode.Target
+        ? await this._controller.ScanTargetDirectoryAsync()
+        : await this._controller.ScanCheckedSourcesAsync();
+      this._currentFileItems = items;
+
+      if (grid != null)
+        grid.ItemsSource = items;
+    } finally {
+      this._controller.ViewModel.CurrentOperation = null;
+      cts.Dispose();
+    }
   }
 
   private async void OnBrowseModeChanged(object? sender, RoutedEventArgs e) {
@@ -1029,6 +1044,105 @@ public partial class MainWindow : Window {
     await window.ShowDialog(this);
   }
 
+  private async void OnOpenQualityScanClick(object? sender, RoutedEventArgs e) {
+    var seedFolder = this.SeedFolderFromTree();
+    var window = seedFolder == null ? new QualityScanWindow() : new QualityScanWindow(seedFolder);
+    await window.ShowDialog(this);
+  }
+
+  private async void OnOpenSmartAlbumsClick(object? sender, RoutedEventArgs e) {
+    // Pre-load metadata for the currently-displayed files so the builder's
+    // "Test on current library" action returns instantly. Caps at ~ a few
+    // hundred files via the existing parallel reader.
+    var snapshot = await this.GatherSnapshotForSmartAlbumAsync();
+    var window = new SmartAlbumBuilderWindow(
+      this._controller.ViewModel.SmartAlbums,
+      () => snapshot);
+    await window.ShowDialog(this);
+
+    this._controller.ViewModel.SmartAlbums = window.Albums.ToList();
+    await this._controller.SaveSettingsAsync();
+  }
+
+  private async void OnOpenKeywordTreeClick(object? sender, RoutedEventArgs e) {
+    var selected = this.FindControl<DataGrid>("FilesGrid")?.SelectedItems
+      .OfType<FileItemModel>()
+      .Where(f => f.FileInfo is { Exists: true })
+      .ToList() ?? new List<FileItemModel>();
+
+    var window = new KeywordTreeWindow(
+      this._controller.ViewModel.KeywordTreeRoots,
+      selected,
+      this._metadataReader,
+      this._metadataWriter
+    );
+    await window.ShowDialog(this);
+
+    this._controller.ViewModel.KeywordTreeRoots = window.CurrentRoots.ToList();
+    await this._controller.SaveSettingsAsync();
+
+    if (this._currentFile is { Exists: true } current)
+      await this.ReloadCurrentMetadataAsync(current);
+  }
+
+  private async void OnOpenCalendarClick(object? sender, RoutedEventArgs e) {
+    var items = this._currentFileItems?
+      .Where(i => i.FileInfo is { Exists: true })
+      .ToList() ?? new List<FileItemModel>();
+    var window = new CalendarWindow(items);
+    await window.ShowDialog(this);
+  }
+
+  private async void OnOpenBurstStacksClick(object? sender, RoutedEventArgs e) {
+    var items = this._currentFileItems?
+      .Where(i => i.FileInfo is { Exists: true })
+      .ToList() ?? new List<FileItemModel>();
+    var window = new BurstStacksWindow(items);
+    await window.ShowDialog(this);
+  }
+
+  private async void OnOpenGeofenceBatchClick(object? sender, RoutedEventArgs e) {
+    var bookmarks = await this._controller.LoadBookmarksAsync();
+    var grid = this.FindControl<DataGrid>("FilesGrid");
+    var selected = grid?.SelectedItems?.Cast<FileItemModel>().ToList() ?? new List<FileItemModel>();
+    var files = (selected.Count > 0
+        ? selected
+        : this._currentFileItems?.ToList() ?? new List<FileItemModel>())
+      .Select(i => i.FileInfo)
+      .Where(f => f != null && f.Exists)
+      .Cast<FileInfo>()
+      .ToList();
+
+    var window = new GeofenceBatchWindow(files, bookmarks);
+    await window.ShowDialog(this);
+  }
+
+  private async Task<IReadOnlyList<(FileInfo File, FullMetadata Metadata)>> GatherSnapshotForSmartAlbumAsync() {
+    if (this._currentFileItems is not { } items)
+      return Array.Empty<(FileInfo, FullMetadata)>();
+    var files = items
+      .Select(i => i.FileInfo)
+      .Where(f => f is { Exists: true })
+      .Cast<FileInfo>()
+      .ToList();
+    var pairs = new System.Collections.Concurrent.ConcurrentBag<(FileInfo File, FullMetadata Metadata)>();
+    try {
+      await Parallel.ForEachAsync(files, new ParallelOptions {
+        MaxDegreeOfParallelism = Environment.ProcessorCount * 2
+      }, async (file, ct) => {
+        try {
+          var md = await this._metadataReader.ReadAsync(file, ct);
+          pairs.Add((file, md));
+        } catch {
+          // Skip unreadable files; don't abort the snapshot.
+        }
+      });
+    } catch {
+      // Best-effort.
+    }
+    return pairs.ToList();
+  }
+
   private async void OnOpenMapBookmarksClick(object? sender, RoutedEventArgs e) {
     var window = new MapBookmarksWindow(
       store: null,
@@ -1199,11 +1313,120 @@ public partial class MainWindow : Window {
       .Select(i => i.FileInfo!)
       .ToList() ?? new List<FileInfo>();
 
-    var window = new EditImageWindow(file, selection);
+    var window = new EditImageWindow(file, selection,
+      op => this._controller.ViewModel.CurrentOperation = op);
     await window.ShowDialog(this);
   }
 
+  private async void OnOpenHdrMergeClick(object? sender, RoutedEventArgs e) {
+    var seed = this.FindControl<DataGrid>("FilesGrid")?.SelectedItems
+      .OfType<FileItemModel>()
+      .Where(i => i.FileInfo is { Exists: true })
+      .Select(i => i.FileInfo!)
+      .ToList() ?? new List<FileInfo>();
+
+    var window = seed.Count >= 3 ? new HdrMergeWindow(seed) : new HdrMergeWindow();
+    await window.ShowDialog(this);
+  }
+
+  private async void OnOpenPanoramaStitchClick(object? sender, RoutedEventArgs e) {
+    var selection = this.FindControl<DataGrid>("FilesGrid")?.SelectedItems
+      .OfType<FileItemModel>()
+      .Where(i => i.FileInfo is { Exists: true })
+      .Select(i => i.FileInfo!)
+      .ToList() ?? new List<FileInfo>();
+
+    var window = selection.Count > 0
+      ? new PanoramaStitchWindow(selection)
+      : new PanoramaStitchWindow();
+    await window.ShowDialog(this);
+  }
+
+  private async void OnOpenPanoramaViewerClick(object? sender, RoutedEventArgs e) {
+    // Null seed lets the viewer fall through to its own file picker.
+    var seed = this._currentFile is { Exists: true } current ? current : null;
+    await new PanoramaViewerWindow(seed).ShowDialog(this);
+  }
+
+  private async void OnOpenVideoExtractClick(object? sender, RoutedEventArgs e) {
+    var window = new VideoExtractWindow();
+    // When the user picks "Send to Panorama", hand the extracted frames
+    // straight into a fresh stitcher window so the video → pano flow doesn't
+    // require a manual file-picker hop.
+    window.FramesReady += frames => {
+      var stitcher = new PanoramaStitchWindow(frames);
+      _ = stitcher.ShowDialog(this);
+    };
+    await window.ShowDialog(this);
+  }
+
+  private async void OnOpenIn360ViewerClick(object? sender, RoutedEventArgs e)
+    => await new PanoramaViewerWindow(this.PickContextFile()).ShowDialog(this);
+
   private void OnExitClick(object? sender, RoutedEventArgs e) => this.Close();
+
+  private async void OnOpenSettingsClick(object? sender, RoutedEventArgs e) {
+    var window = new SettingsWindow(this._controller);
+    await window.ShowDialog(this);
+  }
+
+  private void OnCancelOperationClick(object? sender, RoutedEventArgs e) {
+    var op = this._controller.ViewModel.CurrentOperation;
+    op?.Cancel?.Invoke();
+  }
+
+  private void InitializeRecentFoldersMenus() {
+    this._controller.ViewModel.RecentSourceFolders.CollectionChanged += (_, _) => this.RebuildRecentMenu(isSource: true);
+    this._controller.ViewModel.RecentOutputFolders.CollectionChanged += (_, _) => this.RebuildRecentMenu(isSource: false);
+    this.RebuildRecentMenu(isSource: true);
+    this.RebuildRecentMenu(isSource: false);
+  }
+
+  /// <summary>
+  /// Repopulate one of the File-menu submenus from the matching recent-folder
+  /// list on the view-model. Each item gets a 1-based numeric mnemonic so the
+  /// keyboard-only path is &quot;File → R → 1&quot; for the most recent.
+  /// </summary>
+  private void RebuildRecentMenu(bool isSource) {
+    var menuName = isSource ? "RecentSourcesMenu" : "RecentOutputsMenu";
+    var list = isSource ? this._controller.ViewModel.RecentSourceFolders : this._controller.ViewModel.RecentOutputFolders;
+    if (this.FindControl<MenuItem>(menuName) is not { } menu)
+      return;
+
+    menu.Items.Clear();
+
+    if (list.Count == 0) {
+      menu.Items.Add(new MenuItem { Header = "(none)", IsEnabled = false });
+      return;
+    }
+
+    var index = 1;
+    foreach (var path in list) {
+      var captured = path;
+      var src = isSource;
+      var item = new MenuItem {
+        Header = $"_{index} {Shorten(captured)}"
+      };
+      item.Click += (_, _) => {
+        if (src)
+          this._controller.OpenRecentSourceFolder(captured);
+        else
+          this._controller.OpenRecentOutputFolder(captured);
+      };
+      ToolTip.SetTip(item, captured);
+      menu.Items.Add(item);
+      index++;
+    }
+  }
+
+  private static string Shorten(string path) {
+    const int maxLen = 60;
+    if (path.Length <= maxLen)
+      return path;
+    var head = path[..18];
+    var tail = path[^(maxLen - 22)..];
+    return head + "…" + tail;
+  }
 
   private void InitializeThemeMenu() {
     this.SyncThemeMenuToViewModel();

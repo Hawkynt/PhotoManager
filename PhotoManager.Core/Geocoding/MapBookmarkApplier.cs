@@ -27,6 +27,32 @@ public static class MapBookmarkApplier {
     };
   }
 
+  /// Variant used by the geofence batch flow: when <paramref name="onlyFillEmpty"/>
+  /// is true, place fields the photo already has stay untouched so a hand-typed
+  /// "Berlin" isn't overwritten by a bookmark's "Berlin, Germany". GPS still
+  /// always wins — the whole point of applying a fence.
+  public static MetadataEdit BuildEdit(MapBookmark bookmark, FullMetadata existing, bool onlyFillEmpty) {
+    ArgumentNullException.ThrowIfNull(bookmark);
+    ArgumentNullException.ThrowIfNull(existing);
+
+    return new MetadataEdit {
+      Gps         = Optional<GpsCoordinate?>.Set(bookmark.ToGps()),
+      Location    = ConditionalText(bookmark.Location,    existing.Location,    onlyFillEmpty),
+      City        = ConditionalText(bookmark.City,        existing.City,        onlyFillEmpty),
+      State       = ConditionalText(bookmark.State,       existing.State,       onlyFillEmpty),
+      Country     = ConditionalText(bookmark.Country,     existing.Country,     onlyFillEmpty),
+      CountryCode = ConditionalText(bookmark.CountryCode, existing.CountryCode, onlyFillEmpty)
+    };
+  }
+
   private static Optional<string?> OptionalText(string? value) =>
     string.IsNullOrWhiteSpace(value) ? default : Optional<string?>.Set(value);
+
+  private static Optional<string?> ConditionalText(string? bookmarkValue, string? existingValue, bool onlyFillEmpty) {
+    if (string.IsNullOrWhiteSpace(bookmarkValue))
+      return default;
+    if (onlyFillEmpty && !string.IsNullOrWhiteSpace(existingValue))
+      return default;
+    return Optional<string?>.Set(bookmarkValue);
+  }
 }

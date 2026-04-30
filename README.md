@@ -25,9 +25,31 @@ PhotoManager helps photographers and photo enthusiasts:
 ## Features
 
 ### What's new (April 2026)
+- 🧠 **Smart Patch Selection** in panorama stitchers — per-frame Laplacian-variance sharpness mask with adaptive median threshold; blurry / obstructed regions are excluded so they don't bleed into the panorama. Drives all three stitcher backends (mask-zeroed BGR for OpenCV, weight-scaled feathering for tripod). Toggle via checkbox; ~1s per frame extra.
+- 🎬 **Video → frames extractor (ffmpeg)** — drop a video sweep into PhotoManager and ffmpeg splits it into JPEG frames at user-pickable FPS / quality / time-window. Frames pipe straight into the panorama stitcher with one click. Friendly install banner (`winget`/`brew`/`apt`) when ffmpeg isn't on PATH.
+- 🌐 **Spherical (360°) stitcher** — third mode in the panorama stitcher: feed N overlapping frames, get a 2:1 equirectangular canvas straight into the 360° viewer (no save round-trip). OpenCvSharp4-backed.
+- 🌅 **HDR merge from bracketed exposures** — Greg-Ward MTB alignment + Debevec/Malik response-curve recovery + Reinhard / Drago tone mapping. Pure C#, no native deps. Mismatched-dimension brackets auto-fit-and-pad to the largest frame; manual exposure-time entry when EXIF is missing.
+- 🌐 **360° equirectangular viewer** — pan-around viewer for spherical photos with drag yaw/pitch + scroll FOV; auto-detects via 2:1 aspect or `GPano:ProjectionType` metadata. Save the current perspective view as a JPEG.
+- 🖼 **Panorama stitcher** — two modes: tripod (cylindrical re-projection + sequential SSD pairwise alignment + linear feathering, no deps) for sweep shots, and hand-held (OpenCvSharp4 high-level `Stitcher` for gigapixel hand-shot panos).
+- 🌳 **Hierarchical keyword tree** — `Travel > Italy > Rome` style. Selecting a leaf writes leaf + ancestors as flat `dc:subject` keywords so other tools see standard keywords; the tree itself lives in app-data JSON.
+- 📅 **Calendar view** — month-grid of photos by capture date with day-tile thumbnails and drill-into-day pane.
+- 🗂 **Burst grouping** — cluster photos taken in rapid succession by `DateTimeOriginal` proximity + filename similarity; tag each group with a `pm:burstId` keyword.
+- 🎯 **Geofence auto-tagging** — when a photo's GPS lands inside a saved bookmark's radius, merge the bookmark's place fields. Auto-on-scan toggle + manual "Apply geofences to selection" dialog.
+- ☀️🌙 **Sun / moon position calculator** — NOAA solar + Almanac lunar (azimuth + altitude + twilight description) for any photo's time + location. Used by the world-map sun-arrow follow-up.
+- 🌤 **Heuristic sky mask** — top-N% rows + blue-dominance + low-saturation + low-edge classifier; appends a brush-mask local adjustment for the detected sky.
+- 👁 **Red-eye removal** — flood-fill blob detector inside face bounds (or whole image when face detector unavailable) + luminance-preserving desaturation.
+- 💧 **Watermark layer** — text + opacity + position + font-size, applied at render time only (non-destructive). Round-trips via `pm:developSettings`.
+- 🪟 **Develop preset on import** — pick a `DevelopTemplateStore` preset in Settings and every newly-imported file with no embedded settings gets it stamped in automatically.
+- 🎬 **3D LUT support** — drop `.cube` / `.3dl` files into `%AppData%/PhotoManager/luts/` and they appear as a "Look" picker in the develop window with an opacity slider. Round-trips via `crs:LookName` so 3rd-party tools see the assigned look.
+- ✂️ **Click-drag crop overlay** — eight drag-handles + dimmed exterior + rule-of-thirds guides on the develop preview. Auto-shows when the user has a non-default crop, toggleable via a "Show crop handles" button.
+- 🧠 **Smart-album rule builder** — composable rules (rating ≥, keyword, person, location, color label, pick state, date range, GPS box) AND/OR-combined; persisted polymorphically in `UserSettingsData`.
+- 📊 **Quality flags scan** — Laplacian-variance sharpness + histogram clipping; tags blurry / over- / under-exposed photos with `qa:` keywords for one-click culling.
+- 🛤 **GPX track preview on the world map** — load a GPX file, see the route polyline alongside your photo pins.
+- 📍 **Nearby-photo radius search** — in the world map, switch to Nearby mode, click anywhere → photos within a log-scale 100m–50km radius are highlighted, the rest dimmed.
+- ⚙️ **Settings window + Recent folders + Status-bar progress** — File → Settings consolidates theme, default rename template, recent-folders depth, geocoder/elevation toggles, rate limit. File menu lists last-5 source/output folders. A shared `OperationProgress` strip below the status bar shows long ops with a Cancel button.
 - 🎭 **AI subject mask** — MODNet ONNX segmentation auto-creates a brush-mask local adjustment so you can tweak the subject without touching the background.
 - 🔀 **Side-by-side compare** — three modes inside the develop window: After only, split view (with grid splitter), or slider-overlay wipe against the un-edited baseline.
-- 🎨 **Theme toggle** — Light / Dark / System default, persisted across sessions.
+- 🎨 **Theme toggle** — Light / Dark / System default, persisted across sessions, theme-aware tile / border brushes.
 - 🪂 **Drag-drop** folders onto the source tree (adds them as roots) or files onto the grid (switches to target mode and scans).
 - 📤 **KML export** — `Tools → Export KML…` walks the in-memory index and writes one Placemark per geotagged photo.
 - 🔁 **Duplicate detection** — 64-bit perceptual hash + Hamming-distance clustering; no DB, in-memory only.
@@ -37,34 +59,45 @@ PhotoManager helps photographers and photo enthusiasts:
 
 ### Current Features
 - ✅ Cross-platform desktop UI (Avalonia 11 — Windows, macOS, Linux), single-file self-contained executables per platform
+- ✅ HDR merge from bracketed exposures (alignment + response curve + tone mapping, hand-rolled in pure C#)
+- ✅ Panorama stitching: tripod (cylindrical reprojection) + hand-held gigapixel (OpenCvSharp4) + spherical 360° (equirectangular output, viewer-ready); optional Smart Patch Selection masks out blurry / obstructed regions per frame
+- ✅ Video → frames extractor (ffmpeg subprocess; cancellable; pipes into the panorama stitcher)
+- ✅ 360° equirectangular spherical-photo viewer with drag-pan + scroll-zoom
 - ✅ Lightroom-lite develop pipeline (~all non-AI Adobe parameters), non-destructive via XMP `pm:developSettings` round-trip
-- ✅ AI subject mask (MODNet ONNX) → brush-dab local adjustment
+- ✅ 3D LUT (.cube / .3dl) creative-look picker with opacity blend and `crs:LookName` round-trip
+- ✅ Watermark layer (text + opacity + position + font-size) rendered at output time only
+- ✅ Develop preset auto-applied to newly-imported files (via Settings)
+- ✅ Click-drag crop overlay with corner + edge handles, dimmed exterior, rule-of-thirds guides
+- ✅ AI subject mask (MODNet ONNX) + heuristic sky mask + red-eye removal → brush-dab local adjustments
 - ✅ Face detection + clustering (UltraFace + ArcFace ONNX), object detection (YOLOv8 ONNX)
 - ✅ GPS map editor, GPX geotagging, reverse geocoding, elevation lookup, triangulation/resection, world map
-- ✅ Map favourites/bookmarks, KML export, batch reverse-geocode
-- ✅ Library search (in-memory index, no DB), saved searches, smart filter chips (rating, color, picks/rejects)
+- ✅ World-map GPX track overlay + Nearby-photo radius search (haversine, log-scale 100m–50km)
+- ✅ Map favourites/bookmarks, KML export, batch reverse-geocode, geofence auto-tagging on scan
+- ✅ Sun / moon position calculator (NOAA solar + Almanac lunar) with twilight regime
+- ✅ Library search (in-memory index, no DB), saved searches, smart-album rule builder (composable clauses)
+- ✅ Hierarchical keyword tree flattens to flat `dc:subject` on write
+- ✅ Calendar view (photos by capture date in a month grid) and burst-stacks detector
 - ✅ Side-by-side compare (After / Split / Slider) inside the develop window
-- ✅ Picasa-style picks/rejects (`xmp:Pick`/`xmp:Reject`) with P/X/U hotkeys
+- ✅ Picasa-style picks/rejects (`xmp:Pick`/`xmp:Reject`) with P/X/U hotkeys; quality-flag scan tags blurry / over- / under-exposed photos
 - ✅ Perceptual-hash duplicate detection
-- ✅ Theme toggle (Light / Dark / System), persisted in user settings
+- ✅ Settings window (theme, default rename template, recent-folders depth, default develop preset, geocoder/elevation toggles, rate limit, geofence-on-scan toggle)
+- ✅ Recent folders submenu (last 5 source + 5 output folders, persisted)
+- ✅ Status-bar progress strip with Cancel for long ops, bound to a shared `IProgress<T>` sink
+- ✅ Theme toggle (Light / Dark / System), persisted in user settings, theme-aware tile / border brushes
 - ✅ Drag-drop folders onto source tree / files onto grid
 - ✅ Batch rename with metadata-token templates; batch date shift; batch metadata edit
 - ✅ Multiple date source detection (EXIF SubIFD, IFD0, GPS, filename, file system) with reliability scoring
 - ✅ Folder structure organisation (`yyyy/yyyyMMdd/HHmmss`); duplicate handling with sequential numbering
 - ✅ Command-line interface for automation (preview/dry-run, recursive)
-- ✅ MVC pattern (UI), atomic metadata writes (preserved mtime), comprehensive unit + integration tests
+- ✅ MVC pattern (UI), atomic metadata writes (preserved mtime), comprehensive unit + integration tests (766 passing)
 
 ### Planned Features
-- [ ] AI sky mask (heuristic + dedicated model)
+- [ ] AI sky mask using a dedicated ONNX model (heuristic version is shipped)
+- [ ] Sun/moon arrows on the world map (calculator is shipped; map overlay is the follow-up)
 - [ ] Healing brush / spot remover
-- [ ] LUT support (`.cube` / `.3dl`)
-- [ ] HDR merge (bracketed series), panorama stitch
-- [ ] Click-drag crop overlay on the develop preview
-- [ ] Hierarchical keyword tree (flattens to `dc:subject` on write)
-- [ ] Smart-album rule builder (saved searches with rating/keyword/GPS-box predicates)
-- [ ] Calendar / stacks-by-burst views
-- [ ] Status-bar progress for long operations
+- [ ] Photometric modelling (photogrammetry / surface normals — requires user-story scoping)
 - [ ] Crash-safe metadata write-back queue
+- [ ] Background pre-cache of thumbnails
 
 ## How It Works
 
@@ -204,6 +237,8 @@ Settings can be configured through:
 - Image files only — video support is not on the roadmap.
 - No cloud storage integration; PhotoManager works entirely on local files. The XMP sidecars and embedded XMP packets are designed to interoperate cleanly with cloud-syncing tools that respect them.
 - The AI subject mask requires a one-time ~25 MB MODNet ONNX download (`Tools → Download detection models…` or click `🎭 Detect subject` and confirm the prompt).
+- The video → frames extractor requires `ffmpeg` to be installed and on PATH (`winget install ffmpeg` / `brew install ffmpeg` / `apt install ffmpeg`). PhotoManager doesn't bundle the ffmpeg binary because of its size.
+- The spherical 360° stitcher uses OpenCV's mosaic-into-canvas fallback (true cleanroom equirectangular reprojection isn't reachable through OpenCvSharp4 4.10's bindings). Output is a 2:1 canvas with the stitched mosaic centred; full-sphere coverage requires aligned input.
 - pHash duplicate detection is in-memory only — re-scanning a 10k+ photo library re-computes hashes (mtime-keyed cache short-circuits unchanged files).
 
 ## Security Considerations

@@ -9,18 +9,39 @@
         MinWidth="700" MinHeight="500"
         WindowStartupLocation="CenterOwner"
         Title="World map">
-  <Grid RowDefinitions="Auto,*,Auto" Margin="12">
+  <Grid RowDefinitions="Auto,Auto,*,Auto" Margin="12">
     <StackPanel Grid.Row="0" Spacing="4" Margin="0,0,0,8">
       <TextBlock Text="World map" FontSize="16" FontWeight="SemiBold" />
       <TextBlock Opacity="0.75" TextWrapping="Wrap"
-                 Text="Every geotagged photo from your currently scanned library, plotted as a pin. Click a pin to see which photo lives there; the Open button reveals it in the main grid." />
+                 Text="Every geotagged photo from your currently scanned library, plotted as a pin. Click a pin to see which photo lives there; the Open button reveals it in the main grid. Load a GPX track to overlay a route, or switch to Nearby mode to highlight photos within a radius of a clicked point." />
     </StackPanel>
 
-    <Border Grid.Row="1" BorderBrush="{DynamicResource PanelBorderBrush}" BorderThickness="1" CornerRadius="4">
+    <Grid Grid.Row="1" ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto" Margin="0,0,0,6">
+      <Button Grid.Column="0" Content="📥 Load GPX..." Click="OnLoadGpxClick"
+              ToolTip.Tip="Overlay a GPX track on the map" />
+      <ToggleButton Grid.Column="1" x:Name="TrackToggle" Margin="6,0,0,0" Content="🛤 Show track"
+                    Checked="OnTrackToggleChanged" Unchecked="OnTrackToggleChanged"
+                    IsEnabled="False"
+                    ToolTip.Tip="Show / hide the loaded GPX track" />
+      <ToggleButton Grid.Column="2" x:Name="NearbyToggle" Margin="12,0,0,0" Content="📍 Nearby"
+                    Checked="OnNearbyToggleChanged" Unchecked="OnNearbyToggleChanged"
+                    ToolTip.Tip="Click the map to highlight photos within a radius" />
+      <TextBlock Grid.Column="4" Text="Radius:" VerticalAlignment="Center" Margin="0,0,4,0"
+                 IsVisible="{Binding #NearbyToggle.IsChecked}" />
+      <StackPanel Grid.Column="5" Orientation="Horizontal" Spacing="6"
+                  IsVisible="{Binding #NearbyToggle.IsChecked}">
+        <Slider x:Name="RadiusSlider" Width="200" Minimum="0" Maximum="100" Value="40"
+                ValueChanged="OnRadiusSliderChanged"
+                ToolTip.Tip="Logarithmic 100 m … 50 km" />
+        <TextBlock x:Name="RadiusText" VerticalAlignment="Center" Width="80" />
+      </StackPanel>
+    </Grid>
+
+    <Border Grid.Row="2" BorderBrush="{DynamicResource PanelBorderBrush}" BorderThickness="1" CornerRadius="4">
       <mapsui:MapControl x:Name="MapControl" />
     </Border>
 
-    <Grid Grid.Row="2" ColumnDefinitions="*,Auto,Auto" Margin="0,8,0,0">
+    <Grid Grid.Row="3" ColumnDefinitions="*,Auto,Auto" Margin="0,8,0,0">
       <TextBlock Grid.Column="0" x:Name="StatusText" VerticalAlignment="Center" Opacity="0.8" />
       <Button Grid.Column="1" x:Name="OpenButton" Content="🖼️ Open in main window"
               Click="OnOpenClick" IsEnabled="False" Margin="0,0,6,0" />

@@ -1,0 +1,46 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="1100" d:DesignHeight="720"
+        x:Class="PhotoManager.UI.Views.PanoramaViewerWindow"
+        Width="1100" Height="720"
+        MinWidth="640" MinHeight="420"
+        WindowStartupLocation="CenterOwner"
+        Title="360° viewer">
+  <Grid RowDefinitions="*,Auto,Auto" Margin="8">
+    <Border Grid.Row="0" Background="#111" BorderBrush="#333" BorderThickness="1" CornerRadius="4"
+            ClipToBounds="True">
+      <Image x:Name="ViewportImage"
+             Stretch="Uniform"
+             PointerPressed="OnViewportPointerPressed"
+             PointerMoved="OnViewportPointerMoved"
+             PointerReleased="OnViewportPointerReleased"
+             PointerWheelChanged="OnViewportPointerWheelChanged" />
+    </Border>
+
+    <!-- Slider strip mirrors the drag/wheel state so the user can also tap
+         exact values. Yaw spans the full 360° range; pitch caps at ±89 to
+         avoid the singularity at the poles. -->
+    <Grid Grid.Row="1" ColumnDefinitions="Auto,*,Auto,Auto,*,Auto,Auto,*,Auto" Margin="4,8,4,4">
+      <TextBlock Grid.Column="0" Text="Yaw" VerticalAlignment="Center" Margin="0,0,6,0" />
+      <Slider Grid.Column="1" x:Name="YawSlider" Minimum="0" Maximum="360" TickFrequency="30" />
+      <TextBlock Grid.Column="2" x:Name="YawText" Width="56" VerticalAlignment="Center" />
+
+      <TextBlock Grid.Column="3" Text="Pitch" VerticalAlignment="Center" Margin="16,0,6,0" />
+      <Slider Grid.Column="4" x:Name="PitchSlider" Minimum="-89" Maximum="89" TickFrequency="15" />
+      <TextBlock Grid.Column="5" x:Name="PitchText" Width="56" VerticalAlignment="Center" />
+
+      <TextBlock Grid.Column="6" Text="FOV" VerticalAlignment="Center" Margin="16,0,6,0" />
+      <Slider Grid.Column="7" x:Name="FovSlider" Minimum="50" Maximum="120" TickFrequency="10" />
+      <TextBlock Grid.Column="8" x:Name="FovText" Width="56" VerticalAlignment="Center" />
+    </Grid>
+
+    <Grid Grid.Row="2" ColumnDefinitions="*,Auto,Auto,Auto" Margin="4,4,4,0">
+      <TextBlock Grid.Column="0" x:Name="StatusText" VerticalAlignment="Center" Opacity="0.75" />
+      <Button Grid.Column="1" Content="🔄 Reset view" Click="OnResetClick" Margin="0,0,6,0" />
+      <Button Grid.Column="2" Content="💾 Save as…" Click="OnSaveAsClick" Margin="0,0,6,0" />
+      <Button Grid.Column="3" Content="🚪 Close" Click="OnCloseClick" IsCancel="True" />
+    </Grid>
+  </Grid>
+</Window>

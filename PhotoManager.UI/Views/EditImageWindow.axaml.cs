@@ -9,6 +9,7 @@ using PhotoManager.Core.Develop;
 using PhotoManager.Core.Models;
 using PhotoManager.Core.Segmentation;
 using PhotoManager.UI.Controls;
+using PhotoManager.UI.Models;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
@@ -32,6 +33,7 @@ public partial class EditImageWindow : Window {
 
   private readonly FileInfo? _sourceFile;
   private readonly IReadOnlyList<FileInfo> _selectionForApplyAll;
+  private readonly Action<OperationProgress?>? _setHostOperation;
   private readonly DevelopTemplateStore _templates = new();
   private Image<Rgba32>? _previewSource;  // downscaled copy for live preview
   private Image<Rgba32>? _developedPreview;  // last preview render — sampled by eyedroppers
@@ -140,12 +142,15 @@ public partial class EditImageWindow : Window {
   /// <summary>Index of the active sub-mask within the active local adjustment, or -1 = primary.</summary>
   private int _activeSubMaskIndex = -1;
 
-  public EditImageWindow() : this(null, Array.Empty<FileInfo>()) { }
+  public EditImageWindow() : this(null, Array.Empty<FileInfo>(), null) { }
 
   public EditImageWindow(FileInfo sourceFile)
-    : this(sourceFile, Array.Empty<FileInfo>()) { }
+    : this(sourceFile, Array.Empty<FileInfo>(), null) { }
 
-  public EditImageWindow(FileInfo? sourceFile, IReadOnlyList<FileInfo> selectionForApplyAll) {
+  public EditImageWindow(FileInfo? sourceFile, IReadOnlyList<FileInfo> selectionForApplyAll)
+    : this(sourceFile, selectionForApplyAll, null) { }
+
+  public EditImageWindow(FileInfo? sourceFile, IReadOnlyList<FileInfo> selectionForApplyAll, Action<OperationProgress?>? setHostOperation) {
     // Suppress the slider/combobox-change cascade while the visual tree is
     // built. Avalonia raises SelectionChanged for ComboBox SelectedIndex set
     // in XAML, and ValueChanged for sliders whose value defaults are loaded —
@@ -159,6 +164,7 @@ public partial class EditImageWindow : Window {
     }
     this._sourceFile = sourceFile;
     this._selectionForApplyAll = selectionForApplyAll ?? Array.Empty<FileInfo>();
+    this._setHostOperation = setHostOperation;
 
     this.RefreshTemplateList();
 
@@ -180,6 +186,11 @@ public partial class EditImageWindow : Window {
 
     if (this.FindControl<Avalonia.Controls.Image>("PreviewImageSlider") is { } sliderImg)
       sliderImg.SizeChanged += (_, _) => this.UpdateSliderClip();
+
+    if (this.FindControl<CropOverlayCanvas>("CropOverlay") is { } cropOverlay)
+      cropOverlay.CropChanged += this.OnCropOverlayChanged;
+
+    this.RefreshLookList();
 
     if (sourceFile is not null)
       _ = this.LoadPreviewAsync();
@@ -984,6 +995,7 @@ public partial class EditImageWindow : Window {
     this._settings = this._settings with {
       CropLeft = l, CropTop = t, CropRight = r, CropBottom = b
     };
+    this.SyncCropOverlay();
     this.SchedulePreviewUpdate();
   }
 
@@ -1001,6 +1013,7 @@ public partial class EditImageWindow : Window {
     } finally {
       this._suppressSliderEvents = false;
     }
+    this.SyncCropOverlay();
     this.UpdatePreview();
   }
 
@@ -1090,6 +1103,10 @@ public partial class EditImageWindow : Window {
     if (this.FindControl<MaskOverlayCanvas>("MaskOverlay") is { } overlay) {
       overlay.ImageWidth  = this._previewSource.Width;
       overlay.ImageHeight = this._previewSource.Height;
+    }
+    if (this.FindControl<CropOverlayCanvas>("CropOverlay") is { } cropOverlay) {
+      cropOverlay.ImageWidth  = this._previewSource.Width;
+      cropOverlay.ImageHeight = this._previewSource.Height;
     }
 
     // Pick up any develop edits embedded in the file's XMP so the user
@@ -1384,9 +1401,18 @@ public partial class EditImageWindow : Window {
       if (this.FindControl<NumericUpDown>("CropTopBox")    is { } topBox)    topBox.Value    = (decimal)target.CropTop;
       if (this.FindControl<NumericUpDown>("CropRightBox")  is { } rightBox)  rightBox.Value  = (decimal)target.CropRight;
       if (this.FindControl<NumericUpDown>("CropBottomBox") is { } bottomBox) bottomBox.Value = (decimal)target.CropBottom;
+      if (this.FindControl<Slider>("LookOpacitySlider") is { } lookOp) lookOp.Value = target.LookOpacity;
+      if (this.FindControl<ComboBox>("LookCombo") is { } lookCombo && lookCombo.ItemsSource is IEnumerable<string> looks) {
+        var pick = string.IsNullOrEmpty(target.LookName) ? "(no look)" : target.LookName!;
+        var idx = looks.ToList().IndexOf(pick);
+        lookCombo.SelectedIndex = idx < 0 ? 0 : idx;
+      }
     } finally {
       this._suppressSliderEvents = false;
     }
+    this.SyncCropOverlay();
+    if (this.FindControl<TextBlock>("LookOpacityValue") is { } lookLabel)
+      lookLabel.Text = target.LookOpacity.ToString("0.00", CultureInfo.InvariantCulture);
     this.RefreshValueLabels();
     this.RefreshHslAxisSliders();
     this.RefreshGradingSliders();
@@ -1540,21 +1566,43 @@ public partial class EditImageWindow : Window {
       return;
     }
 
-    this.SetStatus($"Rendering {this._selectionForApplyAll.Count} file(s)...");
+    var total = this._selectionForApplyAll.Count;
+    this.SetStatus($"Rendering {total} file(s)...");
+
+    // Surface the develop-batch in the main window's status strip when we
+    // were given a hook into it. The strip carries its own ProgressBar +
+    // Cancel button so the user can abort without searching for this dialog.
+    var cts = new CancellationTokenSource();
+    var op = new OperationProgress($"Developing {total} files…", cts.Cancel) { Fraction = 0 };
+    this._setHostOperation?.Invoke(op);
+
     var failed = 0;
     var written = 0;
-    foreach (var src in this._selectionForApplyAll) {
-      if (!src.Exists)
-        continue;
-      var dest = new FileInfo(Path.Combine(
-        src.Directory!.FullName,
-        Path.GetFileNameWithoutExtension(src.Name) + "_developed.jpg"));
-      try {
-        await ImageDeveloper.RenderToJpegAsync(src, dest, this._settings);
-        written++;
-      } catch {
-        failed++;
+    try {
+      var index = 0;
+      foreach (var src in this._selectionForApplyAll) {
+        if (cts.IsCancellationRequested)
+          break;
+        if (!src.Exists) {
+          index++;
+          continue;
+        }
+        var dest = new FileInfo(Path.Combine(
+          src.Directory!.FullName,
+          Path.GetFileNameWithoutExtension(src.Name) + "_developed.jpg"));
+        try {
+          await ImageDeveloper.RenderToJpegAsync(src, dest, this._settings);
+          written++;
+        } catch {
+          failed++;
+        }
+        index++;
+        op.Description = $"Developing {index}/{total} — {src.Name}";
+        op.Fraction = (double)index / total;
       }
+    } finally {
+      this._setHostOperation?.Invoke(null);
+      cts.Dispose();
     }
 
     this.SetStatus(failed == 0
@@ -1700,6 +1748,96 @@ public partial class EditImageWindow : Window {
       if (this.FindControl<Avalonia.Controls.Image>("BaselineImageSlider") is { } b)
         b.Source = bitmap;
     });
+  }
+
+  // ---------- Crop drag-handles + Look (3D LUT) ----------
+
+  private void OnShowCropHandlesChanged(object? sender, RoutedEventArgs e) {
+    this.SyncCropOverlay();
+  }
+
+  private void OnCropOverlayChanged(object? sender, EventArgs e) {
+    if (this.FindControl<CropOverlayCanvas>("CropOverlay") is not { } overlay)
+      return;
+    this._settings = this._settings with {
+      CropLeft   = overlay.CropLeft,
+      CropTop    = overlay.CropTop,
+      CropRight  = overlay.CropRight,
+      CropBottom = overlay.CropBottom
+    };
+    this._suppressSliderEvents = true;
+    try {
+      if (this.FindControl<NumericUpDown>("CropLeftBox")   is { } l) l.Value = (decimal)overlay.CropLeft;
+      if (this.FindControl<NumericUpDown>("CropTopBox")    is { } t) t.Value = (decimal)overlay.CropTop;
+      if (this.FindControl<NumericUpDown>("CropRightBox")  is { } r) r.Value = (decimal)overlay.CropRight;
+      if (this.FindControl<NumericUpDown>("CropBottomBox") is { } b) b.Value = (decimal)overlay.CropBottom;
+    } finally {
+      this._suppressSliderEvents = false;
+    }
+    this.SchedulePreviewUpdate();
+  }
+
+  private void SyncCropOverlay() {
+    if (this.FindControl<CropOverlayCanvas>("CropOverlay") is not { } overlay)
+      return;
+    overlay.SetCrop(this._settings.CropLeft, this._settings.CropTop, this._settings.CropRight, this._settings.CropBottom);
+
+    var hasNonDefault = this._settings.CropLeft   > 1e-6
+                     || this._settings.CropTop    > 1e-6
+                     || this._settings.CropRight  < 1 - 1e-6
+                     || this._settings.CropBottom < 1 - 1e-6;
+    var toggleOn = this.FindControl<ToggleButton>("ShowCropHandlesToggle")?.IsChecked == true;
+    var visible = toggleOn || hasNonDefault;
+    overlay.IsVisible = visible;
+    overlay.IsHitTestVisible = visible;
+  }
+
+  private void RefreshLookList() {
+    if (this.FindControl<ComboBox>("LookCombo") is not { } combo)
+      return;
+    var dir = PhotoManager.Core.AppDataPaths.SubDirectory("luts");
+    var entries = new List<string> { "(no look)" };
+    try {
+      foreach (var ext in new[] { "*.cube", "*.3dl" })
+        foreach (var f in dir.EnumerateFiles(ext, SearchOption.TopDirectoryOnly).OrderBy(f => f.Name, StringComparer.OrdinalIgnoreCase))
+          entries.Add(f.Name);
+    } catch { /* best-effort */ }
+
+    this._suppressSliderEvents = true;
+    try {
+      combo.ItemsSource = entries;
+      var current = this._settings.LookName;
+      var idx = string.IsNullOrEmpty(current) ? 0 : entries.IndexOf(current!);
+      combo.SelectedIndex = idx < 0 ? 0 : idx;
+    } finally {
+      this._suppressSliderEvents = false;
+    }
+  }
+
+  private void OnRefreshLooksClick(object? sender, RoutedEventArgs e) {
+    this.RefreshLookList();
+    this.SetStatus("Look list refreshed.");
+  }
+
+  private void OnLookSelected(object? sender, SelectionChangedEventArgs e) {
+    if (this._suppressSliderEvents)
+      return;
+    if (sender is not ComboBox combo)
+      return;
+    var picked = combo.SelectedItem as string;
+    var lookName = string.IsNullOrEmpty(picked) || picked == "(no look)" ? null : picked;
+    this._settings = this._settings with { LookName = lookName };
+    this.SchedulePreviewUpdate();
+  }
+
+  private void OnLookOpacityChanged(object? sender, RangeBaseValueChangedEventArgs e) {
+    if (this._suppressSliderEvents)
+      return;
+    var v = e.NewValue;
+    this._settings = this._settings with { LookOpacity = v };
+    if (this.FindControl<TextBlock>("LookOpacityValue") is { } label)
+      label.Text = v.ToString("0.00", CultureInfo.InvariantCulture);
+    this.SchedulePreviewUpdate();
   }
 
   private void InvalidateBaseline() {

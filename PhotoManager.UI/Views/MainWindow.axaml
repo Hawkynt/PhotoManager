@@ -126,11 +126,20 @@
       <Setter Property="Background" Value="#DCE8F5" />
     </Style>
   </Window.Styles>
-  <Grid RowDefinitions="Auto,*,Auto,Auto">
+  <Grid RowDefinitions="Auto,*,Auto,Auto,Auto">
     <Menu Grid.Row="0">
       <MenuItem Header="_File">
         <MenuItem Header="📁 _Add folder..." Click="OnAddPathClick" InputGesture="Ctrl+O" />
         <MenuItem Header="📂 Select _output..." Click="OnBrowseDestinationClick" />
+        <Separator />
+        <MenuItem Header="📁 Recent _sources" x:Name="RecentSourcesMenu">
+          <MenuItem Header="(none)" IsEnabled="False" />
+        </MenuItem>
+        <MenuItem Header="📂 Recent _output folders" x:Name="RecentOutputsMenu">
+          <MenuItem Header="(none)" IsEnabled="False" />
+        </MenuItem>
+        <Separator />
+        <MenuItem Header="⚙️ _Settings…" Click="OnOpenSettingsClick" InputGesture="Ctrl+," />
         <Separator />
         <MenuItem Header="🚪 E_xit" Click="OnExitClick" InputGesture="Alt+F4" />
       </MenuItem>
@@ -148,6 +157,16 @@
         <MenuItem Header="🔍 _Search library..." Click="OnOpenSearchClick" InputGesture="Ctrl+F" />
         <MenuItem Header="🔁 Find _duplicates..." Click="OnOpenDuplicatesClick"
                   ToolTip.Tip="Scan a folder for visually similar photos via 64-bit perceptual hash. Hashes live in memory only; no DB on disk." />
+        <MenuItem Header="📊 Analyse _quality flags..." Click="OnOpenQualityScanClick"
+                  ToolTip.Tip="Run sharpness (Laplacian variance) + exposure (histogram clipping) heuristics over a folder; tag blurry / over-/under-exposed photos with qa: keywords." />
+        <MenuItem Header="🧠 Smart _albums..." Click="OnOpenSmartAlbumsClick"
+                  ToolTip.Tip="Compose multi-clause smart albums (rating ≥ 3 AND keyword 'vacation' AND GPS within box) and load them into the search filter." />
+        <MenuItem Header="🌳 Keyword _tree..." Click="OnOpenKeywordTreeClick"
+                  ToolTip.Tip="Manage a hierarchical keyword tree (Travel > Italy > Rome). Selecting a leaf writes leaf + ancestors as flat dc:subject keywords." />
+        <MenuItem Header="📅 Calendar _view..." Click="OnOpenCalendarClick"
+                  ToolTip.Tip="Photos grouped by capture date in a month-grid; click a day to drill into the photos taken that day." />
+        <MenuItem Header="🗂 Detect _bursts..." Click="OnOpenBurstStacksClick"
+                  ToolTip.Tip="Cluster photos taken in rapid succession into burst groups; tag each group with a pm:burstId keyword." />
         <MenuItem Header="✏️ Batch _rename..." Click="OnOpenBatchRenameClick"
                   ToolTip.Tip="Rename every selected file using a metadata-aware template like {date:yyyy-MM-dd}_{city}_{name}." />
         <MenuItem Header="🕒 Batch date _shift..." Click="OnOpenBatchDateShiftClick"
@@ -161,9 +180,21 @@
                   ToolTip.Tip="Resolve city/country/state for every selected photo's GPS coordinate in one batch." />
         <MenuItem Header="📤 Export _KML..." Click="OnExportKmlClick"
                   ToolTip.Tip="Save every geotagged photo's coordinates to a single .kml file (Google Earth / GPX viewers)." />
+        <MenuItem Header="🎯 Apply _geofences to selection..." Click="OnOpenGeofenceBatchClick"
+                  ToolTip.Tip="For every selected geotagged photo, apply the place fields of any saved bookmark whose radius contains the photo's GPS." />
         <MenuItem Header="👤 _Face gallery..." Click="OnOpenFaceGalleryClick" />
         <MenuItem Header="🎨 _Develop image..." Click="OnOpenDevelopClick" InputGesture="Ctrl+E"
                   IsEnabled="{Binding HasSelectedFile}" />
+        <Separator />
+        <MenuItem Header="🌅 _HDR merge..." Click="OnOpenHdrMergeClick"
+                  ToolTip.Tip="Merge a bracket of differently-exposed photos into a single HDR image via Debevec response-curve recovery + Reinhard / Drago tone mapping." />
+        <MenuItem Header="🖼 Panorama _stitch..." Click="OnOpenPanoramaStitchClick"
+                  ToolTip.Tip="Stitch overlapping photos into a panorama. Tripod mode = hand-rolled cylindrical projection; hand-held mode = OpenCV high-level Stitcher (gigapixel-friendly); spherical mode = full 360° equirectangular." />
+        <MenuItem Header="🎬 _Video to frames..." Click="OnOpenVideoExtractClick"
+                  ToolTip.Tip="Split a video into individual JPEG frames via ffmpeg. Pipe the result straight into the panorama stitcher to build a sweep from a single take." />
+        <MenuItem Header="🌐 _360° viewer..." Click="OnOpenPanoramaViewerClick"
+                  IsEnabled="{Binding HasSelectedFile}"
+                  ToolTip.Tip="Open the selected equirectangular spherical photo as a navigable 360° view (drag to look around, scroll to zoom)." />
         <Separator />
         <MenuItem Header="🤖 _Download detection models..." Click="OnOpenModelsDialogClick" />
       </MenuItem>
@@ -327,6 +358,7 @@
               <MenuItem Header="🌐 Reverse-geocode selection..." Click="OnReverseGeocodeSelectionClick" />
               <Separator />
               <MenuItem Header="🖼️ Open in default _viewer" Click="OnOpenInViewerClick" />
+              <MenuItem Header="🌐 Open in 360° v_iewer" Click="OnOpenIn360ViewerClick" />
               <MenuItem Header="📂 Show in _folder" Click="OnRevealInFolderClick" />
             </ContextMenu>
           </DataGrid.ContextMenu>
@@ -640,5 +672,27 @@
                    Minimum="0" Maximum="100"
                    Value="{Binding ProgressValue}" />
     </Grid>
+
+    <!-- D5: long-operation progress strip. Visible only while
+         CurrentOperation is non-null; switches to indeterminate mode when
+         the operation reports Fraction=NaN. The Cancel button only appears
+         when the operation supplied a cancellation callback. -->
+    <Border Grid.Row="4" Margin="8,0,8,8"
+            BorderBrush="{DynamicResource PanelBorderBrush}" BorderThickness="1" CornerRadius="4"
+            Padding="8,4"
+            IsVisible="{Binding HasCurrentOperation}">
+      <Grid ColumnDefinitions="Auto,*,Auto,Auto" DataContext="{Binding CurrentOperation}">
+        <TextBlock Grid.Column="0" Text="{Binding Description}" VerticalAlignment="Center" Margin="0,0,8,0" />
+        <ProgressBar Grid.Column="1" Height="14" Margin="0,0,8,0"
+                     Minimum="0" Maximum="100"
+                     Value="{Binding Percentage}"
+                     IsIndeterminate="{Binding IsIndeterminate}" />
+        <TextBlock Grid.Column="2" VerticalAlignment="Center" Margin="0,0,8,0"
+                   Text="{Binding Percentage, StringFormat={}{0:0}%}"
+                   IsVisible="{Binding !IsIndeterminate}" />
+        <Button Grid.Column="3" x:Name="CancelOperationButton" Content="⏹ Cancel"
+                Click="OnCancelOperationClick" Padding="8,2" />
+      </Grid>
+    </Border>
   </Grid>
 </Window>

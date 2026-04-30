@@ -1,0 +1,51 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:models="using:PhotoManager.UI.Models"
+        mc:Ignorable="d" d:DesignWidth="900" d:DesignHeight="640"
+        x:Class="PhotoManager.UI.Views.QualityScanWindow"
+        Width="900" Height="640"
+        MinWidth="700" MinHeight="460"
+        WindowStartupLocation="CenterOwner"
+        Title="Analyse quality flags">
+  <Grid RowDefinitions="Auto,Auto,*,Auto" Margin="12">
+    <StackPanel Grid.Row="0" Spacing="4" Margin="0,0,0,8">
+      <TextBlock Text="Analyse quality flags" FontSize="16" FontWeight="SemiBold" />
+      <TextBlock Opacity="0.75" TextWrapping="Wrap"
+                 Text="Walks the chosen folder, scores each photo for sharpness and exposure, and lets you tag the misses. Sharpness uses Laplacian variance on a downsampled grayscale preview; exposure is a histogram-based check for clipped highlights / crushed shadows." />
+    </StackPanel>
+
+    <Grid Grid.Row="1" ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto" Margin="0,0,0,6">
+      <TextBlock Grid.Column="0" Text="Folder:" VerticalAlignment="Center" Margin="0,0,6,0" />
+      <TextBox Grid.Column="1" x:Name="FolderBox" Watermark="Path to photos folder" />
+      <Button Grid.Column="2" Content="📂 Browse..." Margin="6,0,0,0" Click="OnBrowseClick" />
+      <CheckBox Grid.Column="3" x:Name="RecursiveBox" Content="Recursive" IsChecked="True" Margin="12,0,0,0" VerticalAlignment="Center" />
+      <Button Grid.Column="4" Content="📊 Scan" Margin="12,0,0,0" Click="OnScanClick" FontWeight="Bold" />
+      <Button Grid.Column="5" Content="🏷 Apply tags" Margin="6,0,0,0" Click="OnApplyTagsClick"
+              ToolTip.Tip="Write qa:blurry / qa:overexposed / qa:underexposed keywords to the flagged files" />
+    </Grid>
+
+    <Border Grid.Row="2" BorderBrush="{DynamicResource PanelBorderBrush}" BorderThickness="1" CornerRadius="4">
+      <DataGrid x:Name="ResultsGrid"
+                AutoGenerateColumns="False"
+                CanUserResizeColumns="True"
+                GridLinesVisibility="Horizontal"
+                IsReadOnly="True">
+        <DataGrid.Columns>
+          <DataGridTextColumn Header="File"        Binding="{CompiledBinding FileName,        DataType=models:QualityScanRow}" Width="2*" />
+          <DataGridTextColumn Header="Sharpness"   Binding="{CompiledBinding SharpnessText,   DataType=models:QualityScanRow}" Width="*" />
+          <DataGridTextColumn Header="Blurry"      Binding="{CompiledBinding BlurryText,      DataType=models:QualityScanRow}" Width="*" />
+          <DataGridTextColumn Header="Overexposed" Binding="{CompiledBinding OverexposedText, DataType=models:QualityScanRow}" Width="*" />
+          <DataGridTextColumn Header="Underexposed" Binding="{CompiledBinding UnderexposedText, DataType=models:QualityScanRow}" Width="*" />
+          <DataGridTextColumn Header="Folder"      Binding="{CompiledBinding Folder,          DataType=models:QualityScanRow}" Width="3*" />
+        </DataGrid.Columns>
+      </DataGrid>
+    </Border>
+
+    <Grid Grid.Row="3" ColumnDefinitions="*,Auto" Margin="0,8,0,0">
+      <TextBlock Grid.Column="0" x:Name="StatusText" VerticalAlignment="Center" Opacity="0.75" />
+      <Button Grid.Column="1" Content="🚪 Close" Click="OnCloseClick" IsCancel="True" />
+    </Grid>
+  </Grid>
+</Window>

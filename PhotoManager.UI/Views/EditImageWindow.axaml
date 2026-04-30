@@ -33,6 +33,7 @@
                       ValueChanged="OnCompareSliderChanged" />
             </Grid>
             <controls:MaskOverlayCanvas x:Name="MaskOverlay" IsVisible="False" IsHitTestVisible="False" />
+            <controls:CropOverlayCanvas x:Name="CropOverlay" IsVisible="False" IsHitTestVisible="False" />
           </Grid>
         </Grid>
       </Border>
@@ -161,6 +162,9 @@
                       Click="OnResetCropClick" Padding="6,2" FontSize="11" Margin="0,4,0,0" HorizontalAlignment="Stretch"
                       ToolTip.Tip="Reset the crop rectangle and free-angle to identity (no crop, no rotation)." />
             </Grid>
+            <ToggleButton x:Name="ShowCropHandlesToggle" Content="Show crop handles" Padding="6,2" FontSize="11"
+                          IsCheckedChanged="OnShowCropHandlesChanged"
+                          ToolTip.Tip="Show 8 drag-handles on the preview to drag the crop rectangle. Auto-enables when a non-default crop is set." />
           </StackPanel>
 
           <Border Height="1" Background="#DDD" />
@@ -1039,6 +1043,28 @@
                     ValueChanged="OnSettingsChanged" />
             <TextBlock Grid.Column="2" x:Name="GrainFreqValue" Opacity="0.7" TextAlignment="Right" Text="50" />
           </Grid>
+
+          <Border Height="1" Background="#DDD" />
+
+          <!-- Creative-look LUT (.cube / .3dl). Picker reads
+               %AppData%/PhotoManager/luts/ on every open. Opacity blends
+               the look with the underlying tone-curved image. -->
+          <StackPanel Spacing="4">
+            <TextBlock Text="Look (3D LUT)" FontWeight="SemiBold" Opacity="0.85" />
+            <Grid ColumnDefinitions="*,Auto">
+              <ComboBox Grid.Column="0" x:Name="LookCombo" PlaceholderText="(no look)"
+                        SelectionChanged="OnLookSelected" />
+              <Button Grid.Column="1" Content="🔄 Refresh" Padding="6,2" FontSize="11" Margin="4,0,0,0"
+                      Click="OnRefreshLooksClick"
+                      ToolTip.Tip="Re-scan %AppData%/PhotoManager/luts/ for *.cube and *.3dl files." />
+            </Grid>
+            <Grid ColumnDefinitions="120,*,40">
+              <TextBlock Grid.Column="0" Text="Opacity" />
+              <Slider Grid.Column="1" x:Name="LookOpacitySlider" Minimum="0" Maximum="1" TickFrequency="0.05" Value="1"
+                      ValueChanged="OnLookOpacityChanged" />
+              <TextBlock Grid.Column="2" x:Name="LookOpacityValue" Opacity="0.7" TextAlignment="Right" Text="1.00" />
+            </Grid>
+          </StackPanel>
 
           <Button Content="Reset all" Click="OnResetAllClick" HorizontalAlignment="Stretch" />
 

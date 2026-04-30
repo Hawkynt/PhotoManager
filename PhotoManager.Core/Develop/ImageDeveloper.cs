@@ -1,4 +1,7 @@
+using PhotoManager.Core;
+using SixLabors.Fonts;
 using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.Drawing.Processing;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
 
@@ -41,6 +44,11 @@ public static class ImageDeveloper {
     if (!settings.IsIdentity)
       ApplyPixelAdjustments(output, settings);
 
+    // Creative-look LUT — runs AFTER tone / curves so the user-shaped
+    // distribution is what gets remapped, BEFORE local masks so per-mask
+    // tweaks operate on the post-look image.
+    ApplyCreativeLook(output, settings);
+
     // Local adjustments come AFTER the global pixel pass so they sit on
     // top of the developed image. Each adjustment has its own mask + a
     // basic-panel slider set; mask weight scales how much of the local
@@ -49,6 +57,8 @@ public static class ImageDeveloper {
       foreach (var local in locals)
         if (!local.IsZero)
           ApplyLocalAdjustment(output, local);
+
+    ApplyWatermark(output, settings);
 
     ApplyCropRectangle(output, settings);
 
@@ -455,6 +465,48 @@ public static class ImageDeveloper {
     1 => px.G,
     _ => px.B
   };
+
+  /// Resolves the named LUT (lazy-loaded from %AppData%/PhotoManager/luts/)
+  /// and applies it via trilinear interpolation. Skipped when no look is
+  /// selected, opacity ≤ 0, or the file is missing / unparseable.
+  private static void ApplyCreativeLook(Image<Rgba32> image, DevelopSettings settings) {
+    if (string.IsNullOrWhiteSpace(settings.LookName) || settings.LookOpacity <= 1e-6)
+      return;
+    var lut = LookCache.Resolve(settings.LookName!);
+    if (lut is null)
+      return;
+    Lut3D.Apply(image, lut, settings.LookOpacity);
+  }
+
+  /// Caches parsed LUTs by filename so a slider drag doesn't re-read disk
+  /// on every preview tick. Invalidates entries whose backing file's
+  /// last-write timestamp changes.
+  private static class LookCache {
+    private static readonly Dictionary<string, (DateTime Stamp, Lut3D? Lut)> Entries = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly object Gate = new();
+
+    public static Lut3D? Resolve(string lookName) {
+      var dir = AppDataPaths.SubDirectory("luts");
+      var file = new FileInfo(Path.Combine(dir.FullName, lookName));
+      if (!file.Exists) {
+        var withCube = new FileInfo(file.FullName + ".cube");
+        var with3dl  = new FileInfo(file.FullName + ".3dl");
+        if (withCube.Exists)      file = withCube;
+        else if (with3dl.Exists)  file = with3dl;
+        else                      return null;
+      }
+      var stamp = file.LastWriteTimeUtc;
+      lock (Gate) {
+        if (Entries.TryGetValue(file.FullName, out var cached) && cached.Stamp == stamp)
+          return cached.Lut;
+        Lut3D? lut;
+        try { lut = LutLoader.Load(file); }
+        catch { lut = null; }
+        Entries[file.FullName] = (stamp, lut);
+        return lut;
+      }
+    }
+  }
 
   /// <summary>
   /// Applies the user's normalised crop rectangle. Runs AFTER pixel
@@ -1402,5 +1454,77 @@ public static class ImageDeveloper {
       270 => RotateMode.Rotate270,
       _ => RotateMode.None
     };
+  }
+
+  /// Watermark layer: white text + 1 px black outline at the chosen corner /
+  /// centre, blended with WatermarkOpacity. Tries Arial first, then any
+  /// installed sans-serif, then the first system family. Failure is silent —
+  /// a missing font system shouldn't punch a hole in the develop pipeline.
+  private static void ApplyWatermark(Image<Rgba32> image, DevelopSettings settings) {
+    if (string.IsNullOrEmpty(settings.WatermarkText))
+      return;
+    var opacity = Math.Clamp(settings.WatermarkOpacity, 0, 1);
+    if (opacity < 1e-6)
+      return;
+    if (settings.WatermarkFontSize <= 0)
+      return;
+
+    Font? font;
+    try {
+      font = ResolveWatermarkFont(settings.WatermarkFontSize);
+    } catch {
+      return;
+    }
+    if (font is null)
+      return;
+
+    FontRectangle bounds;
+    try {
+      bounds = TextMeasurer.MeasureBounds(settings.WatermarkText!, new TextOptions(font));
+    } catch {
+      return;
+    }
+
+    var margin = Math.Max(8, settings.WatermarkFontSize / 3);
+    var (px, py) = ComputeWatermarkOrigin(settings.WatermarkPosition, image.Width, image.Height, bounds, margin);
+
+    var fillAlpha = (byte)Math.Round(255 * opacity);
+    var outlineAlpha = (byte)Math.Round(200 * opacity);
+    var fill = Color.FromRgba(255, 255, 255, fillAlpha);
+    var outline = Color.FromRgba(0, 0, 0, outlineAlpha);
+
+    try {
+      image.Mutate(c => c.DrawText(settings.WatermarkText!, font!, fill, new PointF(px, py)));
+      image.Mutate(c => c.DrawText(settings.WatermarkText!, font!, Pens.Solid(outline, 1f), new PointF(px, py)));
+    } catch {
+      // Glyph / shaping failure — keep going with the un-watermarked image.
+    }
+  }
+
+  private static (float X, float Y) ComputeWatermarkOrigin(
+    string position, int width, int height, FontRectangle bounds, int margin) {
+    var w = bounds.Width;
+    var h = bounds.Height;
+    return position switch {
+      "TopLeft"     => (margin,                 margin),
+      "TopRight"    => (width  - w - margin,    margin),
+      "BottomLeft"  => (margin,                 height - h - margin),
+      "Center"      => ((width - w) * 0.5f,     (height - h) * 0.5f),
+      _             => (width  - w - margin,    height - h - margin)
+    };
+  }
+
+  private static Font? ResolveWatermarkFont(int size) {
+    if (size <= 0) return null;
+    if (SystemFonts.TryGet("Arial", out var arial))
+      return arial.CreateFont(size);
+    foreach (var family in SystemFonts.Families) {
+      var name = (family.Name ?? string.Empty).ToLowerInvariant();
+      if (name.Contains("sans") || name.Contains("dejavu") || name.Contains("liberation") || name.Contains("noto"))
+        return family.CreateFont(size);
+    }
+    foreach (var family in SystemFonts.Families)
+      return family.CreateFont(size);
+    return null;
   }
 }

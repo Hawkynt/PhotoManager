@@ -1,0 +1,123 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:models="using:PhotoManager.UI.Models"
+        mc:Ignorable="d" d:DesignWidth="1100" d:DesignHeight="780"
+        x:Class="PhotoManager.UI.Views.CalendarWindow"
+        Width="1100" Height="780"
+        MinWidth="780" MinHeight="560"
+        WindowStartupLocation="CenterOwner"
+        Title="Calendar view">
+  <Window.Styles>
+    <Style Selector="Border.dayCell">
+      <Setter Property="BorderBrush" Value="#DDD" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="3" />
+      <Setter Property="Background" Value="White" />
+      <Setter Property="Margin" Value="2" />
+    </Style>
+    <Style Selector="Border.dayCell.outOfMonth">
+      <Setter Property="Opacity" Value="0.35" />
+    </Style>
+    <Style Selector="Border.dayCell.hasPhotos">
+      <Setter Property="BorderBrush" Value="#1976D2" />
+      <Setter Property="BorderThickness" Value="2" />
+    </Style>
+    <Style Selector="Border.dayCell.selected">
+      <Setter Property="Background" Value="#DCE8F5" />
+    </Style>
+  </Window.Styles>
+
+  <Grid RowDefinitions="Auto,Auto,*,Auto" Margin="12">
+    <StackPanel Grid.Row="0" Spacing="4" Margin="0,0,0,8">
+      <TextBlock Text="Calendar view" FontSize="16" FontWeight="SemiBold" />
+      <TextBlock Opacity="0.75" TextWrapping="Wrap"
+                 Text="Photos taken on each day, grouped by capture date. Click a day to drill into its photos; double-click a photo to open it." />
+    </StackPanel>
+
+    <Grid Grid.Row="1" ColumnDefinitions="Auto,Auto,*,Auto" Margin="0,0,0,8">
+      <Button Grid.Column="0" Content="◀" Padding="10,4" Click="OnPrevMonthClick"
+              ToolTip.Tip="Previous month" />
+      <Button Grid.Column="1" Content="▶" Padding="10,4" Margin="6,0,0,0" Click="OnNextMonthClick"
+              ToolTip.Tip="Next month" />
+      <TextBlock Grid.Column="2" x:Name="MonthHeading" Text="" FontSize="20" FontWeight="SemiBold"
+                 HorizontalAlignment="Center" VerticalAlignment="Center" />
+      <Button Grid.Column="3" Content="📌 Today" Padding="10,4" Click="OnTodayClick" />
+    </Grid>
+
+    <Grid Grid.Row="2" ColumnDefinitions="3*,4,2*">
+      <Border Grid.Column="0" BorderBrush="#DDD" BorderThickness="1" CornerRadius="4">
+        <Grid RowDefinitions="Auto,*">
+          <Grid Grid.Row="0" x:Name="WeekdayHeader" Background="#F5F5F5">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0" Text="Mon" Margin="6,4" FontWeight="SemiBold" />
+            <TextBlock Grid.Column="1" Text="Tue" Margin="6,4" FontWeight="SemiBold" />
+            <TextBlock Grid.Column="2" Text="Wed" Margin="6,4" FontWeight="SemiBold" />
+            <TextBlock Grid.Column="3" Text="Thu" Margin="6,4" FontWeight="SemiBold" />
+            <TextBlock Grid.Column="4" Text="Fri" Margin="6,4" FontWeight="SemiBold" />
+            <TextBlock Grid.Column="5" Text="Sat" Margin="6,4" FontWeight="SemiBold" />
+            <TextBlock Grid.Column="6" Text="Sun" Margin="6,4" FontWeight="SemiBold" />
+          </Grid>
+          <ItemsControl Grid.Row="1" x:Name="DayGrid" Padding="2">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <UniformGrid Columns="7" Rows="6" />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate DataType="models:CalendarDayViewModel">
+                <Border Classes="dayCell" Tag="{CompiledBinding}" Tapped="OnDayCellTapped"
+                        ToolTip.Tip="{CompiledBinding CountText}">
+                  <Grid RowDefinitions="Auto,*,Auto" Margin="4">
+                    <TextBlock Grid.Row="0" Text="{CompiledBinding DayNumber}" FontWeight="SemiBold" FontSize="12" />
+                    <Border Grid.Row="1" Margin="0,2,0,2" Background="#F7F7F7" MinHeight="60"
+                            IsVisible="{CompiledBinding HasPhotos}">
+                      <Image Source="{CompiledBinding Thumbnail}" Stretch="UniformToFill" />
+                    </Border>
+                    <TextBlock Grid.Row="2" Text="{CompiledBinding CountText}" FontSize="10" Opacity="0.75"
+                               IsVisible="{CompiledBinding HasPhotos}" />
+                  </Grid>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </Grid>
+      </Border>
+
+      <GridSplitter Grid.Column="1" Background="Transparent" />
+
+      <Border Grid.Column="2" BorderBrush="#DDD" BorderThickness="1" CornerRadius="4">
+        <Grid RowDefinitions="Auto,*">
+          <TextBlock Grid.Row="0" x:Name="DayDetailHeading" Margin="8,6,8,4" FontWeight="SemiBold"
+                     Text="(pick a day)" />
+          <ListBox Grid.Row="1" x:Name="DayPhotoList" SelectionMode="Single"
+                   DoubleTapped="OnPhotoDoubleTapped">
+            <ListBox.ItemTemplate>
+              <DataTemplate DataType="models:FileItemModel">
+                <StackPanel Spacing="0">
+                  <TextBlock Text="{CompiledBinding FileName}" FontWeight="SemiBold" />
+                  <TextBlock Text="{CompiledBinding SourcePath}" FontSize="11" Opacity="0.6"
+                             TextTrimming="CharacterEllipsis" />
+                </StackPanel>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+        </Grid>
+      </Border>
+    </Grid>
+
+    <Grid Grid.Row="3" ColumnDefinitions="*,Auto" Margin="0,8,0,0">
+      <TextBlock Grid.Column="0" x:Name="StatusText" VerticalAlignment="Center" Opacity="0.75" />
+      <Button Grid.Column="1" Content="🚪 Close" Click="OnCloseClick" IsCancel="True" />
+    </Grid>
+  </Grid>
+</Window>

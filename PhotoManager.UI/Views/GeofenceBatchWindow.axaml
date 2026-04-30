@@ -1,0 +1,44 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="720" d:DesignHeight="540"
+        x:Class="PhotoManager.UI.Views.GeofenceBatchWindow"
+        Width="720" Height="540"
+        MinWidth="600" MinHeight="380"
+        WindowStartupLocation="CenterOwner"
+        Title="Apply geofences">
+  <Grid RowDefinitions="Auto,Auto,Auto,*,Auto" Margin="12">
+    <StackPanel Grid.Row="0" Spacing="4" Margin="0,0,0,8">
+      <TextBlock Text="Apply geofences to selection" FontSize="16" FontWeight="SemiBold" />
+      <TextBlock Opacity="0.75" TextWrapping="Wrap"
+                 Text="For each selected photo, look up its GPS coordinate against your saved bookmarks. If a photo lands inside a bookmark's radius, the bookmark's place fields (City / State / Country / Country Code / Location) are merged into the photo's metadata and the bookmark name is added as a keyword." />
+    </StackPanel>
+
+    <Grid Grid.Row="1" ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,4">
+      <TextBlock Grid.Column="0" Text="Files:" VerticalAlignment="Center" Margin="0,0,6,0" />
+      <TextBlock Grid.Column="1" x:Name="FileCountText" VerticalAlignment="Center" />
+      <TextBlock Grid.Column="2" x:Name="BookmarkCountText" VerticalAlignment="Center" Opacity="0.7" />
+    </Grid>
+
+    <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="12" Margin="0,4,0,8">
+      <CheckBox x:Name="DryRunBox" Content="Dry run (don't write)" IsChecked="True"
+                ToolTip.Tip="Preview which photos would be tagged without modifying any sidecar." />
+      <CheckBox x:Name="OnlyFillEmptyBox" Content="Only fill empty fields" IsChecked="True"
+                ToolTip.Tip="Preserve any place field the user has already set." />
+    </StackPanel>
+
+    <Border Grid.Row="3" BorderBrush="{DynamicResource PanelBorderBrush}" BorderThickness="1" CornerRadius="4">
+      <ScrollViewer>
+        <ItemsControl x:Name="ResultsList" Padding="6" />
+      </ScrollViewer>
+    </Border>
+
+    <Grid Grid.Row="4" ColumnDefinitions="*,Auto,Auto,Auto" Margin="0,8,0,0">
+      <TextBlock Grid.Column="0" x:Name="StatusText" VerticalAlignment="Center" Opacity="0.8" />
+      <ProgressBar Grid.Column="1" x:Name="Progress" Width="180" Height="14" Margin="0,0,8,0" Minimum="0" Maximum="100" />
+      <Button Grid.Column="2" x:Name="ResolveButton" Content="🎯 Resolve" FontWeight="Bold" Click="OnResolveClick" Margin="0,0,6,0" />
+      <Button Grid.Column="3" x:Name="CancelButton" Content="🚪 Close" Click="OnCancelClick" IsCancel="True" />
+    </Grid>
+  </Grid>
+</Window>

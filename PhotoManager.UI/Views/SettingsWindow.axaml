@@ -1,0 +1,95 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:vm="using:PhotoManager.UI.Models"
+        mc:Ignorable="d" d:DesignWidth="640" d:DesignHeight="560"
+        x:Class="PhotoManager.UI.Views.SettingsWindow"
+        x:DataType="vm:MainViewModel"
+        Width="640" Height="560"
+        MinWidth="520" MinHeight="420"
+        WindowStartupLocation="CenterOwner"
+        Title="Settings">
+  <Grid Margin="12" RowDefinitions="*,Auto">
+    <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto">
+      <StackPanel Spacing="14">
+
+        <!-- Appearance -->
+        <Border BorderBrush="{DynamicResource PanelBorderBrush}" BorderThickness="1" CornerRadius="4" Padding="12">
+          <StackPanel Spacing="8">
+            <TextBlock Text="Appearance" FontWeight="SemiBold" FontSize="14" />
+            <Grid ColumnDefinitions="160,*">
+              <TextBlock Grid.Column="0" Text="Theme:" VerticalAlignment="Center" />
+              <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
+                <RadioButton x:Name="ThemeLightRadio" Content="☀ Light" GroupName="settingsTheme" Click="OnThemeLightClick" />
+                <RadioButton x:Name="ThemeDarkRadio" Content="🌙 Dark" GroupName="settingsTheme" Click="OnThemeDarkClick" />
+                <RadioButton x:Name="ThemeSystemRadio" Content="🖥 System" GroupName="settingsTheme" Click="OnThemeSystemClick" />
+              </StackPanel>
+            </Grid>
+          </StackPanel>
+        </Border>
+
+        <!-- Library -->
+        <Border BorderBrush="{DynamicResource PanelBorderBrush}" BorderThickness="1" CornerRadius="4" Padding="12">
+          <StackPanel Spacing="8">
+            <TextBlock Text="Library" FontWeight="SemiBold" FontSize="14" />
+            <Grid ColumnDefinitions="160,*">
+              <TextBlock Grid.Column="0" Text="Default rename template:" VerticalAlignment="Center"
+                         ToolTip.Tip="Pre-fills the Batch-rename dialog. Tokens: {date:fmt} {name} {ext} {city} ..." />
+              <TextBox Grid.Column="1" Text="{Binding DefaultRenameTemplate, Mode=TwoWay}" />
+            </Grid>
+            <Grid ColumnDefinitions="160,*">
+              <TextBlock Grid.Column="0" Text="Recent-folders depth:" VerticalAlignment="Center"
+                         ToolTip.Tip="How many entries to keep in each recent-folder submenu" />
+              <NumericUpDown Grid.Column="1" Minimum="1" Maximum="20" Width="120" HorizontalAlignment="Left"
+                             Value="{Binding RecentFoldersDepth, Mode=TwoWay}" />
+            </Grid>
+          </StackPanel>
+        </Border>
+
+        <!-- Detection / models -->
+        <Border BorderBrush="{DynamicResource PanelBorderBrush}" BorderThickness="1" CornerRadius="4" Padding="12">
+          <StackPanel Spacing="8">
+            <TextBlock Text="Detection / models" FontWeight="SemiBold" FontSize="14" />
+            <Grid ColumnDefinitions="160,*,Auto">
+              <TextBlock Grid.Column="0" Text="Model folder:" VerticalAlignment="Center" />
+              <TextBox Grid.Column="1" x:Name="ModelFolderText" IsReadOnly="True"
+                       Background="{DynamicResource SubtlePanelBrush}" />
+              <Button Grid.Column="2" Content="📂 Open" Margin="6,0,0,0" Click="OnOpenModelFolderClick" />
+            </Grid>
+            <CheckBox Content="Auto-detect faces on scan"
+                      IsChecked="{Binding AutoDetectFacesOnScan, Mode=TwoWay}"
+                      ToolTip.Tip="Future hook: kick off face detection automatically when a scan finishes" />
+            <CheckBox Content="Auto-detect objects on scan"
+                      IsChecked="{Binding AutoDetectObjectsOnScan, Mode=TwoWay}"
+                      ToolTip.Tip="Future hook: kick off the YOLO object detector automatically when a scan finishes" />
+          </StackPanel>
+        </Border>
+
+        <!-- Geocoder -->
+        <Border BorderBrush="{DynamicResource PanelBorderBrush}" BorderThickness="1" CornerRadius="4" Padding="12">
+          <StackPanel Spacing="8">
+            <TextBlock Text="Geocoder" FontWeight="SemiBold" FontSize="14" />
+            <CheckBox Content="Enable reverse geocoder (city / country lookup)"
+                      IsChecked="{Binding ReverseGeocoderEnabled, Mode=TwoWay}" />
+            <CheckBox Content="Enable elevation lookup"
+                      IsChecked="{Binding ElevationLookupEnabled, Mode=TwoWay}" />
+            <Grid ColumnDefinitions="160,*">
+              <TextBlock Grid.Column="0" Text="Rate limit (req/sec):" VerticalAlignment="Center"
+                         ToolTip.Tip="Soft cap on outbound geocoder requests so we stay friendly to free APIs" />
+              <NumericUpDown Grid.Column="1" Minimum="1" Maximum="100" Width="120" HorizontalAlignment="Left"
+                             Value="{Binding GeocoderRateLimitPerSecond, Mode=TwoWay}" />
+            </Grid>
+          </StackPanel>
+        </Border>
+
+      </StackPanel>
+    </ScrollViewer>
+
+    <Grid Grid.Row="1" ColumnDefinitions="*,Auto" Margin="0,12,0,0">
+      <TextBlock Grid.Column="0" Text="Settings save automatically when you close this window."
+                 Opacity="0.7" VerticalAlignment="Center" />
+      <Button Grid.Column="1" Content="✅ Close" Click="OnCloseClick" IsDefault="True" />
+    </Grid>
+  </Grid>
+</Window>

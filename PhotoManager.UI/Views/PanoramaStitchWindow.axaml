@@ -1,0 +1,145 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:models="using:PhotoManager.UI.Models"
+        mc:Ignorable="d" d:DesignWidth="980" d:DesignHeight="720"
+        x:Class="PhotoManager.UI.Views.PanoramaStitchWindow"
+        Width="980" Height="720"
+        MinWidth="780" MinHeight="540"
+        WindowStartupLocation="CenterOwner"
+        Title="Panorama stitch">
+  <Grid RowDefinitions="Auto,Auto,*,Auto,Auto" Margin="12">
+    <StackPanel Grid.Row="0" Spacing="4" Margin="0,0,0,8">
+      <TextBlock Text="Panorama stitch" FontSize="16" FontWeight="SemiBold" />
+      <TextBlock Opacity="0.75" TextWrapping="Wrap"
+                 Text="Pick a sequence of overlapping frames. Tripod mode warps each frame onto a cylinder and aligns by horizontal translation; hand-held mode hands off to OpenCV's full feature-matching stitcher." />
+    </StackPanel>
+
+    <Grid Grid.Row="1" ColumnDefinitions="Auto,Auto,Auto,Auto,Auto,*" Margin="0,0,0,6">
+      <Button Grid.Column="0" Content="📂 Add files..." Click="OnAddFilesClick" />
+      <Button Grid.Column="1" Content="🎬 From video..." Margin="6,0,0,0" Click="OnFromVideoClick"
+              ToolTip.Tip="Extract frames from a video file via ffmpeg and feed them straight into this stitcher." />
+      <Button Grid.Column="2" Content="🗑️ Remove" Margin="6,0,0,0" Click="OnRemoveClick" />
+      <Button Grid.Column="3" Content="↑" Width="32" Margin="6,0,0,0" Click="OnMoveUpClick" />
+      <Button Grid.Column="4" Content="↓" Width="32" Margin="2,0,0,0" Click="OnMoveDownClick" />
+    </Grid>
+
+    <Grid Grid.Row="2" ColumnDefinitions="2*,8,3*">
+      <Border Grid.Column="0" BorderBrush="{DynamicResource PanelBorderBrush}" BorderThickness="1" CornerRadius="4">
+        <DataGrid x:Name="InputsGrid"
+                  AutoGenerateColumns="False"
+                  CanUserResizeColumns="True"
+                  GridLinesVisibility="Horizontal"
+                  IsReadOnly="True"
+                  SelectionMode="Extended">
+          <DataGrid.Columns>
+            <DataGridTextColumn Header="File"
+                                Binding="{Binding FileName, DataType=models:PanoramaInputRow}"
+                                Width="*" />
+            <DataGridTextColumn Header="Dimensions"
+                                Binding="{Binding Dimensions, DataType=models:PanoramaInputRow}"
+                                Width="120" />
+          </DataGrid.Columns>
+        </DataGrid>
+      </Border>
+
+      <Grid Grid.Column="2" RowDefinitions="Auto,*">
+        <Border Grid.Row="0" BorderBrush="{DynamicResource PanelBorderBrush}" BorderThickness="1" CornerRadius="4" Padding="10">
+          <StackPanel Spacing="8">
+            <TextBlock Text="Mode" FontWeight="SemiBold" />
+            <StackPanel Orientation="Horizontal" Spacing="12">
+              <RadioButton x:Name="TripodModeRadio" GroupName="StitchMode" IsChecked="True"
+                           Content="🎥 Tripod (cylindrical)"
+                           Checked="OnModeChanged" />
+              <RadioButton x:Name="HandheldModeRadio" GroupName="StitchMode"
+                           Content="📷 Hand-held (OpenCV)"
+                           Checked="OnModeChanged" />
+              <RadioButton x:Name="SphericalModeRadio" GroupName="StitchMode"
+                           Content="🌐 Spherical (360°)"
+                           Checked="OnModeChanged" />
+            </StackPanel>
+
+            <StackPanel x:Name="TripodControls" Spacing="6" Margin="0,8,0,0">
+              <Grid ColumnDefinitions="120,*,80">
+                <TextBlock Grid.Column="0" Text="Focal (px):" VerticalAlignment="Center" />
+                <Slider Grid.Column="1" x:Name="FocalSlider" Minimum="200" Maximum="6000" Value="1024"
+                        ValueChanged="OnFocalChanged" />
+                <TextBlock Grid.Column="2" x:Name="FocalLabel" Text="1024" VerticalAlignment="Center"
+                           HorizontalAlignment="Right" />
+              </Grid>
+              <Grid ColumnDefinitions="120,*,80">
+                <TextBlock Grid.Column="0" Text="Overlap hint:" VerticalAlignment="Center" />
+                <Slider Grid.Column="1" x:Name="OverlapSlider" Minimum="0.05" Maximum="0.9" Value="0.3"
+                        ValueChanged="OnOverlapChanged" />
+                <TextBlock Grid.Column="2" x:Name="OverlapLabel" Text="30%" VerticalAlignment="Center"
+                           HorizontalAlignment="Right" />
+              </Grid>
+            </StackPanel>
+
+            <StackPanel x:Name="HandheldControls" Spacing="6" Margin="0,8,0,0" IsVisible="False">
+              <Grid ColumnDefinitions="120,*">
+                <TextBlock Grid.Column="0" Text="Mode:" VerticalAlignment="Center" />
+                <ComboBox Grid.Column="1" x:Name="OpenCvModeCombo" SelectedIndex="0">
+                  <ComboBoxItem Content="Panorama" />
+                  <ComboBoxItem Content="Scans" />
+                </ComboBox>
+              </Grid>
+              <Grid ColumnDefinitions="120,*,80">
+                <TextBlock Grid.Column="0" Text="Confidence:" VerticalAlignment="Center" />
+                <Slider Grid.Column="1" x:Name="ConfidenceSlider" Minimum="0.3" Maximum="2.0" Value="1.0"
+                        ValueChanged="OnConfidenceChanged" />
+                <TextBlock Grid.Column="2" x:Name="ConfidenceLabel" Text="1.00" VerticalAlignment="Center"
+                           HorizontalAlignment="Right" />
+              </Grid>
+              <CheckBox x:Name="AutoCropCheck" Content="Auto-crop to content" IsChecked="True" />
+            </StackPanel>
+
+            <StackPanel x:Name="SphericalControls" Spacing="6" Margin="0,8,0,0" IsVisible="False">
+              <Grid ColumnDefinitions="120,*">
+                <TextBlock Grid.Column="0" Text="Output width:" VerticalAlignment="Center" />
+                <ComboBox Grid.Column="1" x:Name="SphericalWidthCombo" SelectedIndex="2">
+                  <ComboBoxItem Content="1024" />
+                  <ComboBoxItem Content="2048" />
+                  <ComboBoxItem Content="4096" />
+                  <ComboBoxItem Content="8192" />
+                  <ComboBoxItem Content="16384" />
+                  <ComboBoxItem Content="32768" />
+                </ComboBox>
+              </Grid>
+              <CheckBox x:Name="SphericalBlendCheck" Content="Blend overlaps" IsChecked="True" />
+              <TextBlock Opacity="0.65" TextWrapping="Wrap" FontSize="11"
+                         Text="Output is a 2:1 equirectangular canvas suitable for the 360° viewer. Use 'Open in 360° viewer' to inspect without saving." />
+            </StackPanel>
+
+            <CheckBox x:Name="SmartPatchCheck" Content="🧠 Smart Patch Selection" IsChecked="False" Margin="0,8,0,0"
+                      ToolTip.Tip="Per-pixel sharpness-aware stitching: blurry / obstructed regions are excluded so they don't bleed into the panorama. Adds ~1s per frame for the analysis pass." />
+          </StackPanel>
+        </Border>
+
+        <Border Grid.Row="1" BorderBrush="{DynamicResource PanelBorderBrush}" BorderThickness="1" CornerRadius="4" Margin="0,8,0,0"
+                Background="{DynamicResource SubtlePanelBrush}">
+          <Grid RowDefinitions="Auto,*">
+            <TextBlock Grid.Row="0" Text="Preview" FontWeight="SemiBold" Margin="8,6,8,2" />
+            <Image Grid.Row="1" x:Name="PreviewImage" Stretch="Uniform" Margin="6" />
+          </Grid>
+        </Border>
+      </Grid>
+    </Grid>
+
+    <Grid Grid.Row="3" ColumnDefinitions="Auto,Auto,Auto,*,Auto" Margin="0,8,0,0">
+      <Button Grid.Column="0" Content="🖼 Preview" Click="OnPreviewClick" />
+      <Button Grid.Column="1" Content="💾 Save as..." Margin="6,0,0,0" FontWeight="Bold"
+              Click="OnSaveAsClick" />
+      <Button Grid.Column="2" x:Name="OpenInViewerButton" Content="🌐 Open in 360° viewer"
+              Margin="6,0,0,0" IsEnabled="False" Click="OnOpenInViewerClick" />
+      <Button Grid.Column="4" Content="🚪 Close" Click="OnCloseClick" IsCancel="True" />
+    </Grid>
+
+    <Grid Grid.Row="4" ColumnDefinitions="*,Auto" Margin="0,8,0,0">
+      <TextBlock Grid.Column="0" x:Name="StatusText" VerticalAlignment="Center" Opacity="0.75" />
+      <ProgressBar Grid.Column="1" x:Name="ProgressBar" Width="220" Height="14"
+                   Minimum="0" Maximum="100" Value="0" />
+    </Grid>
+  </Grid>
+</Window>

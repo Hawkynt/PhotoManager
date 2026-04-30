@@ -1,0 +1,109 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:models="using:PhotoManager.UI.Models"
+        mc:Ignorable="d" d:DesignWidth="1000" d:DesignHeight="720"
+        x:Class="PhotoManager.UI.Views.HdrMergeWindow"
+        Width="1000" Height="720"
+        MinWidth="820" MinHeight="540"
+        WindowStartupLocation="CenterOwner"
+        Title="HDR merge from bracketed exposures">
+  <Grid RowDefinitions="Auto,Auto,*,Auto,Auto" Margin="12">
+    <StackPanel Grid.Row="0" Spacing="4" Margin="0,0,0,8">
+      <TextBlock Text="HDR merge" FontSize="16" FontWeight="SemiBold" />
+      <TextBlock Opacity="0.75" TextWrapping="Wrap"
+                 Text="Pick at least three bracketed exposures of the same scene. The merge aligns hand-held shifts (median-threshold-bitmap), recovers the camera response curve (Debevec/Malik), and tone-maps the radiance to an LDR JPEG ready to save." />
+    </StackPanel>
+
+    <Grid Grid.Row="1" ColumnDefinitions="Auto,Auto,Auto,Auto,*,Auto" Margin="0,0,0,8">
+      <Button Grid.Column="0" Content="📂 Add files…" Click="OnAddFilesClick" />
+      <Button Grid.Column="1" Content="🗑️ Remove" Margin="6,0,0,0" Click="OnRemoveClick" />
+      <Button Grid.Column="2" Content="↑" Width="32" Margin="6,0,0,0" Click="OnMoveUpClick" />
+      <Button Grid.Column="3" Content="↓" Width="32" Margin="2,0,0,0" Click="OnMoveDownClick" />
+      <CheckBox Grid.Column="5" x:Name="AlignBeforeMergeBox" Content="Align before merge"
+                IsChecked="True" VerticalAlignment="Center"
+                ToolTip.Tip="Use Greg Ward's median-threshold-bitmap alignment to undo small hand-held shifts" />
+    </Grid>
+
+    <Grid Grid.Row="2" ColumnDefinitions="2*,4,3*">
+      <Border Grid.Column="0" BorderBrush="{DynamicResource PanelBorderBrush}" BorderThickness="1" CornerRadius="4">
+        <DataGrid x:Name="BracketGrid"
+                  AutoGenerateColumns="False"
+                  CanUserResizeColumns="True"
+                  GridLinesVisibility="Horizontal"
+                  IsReadOnly="False"
+                  SelectionMode="Extended">
+          <DataGrid.Columns>
+            <DataGridTextColumn Header="File"
+                                Binding="{CompiledBinding FileName, DataType=models:HdrBracketRow}"
+                                Width="*" IsReadOnly="True" />
+            <DataGridTemplateColumn Header="Seconds" Width="120">
+              <DataGridTemplateColumn.CellTemplate>
+                <DataTemplate DataType="models:HdrBracketRow">
+                  <NumericUpDown Value="{CompiledBinding ExposureSeconds, Mode=TwoWay}"
+                                 Minimum="0" Maximum="3600" Increment="0.001"
+                                 FormatString="0.######"
+                                 ShowButtonSpinner="True"
+                                 ToolTip.Tip="Exposure time in seconds. Pre-filled from EXIF when available; type a value when not." />
+                </DataTemplate>
+              </DataGridTemplateColumn.CellTemplate>
+            </DataGridTemplateColumn>
+            <DataGridTextColumn Header="Pretty"
+                                Binding="{CompiledBinding ExposureText, DataType=models:HdrBracketRow}"
+                                Width="100" IsReadOnly="True" />
+            <DataGridTextColumn Header="EV offset"
+                                Binding="{CompiledBinding EvOffsetText, DataType=models:HdrBracketRow}"
+                                Width="100" IsReadOnly="True" />
+          </DataGrid.Columns>
+        </DataGrid>
+      </Border>
+
+      <GridSplitter Grid.Column="1" Background="Transparent" />
+
+      <Grid Grid.Column="2" RowDefinitions="*,Auto">
+        <Border Grid.Row="0" BorderBrush="{DynamicResource PanelBorderBrush}" BorderThickness="1" CornerRadius="4" Background="#222">
+          <Image x:Name="PreviewImage" Stretch="Uniform" StretchDirection="DownOnly" />
+        </Border>
+
+        <StackPanel Grid.Row="1" Spacing="6" Margin="0,8,0,0">
+          <Grid ColumnDefinitions="120,*,Auto">
+            <TextBlock Grid.Column="0" Text="Tone map:" VerticalAlignment="Center" />
+            <ComboBox Grid.Column="1" x:Name="OperatorCombo" Width="200" />
+          </Grid>
+          <Grid ColumnDefinitions="120,*,60">
+            <TextBlock Grid.Column="0" Text="White point:" VerticalAlignment="Center"
+                       ToolTip.Tip="Reinhard white-point clamp; 0 disables, higher = more highlight roll-off" />
+            <Slider Grid.Column="1" x:Name="WhitePointSlider" Minimum="0" Maximum="20" Value="0"
+                    TickFrequency="1" IsSnapToTickEnabled="False" />
+            <TextBlock Grid.Column="2" x:Name="WhitePointValue" VerticalAlignment="Center" HorizontalAlignment="Right" Text="0.0" />
+          </Grid>
+          <Grid ColumnDefinitions="120,*,60">
+            <TextBlock Grid.Column="0" Text="Drago bias:" VerticalAlignment="Center"
+                       ToolTip.Tip="Drago contrast bias; lower = brighter midtones, higher = preserve shadow contrast" />
+            <Slider Grid.Column="1" x:Name="DragoBiasSlider" Minimum="0.5" Maximum="0.99" Value="0.85"
+                    TickFrequency="0.05" IsSnapToTickEnabled="False" />
+            <TextBlock Grid.Column="2" x:Name="DragoBiasValue" VerticalAlignment="Center" HorizontalAlignment="Right" Text="0.85" />
+          </Grid>
+          <Grid ColumnDefinitions="120,*,60">
+            <TextBlock Grid.Column="0" Text="Saturation:" VerticalAlignment="Center" />
+            <Slider Grid.Column="1" x:Name="SaturationSlider" Minimum="0.0" Maximum="2.0" Value="1.0"
+                    TickFrequency="0.1" IsSnapToTickEnabled="False" />
+            <TextBlock Grid.Column="2" x:Name="SaturationValue" VerticalAlignment="Center" HorizontalAlignment="Right" Text="1.0" />
+          </Grid>
+        </StackPanel>
+      </Grid>
+    </Grid>
+
+    <Grid Grid.Row="3" ColumnDefinitions="*,Auto" Margin="0,8,0,4">
+      <ProgressBar Grid.Column="0" x:Name="ProgressBar" Height="6" IsIndeterminate="False" Minimum="0" Maximum="100" />
+    </Grid>
+
+    <Grid Grid.Row="4" ColumnDefinitions="*,Auto,Auto,Auto" Margin="0,4,0,0">
+      <TextBlock Grid.Column="0" x:Name="StatusText" VerticalAlignment="Center" Opacity="0.75" />
+      <Button Grid.Column="1" Content="🖼 Preview" Click="OnPreviewClick" Margin="0,0,6,0" />
+      <Button Grid.Column="2" Content="💾 Save as…" Click="OnSaveAsClick" FontWeight="Bold" Margin="0,0,6,0" />
+      <Button Grid.Column="3" Content="🚪 Close" Click="OnCloseClick" IsCancel="True" />
+    </Grid>
+  </Grid>
+</Window>

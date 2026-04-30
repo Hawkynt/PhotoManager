@@ -1,5 +1,7 @@
 using System.Collections.ObjectModel;
+using PhotoManager.Core;
 using PhotoManager.Core.Enums;
+using PhotoManager.Core.Geocoding;
 using PhotoManager.Core.Interfaces;
 using PhotoManager.Core.Metadata;
 using PhotoManager.Core.Models;
@@ -30,8 +32,27 @@ public class MainController(
     this.AttachNodeListeners(node);
     this.SourceTreeRoots.Add(node);
     this.SyncTreeStateToViewModel();
+    PromoteRecent(viewModel.RecentSourceFolders, path.FullName, viewModel.RecentFoldersDepth);
     _ = this.SaveSettingsAsync();
     return node;
+  }
+
+  /// <summary>
+  /// Insert <paramref name="path"/> at the head of <paramref name="list"/>,
+  /// remove any earlier (case-insensitive) match, and trim to
+  /// <paramref name="depth"/>. Used by both source and output recent lists.
+  /// </summary>
+  public static void PromoteRecent(IList<string> list, string path, int depth) {
+    if (string.IsNullOrWhiteSpace(path) || depth <= 0)
+      return;
+
+    for (var i = list.Count - 1; i >= 0; --i) {
+      if (string.Equals(list[i], path, StringComparison.OrdinalIgnoreCase))
+        list.RemoveAt(i);
+    }
+    list.Insert(0, path);
+    while (list.Count > depth)
+      list.RemoveAt(list.Count - 1);
   }
 
   public void RemoveSourceTreeRoot(SourceTreeNode node) {
@@ -348,7 +369,26 @@ public class MainController(
     viewModel.PreserveOriginals = settings.PreserveOriginals;
     viewModel.TreeViewPaths = settings.TreeViewPaths;
     viewModel.SavedSearches = settings.SavedSearches;
+    viewModel.SmartAlbums = settings.SmartAlbums;
+    viewModel.KeywordTreeRoots = settings.KeywordTreeRoots;
+    viewModel.DefaultDevelopPreset = settings.DefaultDevelopPreset;
+    viewModel.GeofenceAutoTagOnScan = settings.GeofenceAutoTagOnScan;
     viewModel.Theme = settings.Theme;
+    viewModel.DefaultRenameTemplate = settings.DefaultRenameTemplate;
+    viewModel.RecentFoldersDepth = settings.RecentFoldersDepth;
+    viewModel.AutoDetectFacesOnScan = settings.AutoDetectFacesOnScan;
+    viewModel.AutoDetectObjectsOnScan = settings.AutoDetectObjectsOnScan;
+    viewModel.ReverseGeocoderEnabled = settings.ReverseGeocoderEnabled;
+    viewModel.ElevationLookupEnabled = settings.ElevationLookupEnabled;
+    viewModel.GeocoderRateLimitPerSecond = settings.GeocoderRateLimitPerSecond;
+
+    viewModel.RecentSourceFolders.Clear();
+    foreach (var folder in settings.RecentFolders.SourceFolders)
+      viewModel.RecentSourceFolders.Add(folder);
+    viewModel.RecentOutputFolders.Clear();
+    foreach (var folder in settings.RecentFolders.OutputFolders)
+      viewModel.RecentOutputFolders.Add(folder);
+
     this.RebuildSourceTreeFromSettings();
   }
 
@@ -378,7 +418,22 @@ public class MainController(
       PreserveOriginals = viewModel.PreserveOriginals,
       TreeViewPaths = viewModel.TreeViewPaths,
       SavedSearches = viewModel.SavedSearches,
-      Theme = viewModel.Theme
+      SmartAlbums = viewModel.SmartAlbums,
+      KeywordTreeRoots = viewModel.KeywordTreeRoots,
+      DefaultDevelopPreset = viewModel.DefaultDevelopPreset,
+      GeofenceAutoTagOnScan = viewModel.GeofenceAutoTagOnScan,
+      Theme = viewModel.Theme,
+      DefaultRenameTemplate = viewModel.DefaultRenameTemplate,
+      RecentFoldersDepth = viewModel.RecentFoldersDepth,
+      AutoDetectFacesOnScan = viewModel.AutoDetectFacesOnScan,
+      AutoDetectObjectsOnScan = viewModel.AutoDetectObjectsOnScan,
+      ReverseGeocoderEnabled = viewModel.ReverseGeocoderEnabled,
+      ElevationLookupEnabled = viewModel.ElevationLookupEnabled,
+      GeocoderRateLimitPerSecond = viewModel.GeocoderRateLimitPerSecond,
+      RecentFolders = new RecentFoldersData {
+        SourceFolders = viewModel.RecentSourceFolders.ToList(),
+        OutputFolders = viewModel.RecentOutputFolders.ToList()
+      }
     };
 
     await settingsService.SaveAsync(settings);
@@ -399,6 +454,45 @@ public class MainController(
       return;
 
     viewModel.DestinationDirectory = picked;
+    PromoteRecent(viewModel.RecentOutputFolders, picked, viewModel.RecentFoldersDepth);
+    _ = this.SaveSettingsAsync();
+  }
+
+  /// <summary>
+  /// Apply a folder picked from the File → Recent menu. Source folders go
+  /// into the tree-of-roots; output folders set <see cref="MainViewModel.DestinationDirectory"/>.
+  /// Either way the path is re-promoted to the head of its recent list.
+  /// </summary>
+  public void OpenRecentSourceFolder(string path) {
+    if (string.IsNullOrWhiteSpace(path))
+      return;
+    var dir = new DirectoryInfo(path);
+    if (!dir.Exists) {
+      // Stale entry — yank it out so the menu doesn't show ghost folders.
+      for (var i = viewModel.RecentSourceFolders.Count - 1; i >= 0; --i) {
+        if (string.Equals(viewModel.RecentSourceFolders[i], path, StringComparison.OrdinalIgnoreCase))
+          viewModel.RecentSourceFolders.RemoveAt(i);
+      }
+      _ = this.SaveSettingsAsync();
+      return;
+    }
+    this.AddSourceTreeRoot(dir, recursive: true);
+  }
+
+  public void OpenRecentOutputFolder(string path) {
+    if (string.IsNullOrWhiteSpace(path))
+      return;
+    var dir = new DirectoryInfo(path);
+    if (!dir.Exists) {
+      for (var i = viewModel.RecentOutputFolders.Count - 1; i >= 0; --i) {
+        if (string.Equals(viewModel.RecentOutputFolders[i], path, StringComparison.OrdinalIgnoreCase))
+          viewModel.RecentOutputFolders.RemoveAt(i);
+      }
+      _ = this.SaveSettingsAsync();
+      return;
+    }
+    viewModel.DestinationDirectory = dir.FullName;
+    PromoteRecent(viewModel.RecentOutputFolders, dir.FullName, viewModel.RecentFoldersDepth);
     _ = this.SaveSettingsAsync();
   }
 
@@ -691,5 +785,16 @@ public class MainController(
         parts.Add(l);
 
     return string.Join(' ', parts.Where(p => !string.IsNullOrWhiteSpace(p))).ToLowerInvariant();
+  }
+
+  /// Path of the JSON file backing the user's saved map bookmarks.
+  public static FileInfo GetBookmarksFile()
+    => new(Path.Combine(AppDataPaths.Root().FullName, "bookmarks.json"));
+
+  /// Loads the user's saved bookmarks. Returns empty if the store doesn't
+  /// exist yet — geofence auto-tag is then a no-op.
+  public Task<IReadOnlyList<MapBookmark>> LoadBookmarksAsync(CancellationToken cancellationToken = default) {
+    var store = new MapBookmarkStore(GetBookmarksFile());
+    return Task.FromResult(store.Load());
   }
 }

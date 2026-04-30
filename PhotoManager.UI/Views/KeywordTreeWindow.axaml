@@ -1,0 +1,51 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:vm="using:PhotoManager.UI.Views"
+        mc:Ignorable="d" d:DesignWidth="540" d:DesignHeight="520"
+        x:Class="PhotoManager.UI.Views.KeywordTreeWindow"
+        Width="540" Height="520"
+        MinWidth="380" MinHeight="320"
+        WindowStartupLocation="CenterOwner"
+        Title="Keyword tree">
+  <Grid RowDefinitions="Auto,Auto,*,Auto,Auto" Margin="12">
+    <TextBlock Grid.Row="0" Text="Hierarchical keywords"
+               FontSize="15" FontWeight="SemiBold" Margin="0,0,0,4" />
+    <TextBlock Grid.Row="1" Margin="0,0,0,8" Opacity="0.75" TextWrapping="Wrap"
+               Text="Build a tag tree (e.g. Travel &gt; Italy &gt; Rome). When you write a leaf to a photo, all its ancestors are written too — other tools see them as flat dc:subject keywords." />
+
+    <Border Grid.Row="2" BorderBrush="{DynamicResource PanelBorderBrush}" BorderThickness="1" CornerRadius="4">
+      <TreeView x:Name="KeywordTree" Padding="4">
+        <TreeView.ItemTemplate>
+          <TreeDataTemplate ItemsSource="{Binding Children}" DataType="vm:KeywordTreeNodeViewModel">
+            <TextBlock Text="{Binding Name}" VerticalAlignment="Center" />
+          </TreeDataTemplate>
+        </TreeView.ItemTemplate>
+      </TreeView>
+    </Border>
+
+    <StackPanel Grid.Row="3" Orientation="Horizontal" Spacing="4" Margin="0,8,0,0">
+      <Button Content="➕ Add root" Click="OnAddRootClick"
+              ToolTip.Tip="Add a new top-level keyword" />
+      <Button Content="➕ Add child" Click="OnAddChildClick"
+              ToolTip.Tip="Add a child under the highlighted node" />
+      <Button Content="✏️ Rename" Click="OnRenameClick" />
+      <Button Content="🗑️ Delete" Click="OnDeleteClick" />
+      <Border Width="1" Background="{DynamicResource PanelBorderBrush}" Margin="6,2,6,2" />
+      <Button Content="↑" Width="28" Click="OnMoveUpClick"
+              ToolTip.Tip="Move highlighted node up among siblings" />
+      <Button Content="↓" Width="28" Click="OnMoveDownClick"
+              ToolTip.Tip="Move highlighted node down among siblings" />
+      <Border Width="1" Background="{DynamicResource PanelBorderBrush}" Margin="6,2,6,2" />
+      <Button Content="🗂 Apply to selection" Click="OnApplyToSelectionClick"
+              FontWeight="SemiBold"
+              ToolTip.Tip="Write the highlighted leaf + every ancestor as keywords on every selected file in the main window grid" />
+    </StackPanel>
+
+    <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="6" Margin="0,8,0,0">
+      <TextBlock x:Name="StatusText" VerticalAlignment="Center" Opacity="0.7" Margin="0,0,8,0" />
+      <Button Content="🚪 Close" Click="OnCloseClick" IsCancel="True" IsDefault="True" />
+    </StackPanel>
+  </Grid>
+</Window>

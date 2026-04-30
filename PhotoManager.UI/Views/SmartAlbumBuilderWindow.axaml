@@ -1,0 +1,66 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:models="using:PhotoManager.UI.Models"
+        mc:Ignorable="d" d:DesignWidth="780" d:DesignHeight="540"
+        x:Class="PhotoManager.UI.Views.SmartAlbumBuilderWindow"
+        Width="780" Height="540"
+        MinWidth="640" MinHeight="420"
+        WindowStartupLocation="CenterOwner"
+        Title="Smart albums">
+  <Grid RowDefinitions="Auto,Auto,Auto,*,Auto,Auto" Margin="12">
+    <StackPanel Grid.Row="0" Spacing="4" Margin="0,0,0,8">
+      <TextBlock Text="Smart album rule builder" FontSize="16" FontWeight="SemiBold" />
+      <TextBlock Opacity="0.75" TextWrapping="Wrap"
+                 Text="Compose AND-combined clauses. Each clause filters one facet (rating, keyword, person, place, dates, GPS box…). Saved albums survive across sessions and apply to the main grid in one click." />
+    </StackPanel>
+
+    <Grid Grid.Row="1" ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,8">
+      <TextBlock Grid.Column="0" Text="Saved albums:" VerticalAlignment="Center" Margin="0,0,6,0" />
+      <ComboBox Grid.Column="1" x:Name="AlbumsCombo"
+                PlaceholderText="(pick a saved album to edit)"
+                SelectionChanged="OnAlbumSelected" />
+      <Button Grid.Column="2" Content="🗑️ Delete" Margin="6,0,0,0" Click="OnDeleteAlbumClick"
+              ToolTip.Tip="Remove the selected album." />
+    </Grid>
+
+    <Grid Grid.Row="2" ColumnDefinitions="Auto,*" Margin="0,0,0,8">
+      <TextBlock Grid.Column="0" Text="Album name:" VerticalAlignment="Center" Margin="0,0,6,0" />
+      <TextBox Grid.Column="1" x:Name="NameBox" Watermark="e.g. Vacation 2024 keepers" />
+    </Grid>
+
+    <Border Grid.Row="3" BorderBrush="{DynamicResource PanelBorderBrush}" BorderThickness="1" CornerRadius="4">
+      <ScrollViewer>
+        <ItemsControl x:Name="ClausesList">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate DataType="models:ClauseRowViewModel">
+              <Grid ColumnDefinitions="180,*,Auto" Margin="6">
+                <ComboBox Grid.Column="0" x:Name="TypeCombo"
+                          ItemsSource="{CompiledBinding Types}"
+                          SelectedItem="{CompiledBinding SelectedType, Mode=TwoWay}" />
+                <ContentControl Grid.Column="1" Margin="6,0,0,0"
+                                Content="{CompiledBinding Editor}" />
+                <Button Grid.Column="2" Content="✕" Width="32" Margin="6,0,0,0"
+                        Click="OnRemoveClauseClick" Tag="{CompiledBinding}" />
+              </Grid>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </ScrollViewer>
+    </Border>
+
+    <Grid Grid.Row="4" ColumnDefinitions="Auto,*,Auto" Margin="0,8,0,0">
+      <Button Grid.Column="0" Content="➕ Add clause" Click="OnAddClauseClick" />
+      <TextBlock Grid.Column="1" x:Name="StatusText" VerticalAlignment="Center"
+                 Margin="12,0" Opacity="0.75" />
+      <Button Grid.Column="2" Content="🧪 Test on current library" Click="OnTestClick" />
+    </Grid>
+
+    <StackPanel Grid.Row="5" Orientation="Horizontal" HorizontalAlignment="Right"
+                Spacing="6" Margin="0,12,0,0">
+      <Button Content="❌ Cancel" Click="OnCancelClick" IsCancel="True" />
+      <Button Content="💾 Save" Click="OnSaveClick" IsDefault="True" FontWeight="Bold" />
+    </StackPanel>
+  </Grid>
+</Window>

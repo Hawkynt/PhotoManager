@@ -1,6 +1,8 @@
+using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using PhotoManager.Core.Enums;
+using PhotoManager.Core.Library;
 using PhotoManager.Core.Models;
 
 namespace PhotoManager.UI.Models;
@@ -19,7 +21,19 @@ public class MainViewModel : INotifyPropertyChanged {
   private BrowseMode _browseMode = BrowseMode.Sources;
   private List<TreeViewPathData> _treeViewPaths = new();
   private List<SavedSearchData> _savedSearches = new();
+  private List<SmartAlbumRule> _smartAlbums = new();
+  private List<KeywordNode> _keywordTreeRoots = new();
+  private string? _defaultDevelopPreset;
+  private bool _geofenceAutoTagOnScan;
   private ThemeVariantPreference _theme = ThemeVariantPreference.System;
+  private string _defaultRenameTemplate = "{date:yyyy-MM-dd}_{name}";
+  private int _recentFoldersDepth = 5;
+  private bool _autoDetectFacesOnScan;
+  private bool _autoDetectObjectsOnScan;
+  private bool _reverseGeocoderEnabled = true;
+  private bool _elevationLookupEnabled = true;
+  private int _geocoderRateLimitPerSecond = 1;
+  private OperationProgress? _currentOperation;
 
   public string SourceDirectory {
     get => this._sourceDirectory;
@@ -109,12 +123,94 @@ public class MainViewModel : INotifyPropertyChanged {
     set => this.SetProperty(this.OnPropertyChanged, ref this._savedSearches, value);
   }
 
+  /// Composable rule-based filters distinct from <see cref="SavedSearches"/>
+  /// (which are flat text/star/label snapshots). Loaded into the search
+  /// pipeline when the user picks one from the smart-album dropdown.
+  public List<SmartAlbumRule> SmartAlbums {
+    get => this._smartAlbums;
+    set => this.SetProperty(this.OnPropertyChanged, ref this._smartAlbums, value);
+  }
+
+  public List<KeywordNode> KeywordTreeRoots {
+    get => this._keywordTreeRoots;
+    set => this.SetProperty(this.OnPropertyChanged, ref this._keywordTreeRoots, value);
+  }
+
+  public string? DefaultDevelopPreset {
+    get => this._defaultDevelopPreset;
+    set => this.SetProperty(this.OnPropertyChanged, ref this._defaultDevelopPreset, value);
+  }
+
+  public bool GeofenceAutoTagOnScan {
+    get => this._geofenceAutoTagOnScan;
+    set => this.SetProperty(this.OnPropertyChanged, ref this._geofenceAutoTagOnScan, value);
+  }
+
   /// Persisted Light/Dark/System preference. Mapped to
   /// Application.Current.RequestedThemeVariant at apply time.
   public ThemeVariantPreference Theme {
     get => this._theme;
     set => this.SetProperty(this.OnPropertyChanged, ref this._theme, value);
   }
+
+  public string DefaultRenameTemplate {
+    get => this._defaultRenameTemplate;
+    set => this.SetProperty(this.OnPropertyChanged, ref this._defaultRenameTemplate, value);
+  }
+
+  public int RecentFoldersDepth {
+    get => this._recentFoldersDepth;
+    set => this.SetProperty(this.OnPropertyChanged, ref this._recentFoldersDepth, value);
+  }
+
+  public bool AutoDetectFacesOnScan {
+    get => this._autoDetectFacesOnScan;
+    set => this.SetProperty(this.OnPropertyChanged, ref this._autoDetectFacesOnScan, value);
+  }
+
+  public bool AutoDetectObjectsOnScan {
+    get => this._autoDetectObjectsOnScan;
+    set => this.SetProperty(this.OnPropertyChanged, ref this._autoDetectObjectsOnScan, value);
+  }
+
+  public bool ReverseGeocoderEnabled {
+    get => this._reverseGeocoderEnabled;
+    set => this.SetProperty(this.OnPropertyChanged, ref this._reverseGeocoderEnabled, value);
+  }
+
+  public bool ElevationLookupEnabled {
+    get => this._elevationLookupEnabled;
+    set => this.SetProperty(this.OnPropertyChanged, ref this._elevationLookupEnabled, value);
+  }
+
+  public int GeocoderRateLimitPerSecond {
+    get => this._geocoderRateLimitPerSecond;
+    set => this.SetProperty(this.OnPropertyChanged, ref this._geocoderRateLimitPerSecond, value);
+  }
+
+  /// <summary>
+  /// Recently-used source folders (full paths). Most-recent first, capped at
+  /// <see cref="RecentFoldersDepth"/>. Bound by the <c>File → Recent sources</c>
+  /// menu — the menu rebuilds whenever this collection's contents change.
+  /// </summary>
+  public ObservableCollection<string> RecentSourceFolders { get; } = new();
+
+  /// <summary>Recently-used output folders. Same rules as <see cref="RecentSourceFolders"/>.</summary>
+  public ObservableCollection<string> RecentOutputFolders { get; } = new();
+
+  /// <summary>
+  /// The currently-running long operation, or null when idle. The status-bar
+  /// progress strip is visible iff this is non-null.
+  /// </summary>
+  public OperationProgress? CurrentOperation {
+    get => this._currentOperation;
+    set {
+      this.SetProperty(this.OnPropertyChanged, ref this._currentOperation, value);
+      this.OnPropertyChanged(nameof(this.HasCurrentOperation));
+    }
+  }
+
+  public bool HasCurrentOperation => this._currentOperation is not null;
 
   public event PropertyChangedEventHandler? PropertyChanged;
 

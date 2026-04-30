@@ -67,7 +67,16 @@ public static class DevelopMetadataStore {
     // live here so PhotoManager round-trips users' control points exactly.
     IReadOnlyList<CurvePoint>? RedCurvePoints = null,
     IReadOnlyList<CurvePoint>? GreenCurvePoints = null,
-    IReadOnlyList<CurvePoint>? BlueCurvePoints = null
+    IReadOnlyList<CurvePoint>? BlueCurvePoints = null,
+    // Creative-look opacity has no Adobe analogue — Adobe stores LookName but
+    // not its opacity. 1.0 default = full strength, matching the slider default.
+    double LookOpacity = 1.0,
+    // Watermark layer — text + opacity + position + font size. No Adobe
+    // analogue; lives entirely in pm:developSettings.
+    string? WatermarkText = null,
+    double WatermarkOpacity = 0.5,
+    string WatermarkPosition = "BottomRight",
+    int WatermarkFontSize = 24
   ) {
     public bool IsEmpty =>
       this.RotationDegrees == 0
@@ -78,13 +87,17 @@ public static class DevelopMetadataStore {
       && IsTrivialPoints(this.ToneCurvePoints)
       && IsTrivialPoints(this.RedCurvePoints)
       && IsTrivialPoints(this.GreenCurvePoints)
-      && IsTrivialPoints(this.BlueCurvePoints);
+      && IsTrivialPoints(this.BlueCurvePoints)
+      && Math.Abs(this.LookOpacity - 1.0) < 1e-6
+      && string.IsNullOrEmpty(this.WatermarkText);
 
     public static DevelopExtras From(DevelopSettings s) => new(
       s.RotationDegrees,
       s.RedGain, s.GreenGain, s.BlueGain,
       s.ToneCurveInterpolation, s.ToneCurvePoints,
-      s.RedCurvePoints, s.GreenCurvePoints, s.BlueCurvePoints);
+      s.RedCurvePoints, s.GreenCurvePoints, s.BlueCurvePoints,
+      s.LookOpacity,
+      s.WatermarkText, s.WatermarkOpacity, s.WatermarkPosition, s.WatermarkFontSize);
 
     private static bool IsTrivialPoints(IReadOnlyList<CurvePoint>? p)
       => p is null || p.Count < 2;
@@ -364,6 +377,9 @@ public static class DevelopMetadataStore {
       "MaskGroupBasedCorrections",
       // Color Enhancement (post-2023 Adobe slider).
       "ColorEnhancement"
+      // Note: crs:LookName is intentionally NOT in this list. It's preserved
+      // as a foreign tag (so 3rd-party-tool values aren't clobbered) and
+      // only emitted by AddCrsElements when settings.LookName is non-null.
     }
     .Concat(HslBandNames.Select(n => "HueAdjustment" + n))
     .Concat(HslBandNames.Select(n => "SaturationAdjustment" + n))
@@ -541,6 +557,11 @@ public static class DevelopMetadataStore {
       description.Add(new XElement(Crs + "CropRight",  settings.CropRight.ToString("0.######", inv)));
       if (Math.Abs(settings.CropAngleDegrees) > 1e-6)
         description.Add(new XElement(Crs + "CropAngle", settings.CropAngleDegrees.ToString("0.0##", inv)));
+    }
+
+    if (!string.IsNullOrWhiteSpace(settings.LookName)) {
+      description.Element(Crs + "LookName")?.Remove();
+      description.Add(new XElement(Crs + "LookName", settings.LookName));
     }
   }
 
@@ -1049,6 +1070,10 @@ public static class DevelopMetadataStore {
     if (TryReadDouble(description, Crs + "PerspectiveX",          out v)) s = s with { PerspectiveX          = v };
     if (TryReadDouble(description, Crs + "PerspectiveY",          out v)) s = s with { PerspectiveY          = v };
 
+    var lookName = description.Element(Crs + "LookName")?.Value;
+    if (!string.IsNullOrWhiteSpace(lookName))
+      s = s with { LookName = lookName };
+
     return s;
   }
 
@@ -1105,7 +1130,12 @@ public static class DevelopMetadataStore {
       ToneCurvePoints = extras.ToneCurvePoints,
       RedCurvePoints = extras.RedCurvePoints,
       GreenCurvePoints = extras.GreenCurvePoints,
-      BlueCurvePoints = extras.BlueCurvePoints
+      BlueCurvePoints = extras.BlueCurvePoints,
+      LookOpacity = extras.LookOpacity,
+      WatermarkText = string.IsNullOrEmpty(extras.WatermarkText) ? null : extras.WatermarkText,
+      WatermarkOpacity = extras.WatermarkOpacity,
+      WatermarkPosition = string.IsNullOrEmpty(extras.WatermarkPosition) ? "BottomRight" : extras.WatermarkPosition,
+      WatermarkFontSize = extras.WatermarkFontSize <= 0 ? 24 : extras.WatermarkFontSize
     };
 
   // ---------- helpers ----------
