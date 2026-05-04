@@ -165,13 +165,10 @@ public static class ImageDeveloper {
   private static Image<Rgba32>? TryAiColorize(Image<Rgba32> image, DevelopSettings settings, CancellationToken ct = default) {
     if (settings.AiColorizeAmount <= 1e-6)
       return null;
-    var modelFile = !string.IsNullOrWhiteSpace(settings.AiColorizeModel)
-      ? AppDataPaths.ModelFile(settings.AiColorizeModel!)
-      : null;
-    using var colorizer = new Segmentation.OnnxColorizer(modelFile);
-    if (!colorizer.IsAvailable)
-      return null;
-    return colorizer.Colorize(image, settings.AiColorizeAmount, ct);
+    // ColorizerRouter dispatches to OnnxColorizer (DeOldify) or
+    // OnnxColorizerDDColor based on the model filename — they have
+    // incompatible I/O contracts (RGB-out vs Lab-ab-out).
+    return Segmentation.ColorizerRouter.Colorize(image, settings.AiColorizeModel, settings.AiColorizeAmount, ct);
   }
 
   /// <summary>

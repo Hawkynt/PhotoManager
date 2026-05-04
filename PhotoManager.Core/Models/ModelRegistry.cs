@@ -188,6 +188,26 @@ public static class ModelRegistry {
     ]
   );
 
+  /// <summary>DDColor paper-tiny ONNX — state-of-the-art (ECCV 2023) colorizer, ~258 MB.</summary>
+  public static readonly ModelInfo ColorizeDDColorPaperTiny = new(
+    Name: "ddcolor-paper-tiny",
+    FileName: "ddcolor-paper-tiny.onnx",
+    DisplayName: "DDColor paper-tiny — state-of-the-art (recommended)",
+    Description: "DDColor (ECCV 2023) — substantially better than DeOldify on portraits / landscapes / scenes. Predicts only Lab a/b chroma at 256×256, source's full-resolution L stays untouched → perfect detail preservation. ~258 MB. Mirrored from instant-high/DDColor-onnx's gdrive zip; original DDColor weights from piddnad/DDColor.",
+    DownloadUrl: "https://huggingface.co/Hawkynt/photomanager-models/resolve/main/ddcolor-paper-tiny.onnx",
+    ApproximateSizeBytes: 270_220_918
+  );
+
+  /// <summary>DDColor artistic ONNX — full-quality variant at 512×512, ~934 MB.</summary>
+  public static readonly ModelInfo ColorizeDDColorArtistic = new(
+    Name: "ddcolor-artistic",
+    FileName: "ddcolor-artistic.onnx",
+    DisplayName: "DDColor artistic — full quality (large)",
+    Description: "DDColor artistic variant — same architecture as paper-tiny but trained at 512×512 with bolder colour choices. Higher chroma resolution = sharper colour edges around fine detail. ~934 MB. Mirrored from instant-high/DDColor-onnx's gdrive zip; original DDColor weights from piddnad/DDColor.",
+    DownloadUrl: "https://huggingface.co/Hawkynt/photomanager-models/resolve/main/ddcolor-artistic.onnx",
+    ApproximateSizeBytes: 979_727_590
+  );
+
   /// <summary>DeOldify Stable ONNX — colorise B&amp;W photos with more conservative output. Multi-file ONNX (~833 MB external weights).</summary>
   public static readonly ModelInfo ColorizeDeOldifyStable = new(
     Name: "deoldify-stable",
@@ -251,8 +271,8 @@ public static class ModelRegistry {
   /// <summary>Every denoise / restoration model registered with the app. UI dropdown order = this list's order.</summary>
   public static readonly IReadOnlyList<ModelInfo> Denoisers = [NafnetSidd, ScuNetGan, NafnetGoPro, NafnetSiddPure];
 
-  /// <summary>Every colorisation model registered with the app. UI dropdown order = this list's order.</summary>
-  public static readonly IReadOnlyList<ModelInfo> Colorizers = [ColorizeDeOldifyArtistic, ColorizeDeOldifyStable];
+  /// <summary>Every colorisation model registered with the app. UI dropdown order = this list's order. DDColor variants first because they materially out-perform DeOldify on real photos.</summary>
+  public static readonly IReadOnlyList<ModelInfo> Colorizers = [ColorizeDDColorPaperTiny, ColorizeDDColorArtistic, ColorizeDeOldifyArtistic, ColorizeDeOldifyStable];
 
   /// <summary>Every face-restoration model registered with the app. UI dropdown order = this list's order.</summary>
   public static readonly IReadOnlyList<ModelInfo> FaceRestorers = [GfpGanV14];
@@ -260,7 +280,7 @@ public static class ModelRegistry {
   /// <summary>Every inpainting model registered with the app. UI dropdown order = this list's order.</summary>
   public static readonly IReadOnlyList<ModelInfo> Inpainters = [LamaInpaint];
 
-  public static readonly IReadOnlyList<ModelInfo> All = [YoloV8n, UltraFaceRfb320, ArcFace, SubjectMaskMODNet, NafnetSidd, ScuNetGan, NafnetGoPro, NafnetSiddPure, RealEsrganX4, RealEsrganX4Fixed128, SwinIrX4, RealEsrganX4Anime, Waifu2xPhotoX4, EdsrX2, ColorizeDeOldifyArtistic, ColorizeDeOldifyStable, GfpGanV14, LamaInpaint, SiglipVision, SiglipText];
+  public static readonly IReadOnlyList<ModelInfo> All = [YoloV8n, UltraFaceRfb320, ArcFace, SubjectMaskMODNet, NafnetSidd, ScuNetGan, NafnetGoPro, NafnetSiddPure, RealEsrganX4, RealEsrganX4Fixed128, SwinIrX4, RealEsrganX4Anime, Waifu2xPhotoX4, EdsrX2, ColorizeDDColorPaperTiny, ColorizeDDColorArtistic, ColorizeDeOldifyArtistic, ColorizeDeOldifyStable, GfpGanV14, LamaInpaint, SiglipVision, SiglipText];
 
   public static ModelInfo? FindByName(string name) =>
     All.FirstOrDefault(m => string.Equals(m.Name, name, StringComparison.OrdinalIgnoreCase));

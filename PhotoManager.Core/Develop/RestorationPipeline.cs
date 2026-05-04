@@ -77,16 +77,13 @@ public static class RestorationPipeline {
     //    sources; on a colour source it'll add a subtle cast.
     if (settings.RecolourStrength > 1e-6) {
       ct.ThrowIfCancellationRequested();
-      var modelFile = !string.IsNullOrWhiteSpace(settings.ColorizeModel)
-        ? AppDataPaths.ModelFile(settings.ColorizeModel!)
-        : null;
-      using var colorizer = new OnnxColorizer(modelFile);
-      if (colorizer.IsAvailable) {
-        var colorised = colorizer.Colorize(output, settings.RecolourStrength, ct);
-        if (colorised != null) {
-          using (colorised)
-            ReplaceContents(output, colorised);
-        }
+      // ColorizerRouter picks the right engine for the user's chosen
+      // model — DDColor (preferred, full-detail Lab pipeline) or
+      // DeOldify (fallback, mild RGB pipeline).
+      var colorised = ColorizerRouter.Colorize(output, settings.ColorizeModel, settings.RecolourStrength, ct);
+      if (colorised != null) {
+        using (colorised)
+          ReplaceContents(output, colorised);
       }
     }
 

@@ -124,9 +124,14 @@ public class ModelDownloaderTests {
     foreach (var model in ModelRegistry.All) {
       Assert.That(model.Name, Is.Not.Empty);
       Assert.That(model.FileName, Does.EndWith(".onnx"));
-      Assert.That(model.DownloadUrl, Does.StartWith("https://"),
-        $"model {model.Name} should use HTTPS to avoid MITM tampering of weights");
       Assert.That(model.ApproximateSizeBytes, Is.GreaterThan(0));
+      // Empty DownloadUrl is allowed for manual-install-only models
+      // (e.g. DDColor — only on Google Drive, no public HF mirror as
+      // of writing). Non-empty URLs must be HTTPS so the downloader
+      // can't be MITM'd into pulling tampered weights.
+      if (!string.IsNullOrEmpty(model.DownloadUrl))
+        Assert.That(model.DownloadUrl, Does.StartWith("https://"),
+          $"model {model.Name} should use HTTPS to avoid MITM tampering of weights");
     }
   }
 

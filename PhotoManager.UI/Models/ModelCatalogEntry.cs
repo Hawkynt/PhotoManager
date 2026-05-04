@@ -77,10 +77,16 @@ public sealed class ModelCatalogEntry : INotifyPropertyChanged {
     set => this.SetProperty(ref this._progressDetail, value);
   }
 
-  public bool CanDownload => !this._isDownloading;
+  /// <summary>True iff the registry entry has no download URL (manual-install-only models like DDColor with no public HF mirror).</summary>
+  public bool IsManualInstallOnly => string.IsNullOrEmpty(this.Model.DownloadUrl);
 
-  /// <summary>"⬇️ Download" when the model is missing, "🔄 Re-download" when it's already on disk.</summary>
-  public string DownloadButtonText => this._isInstalled ? "🔄 Re-download" : "⬇️ Download";
+  public bool CanDownload => !this._isDownloading && !this.IsManualInstallOnly;
+
+  /// <summary>"⬇️ Download" when the model is missing, "🔄 Re-download" when it's already on disk, "Manual install only" when no URL is registered.</summary>
+  public string DownloadButtonText
+    => this.IsManualInstallOnly ? "📁 Manual install only"
+       : this._isInstalled       ? "🔄 Re-download"
+       :                           "⬇️ Download";
 
   /// <summary>Tinted green when installed, transparent otherwise. Bound to the row's Border.Background.</summary>
   public IBrush RowBackground => this._isInstalled ? InstalledBrush : MissingBrush;
