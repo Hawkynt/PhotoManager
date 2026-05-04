@@ -5,17 +5,25 @@ namespace PhotoManager.Core.Services;
 public class SupportedFormatsService : ISupportedFormatsService {
   
   // Central definition of all supported formats based on MetadataExtractor capabilities
+  // and the FileFormat.* readers wired in via RawImageLoader.
   private static readonly Dictionary<string, string[]> _formatExtensions = new(StringComparer.OrdinalIgnoreCase) {
     ["JPEG"] = [".jpg", ".jpeg", ".jfif", ".jpe"],
     ["TIFF"] = [".tiff", ".tif"],
     ["Photoshop"] = [".psd", ".psb"],
     ["PNG"] = [".png"],
+    ["APNG"] = [".apng"],
     ["BMP"] = [".bmp", ".dib"],
     ["GIF"] = [".gif"],
     ["ICO"] = [".ico"],
     ["Netpbm"] = [".pgm", ".ppm", ".pbm", ".pnm"],
     ["PCX"] = [".pcx"],
     ["WebP"] = [".webp"],
+    ["HEIC"] = [".heic", ".heif"],
+    ["AVIF"] = [".avif"],
+    ["JPEG 2000"] = [".jp2", ".j2k", ".jpc"],
+    ["HDR"] = [".hdr"],
+    ["OpenEXR"] = [".exr"],
+    ["DDS"] = [".dds"],
     ["QuickTime"] = [".mov", ".mp4", ".m4v", ".3gp", ".3g2"],
     ["RAW"] = [
       // Canon

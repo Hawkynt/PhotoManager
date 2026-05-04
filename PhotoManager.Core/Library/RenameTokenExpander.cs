@@ -122,10 +122,24 @@ public static class RenameTokenExpander {
   public static string SanitizeForFilename(string raw) {
     if (string.IsNullOrEmpty(raw))
       return raw;
-    var invalid = Path.GetInvalidFileNameChars();
     var sb = new StringBuilder(raw.Length);
     foreach (var c in raw)
-      sb.Append(invalid.Contains(c) ? '_' : c);
+      sb.Append(_FilenameInvalidChars.Contains(c) ? '_' : c);
     return sb.ToString().Trim();
+  }
+
+  // Hard-coded portable invalid set rather than Path.GetInvalidFileNameChars():
+  // the BCL returns a tiny POSIX-only set on Linux (just '/' and NUL), which
+  // means a sanitised name made on Linux can carry '\', '?', '*', '|', '<', '>'
+  // through to a Windows machine and break renaming there. The user copies
+  // PhotoManager-organised folders between OSes, so we always strip the
+  // Windows-superset (which is also a strict superset of Linux's invalid set).
+  private static readonly HashSet<char> _FilenameInvalidChars = BuildInvalidCharSet();
+
+  private static HashSet<char> BuildInvalidCharSet() {
+    var s = new HashSet<char> { '<', '>', ':', '"', '/', '\\', '|', '?', '*' };
+    for (var c = (char)0; c <= 31; c++)
+      s.Add(c);
+    return s;
   }
 }
