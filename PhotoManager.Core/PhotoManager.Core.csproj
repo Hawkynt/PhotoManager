@@ -40,12 +40,19 @@
          with the managed package when a matching runtime appears on NuGet. -->
     <PackageReference Include="OpenCvSharp4.runtime.linux-x64" Version="4.10.0.20240717"
                       Condition="$([MSBuild]::IsOSPlatform('Linux'))" />
-    <!-- osx-arm64: 4.10.0.20241108 hadn't shipped a runtime build at the time of
-         writing, so we pin to the latest 4.9.0.* patch which carries the same
-         Stitcher API. Bump in lockstep with the managed package when a matching
-         runtime appears on NuGet. -->
-    <PackageReference Include="OpenCvSharp4.runtime.osx-arm64" Version="4.9.0.20240103"
-                      Condition="$([MSBuild]::IsOSPlatform('OSX'))" />
+    <!-- macOS: there is no first-party OpenCvSharp4 native runtime for arm64
+         on NuGet — `opencvsharp4.runtime.osx-arm64` (dash) returns BlobNotFound,
+         the underscore form `opencvsharp4.runtime.osx_arm64` only ships 4.8.1
+         (no 4.10.x release), and the only universal binary is the obsolete
+         `opencvsharp4.runtime.osx.10.15-universal` 4.7.0. Without a macOS
+         runtime the OpenCV-backed hand-held panorama stitcher and Smart
+         Patch Selection don't work on macOS — the tripod stitcher (pure
+         managed C#, no OpenCV) still does, and the rest of the app is
+         unaffected (the managed OpenCvSharp4 wrapper P/Invokes lazily, so
+         it loads fine without the native binaries; only stitch-time calls
+         throw, which we already catch and fall back to the managed path).
+         Re-add a runtime reference here when an upstream 4.10+ macOS
+         package finally appears on NuGet. -->
   </ItemGroup>
 
   <!-- Cross-workspace references to the shared format libraries. Both
