@@ -102,6 +102,16 @@ public static class ModelRegistry {
     ApproximateSizeBytes: 467_762_800
   );
 
+  /// <summary>FBCNN colour ONNX — blind JPEG / DCT / wavelet artifact remover, ~120 MB.</summary>
+  public static readonly ModelInfo ArtifactRemoverFbcnnColor = new(
+    Name: "fbcnn-color",
+    FileName: "fbcnn-color.onnx",
+    DisplayName: "FBCNN colour — JPEG / artifact remover (default)",
+    Description: "Flexible Blind CNN (Jiang et al. 2021) — single-pass blind restoration of JPEG / DCT / wavelet compression artifacts: ringing, blocking and halos around hard edges. Operates on the whole image at once, RGB float32 [0..1] in NCHW. ~120 MB. Mirror: huggingface.co/Hawkynt/photomanager-models.",
+    DownloadUrl: "https://huggingface.co/Hawkynt/photomanager-models/resolve/main/fbcnn-color.onnx",
+    ApproximateSizeBytes: 120_000_000
+  );
+
   /// <summary>Real-ESRGAN x4 ONNX — 4× super-resolution upscaler, ~67 MB. Default model.</summary>
   public static readonly ModelInfo RealEsrganX4 = new(
     Name: "real-esrgan-x4",
@@ -235,6 +245,23 @@ public static class ModelRegistry {
     ApproximateSizeBytes: 92_323_456
   );
 
+  /// <summary>BOPB scratch detector ONNX — Microsoft's purpose-built scratch / damage detector, ~144 MB.</summary>
+  public static readonly ModelInfo BopbScratchDetector = new(
+    Name: "bopb-scratch-detector",
+    FileName: "scratch-detector-bopb.onnx",
+    DisplayName: "BOPB scratch detector — neural-net (recommended)",
+    Description: "UNet from Microsoft's 'Bringing Old Photos Back to Life' (Wan et al. 2020), purpose-trained to find scratches, dust, paper-fold tears, mould, and edge damage in old photos. Substantially better than the classical Frangi filter on faint scratches across textured backgrounds. Multi-file ONNX: ~250 KB graph + ~144 MB external weights, both downloaded automatically.",
+    DownloadUrl: "https://huggingface.co/Hawkynt/photomanager-models/resolve/main/scratch-detector-bopb.onnx",
+    ApproximateSizeBytes: 249_226,
+    ExternalDataFiles: [
+      new ExternalDataFile(
+        FileName: "scratch-detector-bopb.onnx.data",
+        DownloadUrl: "https://huggingface.co/Hawkynt/photomanager-models/resolve/main/scratch-detector-bopb.onnx.data",
+        ApproximateSizeBytes: 150_536_192
+      )
+    ]
+  );
+
   /// <summary>GFPGAN v1.4 ONNX — face-only restoration (deblur, scratches, sharpen), ~324 MB.</summary>
   public static readonly ModelInfo GfpGanV14 = new(
     Name: "gfpgan-v1-4",
@@ -271,16 +298,22 @@ public static class ModelRegistry {
   /// <summary>Every denoise / restoration model registered with the app. UI dropdown order = this list's order.</summary>
   public static readonly IReadOnlyList<ModelInfo> Denoisers = [NafnetSidd, ScuNetGan, NafnetGoPro, NafnetSiddPure];
 
+  /// <summary>Every JPEG / compression-artifact remover registered with the app. UI dropdown order = this list's order.</summary>
+  public static readonly IReadOnlyList<ModelInfo> ArtifactRemovers = [ArtifactRemoverFbcnnColor];
+
   /// <summary>Every colorisation model registered with the app. UI dropdown order = this list's order. DDColor variants first because they materially out-perform DeOldify on real photos.</summary>
   public static readonly IReadOnlyList<ModelInfo> Colorizers = [ColorizeDDColorPaperTiny, ColorizeDDColorArtistic, ColorizeDeOldifyArtistic, ColorizeDeOldifyStable];
 
   /// <summary>Every face-restoration model registered with the app. UI dropdown order = this list's order.</summary>
   public static readonly IReadOnlyList<ModelInfo> FaceRestorers = [GfpGanV14];
 
+  /// <summary>Every scratch-detection model registered with the app. UI dropdown order = this list's order.</summary>
+  public static readonly IReadOnlyList<ModelInfo> ScratchDetectors = [BopbScratchDetector];
+
   /// <summary>Every inpainting model registered with the app. UI dropdown order = this list's order.</summary>
   public static readonly IReadOnlyList<ModelInfo> Inpainters = [LamaInpaint];
 
-  public static readonly IReadOnlyList<ModelInfo> All = [YoloV8n, UltraFaceRfb320, ArcFace, SubjectMaskMODNet, NafnetSidd, ScuNetGan, NafnetGoPro, NafnetSiddPure, RealEsrganX4, RealEsrganX4Fixed128, SwinIrX4, RealEsrganX4Anime, Waifu2xPhotoX4, EdsrX2, ColorizeDDColorPaperTiny, ColorizeDDColorArtistic, ColorizeDeOldifyArtistic, ColorizeDeOldifyStable, GfpGanV14, LamaInpaint, SiglipVision, SiglipText];
+  public static readonly IReadOnlyList<ModelInfo> All = [YoloV8n, UltraFaceRfb320, ArcFace, SubjectMaskMODNet, NafnetSidd, ScuNetGan, NafnetGoPro, NafnetSiddPure, ArtifactRemoverFbcnnColor, RealEsrganX4, RealEsrganX4Fixed128, SwinIrX4, RealEsrganX4Anime, Waifu2xPhotoX4, EdsrX2, ColorizeDDColorPaperTiny, ColorizeDDColorArtistic, ColorizeDeOldifyArtistic, ColorizeDeOldifyStable, GfpGanV14, BopbScratchDetector, LamaInpaint, SiglipVision, SiglipText];
 
   public static ModelInfo? FindByName(string name) =>
     All.FirstOrDefault(m => string.Equals(m.Name, name, StringComparison.OrdinalIgnoreCase));

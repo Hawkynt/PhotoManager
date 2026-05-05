@@ -113,7 +113,73 @@ public static class RawImageLoader {
       ".ico"                       => FormatIO.Decode<IcoFile>(file),
       _                            => null
     };
-    return raw is null ? null : RawImageToImageSharp(raw);
+    // Sanity check: the upstream AVIF decoder (FileFormat.Avif at
+    // ../../PNGCrushCS) returns a zero-filled buffer on certain AV1
+    // profiles instead of failing — we'd otherwise paint pure black,
+    // which the user reads as "decode silently broken". When that
+    // happens we fall through to Magick.NET, which has libheif/libavif
+    // bundled and decodes the broader set of profiles correctly.
+    if (raw is null || IsAllZero(raw.PixelData)) {
+      var fromMagick = TryMagickDecode(file);
+      if (fromMagick is not null)
+        return fromMagick;
+      if (raw is null)
+        return null;  // FileFormat lib didn't recognise the format AND Magick couldn't either
+      throw new NotSupportedException(
+        $"Decoder for {file.Extension.ToLowerInvariant()} returned an empty image for '{file.Name}', " +
+        "and the Magick.NET fallback also failed. Convert the file to PNG/JPEG as a workaround.");
+    }
+
+    return RawImageToImageSharp(raw);
+  }
+
+  /// <summary>
+  /// Try to decode <paramref name="file"/> via Magick.NET (libheif /
+  /// libavif / libjpeg / libtiff under the hood). Returns null if the
+  /// native bits aren't available or the decode fails — caller falls
+  /// through to whatever next-best path is appropriate.
+  /// </summary>
+  private static Image<Rgba32>? TryMagickDecode(FileInfo file) {
+    try {
+      using var magick = new ImageMagick.MagickImage(file.FullName);
+      magick.ColorSpace = ImageMagick.ColorSpace.sRGB;
+      // Read straight into our canonical RGBA buffer; Magick handles
+      // 8-vs-16-bit and YUV→RGB conversion for us.
+      var w = (int)magick.Width;
+      var h = (int)magick.Height;
+      var pixels = magick.GetPixelsUnsafe();
+      var bytes = pixels.ToByteArray(ImageMagick.PixelMapping.RGBA);
+      if (bytes is null || bytes.Length != w * h * 4)
+        return null;
+      var image = new Image<Rgba32>(w, h);
+      image.ProcessPixelRows(accessor => {
+        for (var y = 0; y < h; y++) {
+          var row = accessor.GetRowSpan(y);
+          var off = y * w * 4;
+          for (var x = 0; x < w; x++) {
+            var i = off + x * 4;
+            row[x] = new Rgba32(bytes[i], bytes[i + 1], bytes[i + 2], bytes[i + 3]);
+          }
+        }
+      });
+      return image;
+    } catch {
+      return null;
+    }
+  }
+
+  private static bool IsAllZero(byte[]? data) {
+    if (data is null || data.Length == 0)
+      return true;
+    // Sample every Nth byte rather than walk the whole buffer; large
+    // images would cost ~30 MB of pointless reads otherwise. A real
+    // image has high-entropy pixels — finding even ONE non-zero in a
+    // sparse scan is conclusive proof the buffer isn't blank.
+    var step = Math.Max(1, data.Length / 4096);
+    for (var i = 0; i < data.Length; i += step)
+      if (data[i] != 0)
+        return false;
+    return true;
   }
 
   /// <summary>

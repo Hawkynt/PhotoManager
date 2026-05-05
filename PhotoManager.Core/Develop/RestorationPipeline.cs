@@ -71,6 +71,23 @@ public static class RestorationPipeline {
       }
     }
 
+    // 2.5) JPEG / DCT / wavelet / ringing artifact removal: FBCNN runs a
+    //      single-pass blind cleanup of compression artifacts. Sits
+    //      between denoise (which targets sensor / scan noise) and
+    //      recolour (which is sensitive to ringing around edges).
+    if (settings.ArtifactRemoveStrength > 1e-6) {
+      ct.ThrowIfCancellationRequested();
+      var modelFile = !string.IsNullOrWhiteSpace(settings.ArtifactRemoveModel)
+        ? AppDataPaths.ModelFile(settings.ArtifactRemoveModel!)
+        : null;
+      using var remover = new OnnxArtifactRemover(modelFile);
+      if (remover.IsAvailable) {
+        using var cleaned = remover.Remove(output, settings.ArtifactRemoveStrength, ct);
+        if (cleaned != null)
+          ReplaceContents(output, cleaned);
+      }
+    }
+
     // 3) Recolourize: DeOldify maps grayscale luminance to an RGB chroma
     //    field which is blended onto the source's full-resolution
     //    luminance. Only a meaningful operation on B&W or near-B&W
@@ -80,7 +97,7 @@ public static class RestorationPipeline {
       // ColorizerRouter picks the right engine for the user's chosen
       // model — DDColor (preferred, full-detail Lab pipeline) or
       // DeOldify (fallback, mild RGB pipeline).
-      var colorised = ColorizerRouter.Colorize(output, settings.ColorizeModel, settings.RecolourStrength, ct);
+      var colorised = ColorizerRouter.Colorize(output, settings.ColorizeModel, settings.RecolourStrength, settings.ChromaBoost, ct);
       if (colorised != null) {
         using (colorised)
           ReplaceContents(output, colorised);

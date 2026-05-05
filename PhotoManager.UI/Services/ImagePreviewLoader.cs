@@ -1,4 +1,5 @@
 using Avalonia.Media.Imaging;
+using PhotoManager.Core.Develop;
 using PhotoManager.Core.Previews;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
@@ -70,7 +71,11 @@ public static class ImagePreviewLoader {
     }
 
     try {
-      using var image = await Image.LoadAsync<Rgba32>(file.FullName, cancellationToken);
+      // Route through RawImageLoader so AVIF / HEIC / JPEG2000 / PSD / HDR /
+      // EXR / DDS / PCX / ICO / APNG all decode via their FileFormat.* libs.
+      // ImageSharp's own decoder only covers JPG/PNG/BMP/GIF/TIFF/WebP/etc.,
+      // so calling it directly here would silently null-out everything else.
+      using var image = await RawImageLoader.LoadAsync(file, cancellationToken);
       return await ResizeImageAsync(image, cancellationToken);
     } catch {
       return null;

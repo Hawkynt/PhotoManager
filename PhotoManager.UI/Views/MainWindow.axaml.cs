@@ -583,8 +583,17 @@ public partial class MainWindow : Window {
         : await this._controller.ScanCheckedSourcesAsync();
       this._currentFileItems = items;
 
-      if (grid != null)
+      if (grid != null) {
         grid.ItemsSource = items;
+        // Auto-select the first row after a refresh so the preview pane has
+        // something to show without forcing the user to click. SelectedItem=
+        // first item also drags the grid focus forward, so arrow-key
+        // navigation works immediately.
+        if (items.Count > 0) {
+          grid.SelectedItem = items[0];
+          grid.ScrollIntoView(items[0], grid.Columns.FirstOrDefault());
+        }
+      }
 
       this.RefreshTimelineStrip();
 
@@ -1431,6 +1440,17 @@ public partial class MainWindow : Window {
       ? new PanoramaStitchWindow(selection)
       : new PanoramaStitchWindow();
     await window.ShowDialog(this);
+  }
+
+  private async void OnOpenPieceStitchClick(object? sender, RoutedEventArgs e) {
+    // Always operate on the currently-selected file — the window has no
+    // file picker of its own. If nothing is selected, surface a status
+    // message and bail rather than opening an empty window.
+    if (this._currentFile is not { Exists: true } current) {
+      this._controller.ViewModel.StatusMessage = "Select a multi-piece scan in the grid first.";
+      return;
+    }
+    await new PieceStitchWindow(current).ShowDialog(this);
   }
 
   private async void OnOpenPanoramaViewerClick(object? sender, RoutedEventArgs e) {

@@ -194,6 +194,8 @@
                   ToolTip.Tip="Merge a bracket of differently-exposed photos into a single HDR image via Debevec response-curve recovery + Reinhard / Drago tone mapping." />
         <MenuItem Header="🖼 Panorama _stitch..." Click="OnOpenPanoramaStitchClick"
                   ToolTip.Tip="Stitch overlapping photos into a panorama. Tripod mode = hand-rolled cylindrical projection; hand-held mode = OpenCV high-level Stitcher (gigapixel-friendly); spherical mode = full 360° equirectangular." />
+        <MenuItem Header="🧩 Stitch torn _pieces..." Click="OnOpenPieceStitchClick"
+                  ToolTip.Tip="Reassemble a single scan that contains several ripped pieces of one photograph. Detects each piece against the uniform scanner background, matches torn edges, and emits a composited result." />
         <MenuItem Header="🎬 _Video to frames..." Click="OnOpenVideoExtractClick"
                   ToolTip.Tip="Split a video into individual JPEG frames via ffmpeg. Pipe the result straight into the panorama stitcher to build a sweep from a single take." />
         <MenuItem Header="🌐 _360° viewer..." Click="OnOpenPanoramaViewerClick"

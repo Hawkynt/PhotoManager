@@ -23,6 +23,14 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- Magick.NET-Q8-AnyCPU is the cross-platform fallback decoder for
+         AVIF and any other modern container the pure-managed
+         FileFormat.* libs return blank output for. PhotoManager's primary
+         decoders are still the FileFormat.* libs (smaller deployment,
+         pure-managed); this package only kicks in when they fail. ~37 MB
+         native footprint accepted because no other comprehensive
+         AVIF/HEIF/JP2/etc. decoder works reliably on every platform. -->
+    <PackageReference Include="Magick.NET-Q8-AnyCPU" Version="14.4.0" />
     <PackageReference Include="MetadataExtractor" Version="2.8.1" />
     <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.20.1" />
     <PackageReference Include="SixLabors.ImageSharp" Version="3.1.11" />
@@ -64,7 +72,7 @@
        HDR/EXR, PSD/PSB, APNG, DDS) and previously-broken ones we already
        advertised in SupportedFormatsService (PCX, ICO). -->
   <ItemGroup>
-    <ProjectReference Include="..\..\CompressionWorkbench\FileFormat.JpegArchive\FileFormat.JpegArchive.csproj" />
+    <ProjectReference Include="..\..\CompressionWorkbench\FileFormats\FileFormat.JpegArchive\FileFormat.JpegArchive.csproj" />
     <ProjectReference Include="..\..\PNGCrushCS\FileFormat.CameraRaw\FileFormat.CameraRaw.csproj" />
     <ProjectReference Include="..\..\PNGCrushCS\FileFormat.Dng\FileFormat.Dng.csproj" />
     <ProjectReference Include="..\..\PNGCrushCS\FileFormat.Heif\FileFormat.Heif.csproj" />

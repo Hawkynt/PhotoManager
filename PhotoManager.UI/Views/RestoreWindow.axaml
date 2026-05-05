@@ -17,35 +17,26 @@
       <Border Grid.Column="0" BorderBrush="{DynamicResource PanelBorderBrush}" BorderThickness="1" CornerRadius="4">
         <Grid ColumnDefinitions="*,3,*" RowDefinitions="Auto,*">
           <Grid Grid.Row="0" Grid.Column="0" ColumnDefinitions="*,Auto">
-            <TextBlock Grid.Column="0" Text="📷 Source"
-                       Margin="8,4" FontWeight="SemiBold" Opacity="0.85" />
+            <TextBlock Grid.Column="0" Text="📷 Original (as loaded)"
+                       Margin="8,4" FontWeight="SemiBold" Opacity="0.85"
+                       ToolTip.Tip="The un-touched image you opened. Stays visible for comparison even after Inpaint / Despeckle / Apply-* commits modify the working copy." />
             <TextBlock Grid.Column="1" x:Name="ZoomLabel"
                        Margin="0,4,8,4" Opacity="0.6" FontSize="11"
                        Text="100%" />
           </Grid>
-          <TextBlock Grid.Row="0" Grid.Column="2" Text="✨ Restored — wheel = zoom · right-drag = pan · double-click = reset"
-                     Margin="8,4" FontWeight="SemiBold" Opacity="0.85" />
+          <TextBlock Grid.Row="0" Grid.Column="2" Text="✨ Working / restored — left-drag = paint mask · right-drag = pan · wheel = zoom · double-click = reset"
+                     Margin="8,4" FontWeight="SemiBold" Opacity="0.85"
+                     ToolTip.Tip="Shows the current working image with live slider effects on top. Paint here to mask remaining damage; Inpaint operates on the working image (without slider effects), then becomes the new working source." />
           <Border Grid.Row="1" Grid.Column="0" ClipToBounds="True">
-            <Grid>
-              <Image x:Name="SourcePreview"
-                     Stretch="Uniform"
-                     RenderTransformOrigin="0,0"
-                     PointerWheelChanged="OnPreviewWheel"
-                     PointerPressed="OnPreviewPointerPressed"
-                     PointerMoved="OnPreviewPointerMoved"
-                     PointerReleased="OnPreviewPointerReleased"
-                     DoubleTapped="OnPreviewDoubleTap"
-                     RenderOptions.BitmapInterpolationMode="None" />
-              <!-- Brush-paint mask overlay. Paints on top of the source
-                   image; LaMa fills the masked region. Same RenderTransform
-                   as SourcePreview so it pans / zooms with the source. -->
-              <Image x:Name="MaskOverlay"
-                     Stretch="Uniform"
-                     RenderTransformOrigin="0,0"
-                     IsHitTestVisible="False"
-                     RenderOptions.BitmapInterpolationMode="None"
-                     Opacity="0.5" />
-            </Grid>
+            <Image x:Name="SourcePreview"
+                   Stretch="Uniform"
+                   RenderTransformOrigin="0,0"
+                   PointerWheelChanged="OnPreviewWheel"
+                   PointerPressed="OnPreviewPointerPressed"
+                   PointerMoved="OnPreviewPointerMoved"
+                   PointerReleased="OnPreviewPointerReleased"
+                   DoubleTapped="OnPreviewDoubleTap"
+                   RenderOptions.BitmapInterpolationMode="None" />
           </Border>
           <GridSplitter Grid.Row="1" Grid.Column="1" Background="{DynamicResource PanelBorderBrush}" Width="3" ResizeDirection="Columns" />
           <Grid Grid.Row="1" Grid.Column="2" ClipToBounds="True">
@@ -56,8 +47,44 @@
                    PointerPressed="OnPreviewPointerPressed"
                    PointerMoved="OnPreviewPointerMoved"
                    PointerReleased="OnPreviewPointerReleased"
+                   PointerEntered="OnPreviewPointerEntered"
+                   PointerExited="OnPreviewPointerExited"
                    DoubleTapped="OnPreviewDoubleTap"
                    RenderOptions.BitmapInterpolationMode="None" />
+            <!-- Brush-paint mask overlay sits on top of the working /
+                 intermediate image (right pane). Painting here matches the
+                 mental model: left stays pristine for comparison; the user
+                 paints over remaining damage on the work-in-progress. Same
+                 RenderTransform as RestoredPreview so it pans / zooms with
+                 the image underneath. -->
+            <Image x:Name="MaskOverlay"
+                   Stretch="Uniform"
+                   RenderTransformOrigin="0,0"
+                   IsHitTestVisible="False"
+                   RenderOptions.BitmapInterpolationMode="None"
+                   Opacity="0.5" />
+            <!-- Face-detection rectangles. One opaque box per detected face,
+                 drawn at the working source's pixel resolution so the
+                 Stretch=Uniform geometry + RenderTransform line up with the
+                 rest of the right pane. Tells the user exactly where face
+                 restore (👤 GFPGAN) will operate when applied. -->
+            <Image x:Name="FaceBoxOverlay"
+                   Stretch="Uniform"
+                   RenderTransformOrigin="0,0"
+                   IsHitTestVisible="False"
+                   RenderOptions.BitmapInterpolationMode="None" />
+            <!-- Brush-radius cursor — follows the mouse over the right
+                 pane, sized to match the painted footprint after zoom +
+                 Stretch=Uniform. Sits ABOVE the mask overlay so the user
+                 can preview where the next stamp will land. -->
+            <Ellipse x:Name="BrushCursor"
+                     IsHitTestVisible="False"
+                     IsVisible="False"
+                     Stroke="#FFFFFFFF" StrokeThickness="1.5"
+                     StrokeDashArray="3,2"
+                     Fill="#33FF0000"
+                     Width="20" Height="20"
+                     HorizontalAlignment="Left" VerticalAlignment="Top" />
             <Border x:Name="ProgressOverlay" IsVisible="False" IsHitTestVisible="False"
                     Background="#80000000">
               <Border Background="#CC1B1B1B" BorderBrush="#666" BorderThickness="1" CornerRadius="6"
@@ -101,12 +128,18 @@
             </StackPanel>
           </Border>
 
-          <!-- Sliders. Each is 0..100 (not 0..1) so the keyboard +/- step
-               feels natural; settings get divided by 100 internally. -->
+          <!-- Restoration sliders are grouped to mirror the pipeline order
+               so users mentally match each control to the order in which
+               its effect is applied: tone → de-artefact → denoise →
+               scratch (auto-loop / brush inpaint) → faces → recolour →
+               upscale. Group A holds everything that runs BEFORE the
+               brush-mask scratch stage; Group B holds everything that
+               runs AFTER. -->
           <Border BorderBrush="{DynamicResource PanelBorderBrush}" BorderThickness="1" CornerRadius="4" Padding="8">
             <StackPanel Spacing="6">
               <Grid ColumnDefinitions="*,Auto">
-                <TextBlock Grid.Column="0" Text="Restoration strengths" FontWeight="SemiBold" Opacity="0.85"
+                <TextBlock Grid.Column="0" Text="1 · Pre-clean (tone / artifacts / noise)"
+                           FontWeight="SemiBold" Opacity="0.85"
                            VerticalAlignment="Center" />
                 <Button Grid.Column="1" Content="📥 Models…" Padding="6,2" FontSize="11"
                         Click="OnOpenModelsClick"
@@ -117,46 +150,37 @@
                         Click="OnSettingsChangedClick"
                         ToolTip.Tip="Pulls the source's histogram across the full 0–255 range before AI stages run. Cheap; cleans up faded scans." />
 
-              <Grid ColumnDefinitions="120,*,40">
-                <TextBlock Grid.Column="0" Text="👤 Restore faces"
-                           ToolTip.Tip="Runs GFPGAN on each detected face: removes scratches, deblurs features, sharpens. 0 = leave faces alone." />
-                <Slider Grid.Column="1" x:Name="FaceSlider" Minimum="0" Maximum="100" Value="0"
-                        TickFrequency="5" SmallChange="5" LargeChange="10"
-                        ValueChanged="OnSettingsChangedSlider" />
-                <TextBlock Grid.Column="2" x:Name="FaceValue" Opacity="0.7" TextAlignment="Right" Text="0" />
-              </Grid>
+              <StackPanel Spacing="2" Margin="0,4,0,0">
+                <Grid ColumnDefinitions="140,*,40,Auto">
+                  <TextBlock Grid.Column="0" Text="🧊 De-artifact"
+                             ToolTip.Tip="FBCNN single-pass blind removal of JPEG / DCT / wavelet compression artifacts: ringing around hard edges, 8×8 block boundaries, and halo overshoots. Most useful on highly-compressed JPEGs and downloads from social media." />
+                  <Slider Grid.Column="1" x:Name="ArtifactSlider" Minimum="0" Maximum="100" Value="0"
+                          TickFrequency="5" SmallChange="5" LargeChange="10"
+                          ValueChanged="OnSettingsChangedSlider" />
+                  <TextBlock Grid.Column="2" x:Name="ArtifactValue" Opacity="0.7" TextAlignment="Right" Text="0" />
+                  <Button Grid.Column="3" Content="✅" Padding="6,2" Margin="4,0,0,0" Click="OnApplyArtifactClick"
+                          ToolTip.Tip="Bake the de-artifact result into the working source so subsequent stages run on it. Slider drops back to 0 afterwards." />
+                </Grid>
+                <ComboBox x:Name="ArtifactModelCombo" HorizontalAlignment="Stretch"
+                          SelectionChanged="OnArtifactModelChanged"
+                          ToolTip.Tip="FBCNN — flexible blind CNN trained on JPEG / DCT / wavelet artifacts." />
+              </StackPanel>
 
-              <Grid ColumnDefinitions="120,*,40">
-                <TextBlock Grid.Column="0" Text="✨ Reduce noise &amp; grain"
-                           ToolTip.Tip="Tile-based ONNX denoise / restoration. Use the develop window's denoise picker to switch between NAFNet / SCUNet / NAFNet-GoPro." />
-                <Slider Grid.Column="1" x:Name="DenoiseSlider" Minimum="0" Maximum="100" Value="0"
-                        TickFrequency="5" SmallChange="5" LargeChange="10"
-                        ValueChanged="OnSettingsChangedSlider" />
-                <TextBlock Grid.Column="2" x:Name="DenoiseValue" Opacity="0.7" TextAlignment="Right" Text="0" />
-              </Grid>
-
-              <Grid ColumnDefinitions="120,*,40">
-                <TextBlock Grid.Column="0" Text="🎨 Recolour"
-                           ToolTip.Tip="Restores colour to B&amp;W or near-B&amp;W photos via DeOldify. Has minimal effect on already-colour sources." />
-                <Slider Grid.Column="1" x:Name="ColourSlider" Minimum="0" Maximum="100" Value="0"
-                        TickFrequency="5" SmallChange="5" LargeChange="10"
-                        ValueChanged="OnSettingsChangedSlider" />
-                <TextBlock Grid.Column="2" x:Name="ColourValue" Opacity="0.7" TextAlignment="Right" Text="0" />
-              </Grid>
-
-              <Grid ColumnDefinitions="120,*,40">
-                <TextBlock Grid.Column="0" Text="🔍 Upscale"
-                           ToolTip.Tip="Real-ESRGAN ×4 ONNX. 1× = off, 2× / 4× / 16× / 64× — output resolution multipliers; 16× and 64× chain 4× passes." />
-                <ComboBox Grid.Column="1" x:Name="UpscaleCombo" SelectedIndex="0"
-                          SelectionChanged="OnUpscaleChanged">
-                  <ComboBoxItem Content="1× (off)" />
-                  <ComboBoxItem Content="2×" />
-                  <ComboBoxItem Content="4×" />
-                  <ComboBoxItem Content="16× (4× × 2)" />
-                  <ComboBoxItem Content="64× (4× × 3)" />
-                </ComboBox>
-                <TextBlock Grid.Column="2" x:Name="UpscaleValue" Opacity="0.7" TextAlignment="Right" Text="1×" />
-              </Grid>
+              <StackPanel Spacing="2" Margin="0,4,0,0">
+                <Grid ColumnDefinitions="140,*,40,Auto">
+                  <TextBlock Grid.Column="0" Text="✨ Reduce noise &amp; grain"
+                             ToolTip.Tip="Tile-based ONNX denoise / restoration. NAFNet / SCUNet / NAFNet-GoPro." />
+                  <Slider Grid.Column="1" x:Name="DenoiseSlider" Minimum="0" Maximum="100" Value="0"
+                          TickFrequency="5" SmallChange="5" LargeChange="10"
+                          ValueChanged="OnSettingsChangedSlider" />
+                  <TextBlock Grid.Column="2" x:Name="DenoiseValue" Opacity="0.7" TextAlignment="Right" Text="0" />
+                  <Button Grid.Column="3" Content="✅" Padding="6,2" Margin="4,0,0,0" Click="OnApplyDenoiseClick"
+                          ToolTip.Tip="Bake the denoise result into the working source so subsequent stages run on it. Slider drops back to 0 afterwards." />
+                </Grid>
+                <ComboBox x:Name="DenoiseModelCombo" HorizontalAlignment="Stretch"
+                          SelectionChanged="OnDenoiseModelChanged"
+                          ToolTip.Tip="NAFNet (general restoration), SCUNet (despeckling / old scans), NAFNet-GoPro (motion deblur), NAFNet-SIDD (low-light, big download)." />
+              </StackPanel>
             </StackPanel>
           </Border>
 
@@ -167,9 +191,10 @@
                the rest of the restoration pipeline. -->
           <Border BorderBrush="{DynamicResource PanelBorderBrush}" BorderThickness="1" CornerRadius="4" Padding="8">
             <StackPanel Spacing="6">
-              <TextBlock Text="🩹 Brush-mask inpaint" FontWeight="SemiBold" Opacity="0.85" />
+              <TextBlock Text="2 · Scratch &amp; damage removal (auto-loop / brush inpaint / despeckle)"
+                         FontWeight="SemiBold" Opacity="0.85" />
               <TextBlock FontSize="11" Opacity="0.7" TextWrapping="Wrap"
-                         Text="Left-click + drag on the source to paint over damaged regions. Right-click pans, wheel zooms. Then click Inpaint to fill from surrounding pixels." />
+                         Text="Left-click + drag on the right pane (working image) to paint over damaged regions. Right-click pans, wheel zooms. Then click Inpaint to fill from surrounding pixels." />
               <Grid ColumnDefinitions="80,*,40">
                 <TextBlock Grid.Column="0" Text="Brush size" />
                 <Slider Grid.Column="1" x:Name="BrushSizeSlider" Minimum="2" Maximum="80" Value="20"
@@ -178,44 +203,113 @@
                 <TextBlock Grid.Column="2" x:Name="BrushSizeValue" Opacity="0.7" TextAlignment="Right" Text="20" />
               </Grid>
               <StackPanel Orientation="Horizontal" Spacing="6">
+                <Button Content="↶ Undo" Click="OnUndoMaskClick"
+                        ToolTip.Tip="Undo the last mask change (paint stroke / auto-detect / clear). Up to 20 steps." />
+                <Button Content="↷ Redo" Click="OnRedoMaskClick"
+                        ToolTip.Tip="Redo the most recently undone mask change." />
+              </StackPanel>
+              <StackPanel Spacing="2">
+                <TextBlock Text="🔁 Loop max iter"
+                           ToolTip.Tip="Maximum number of detect→inpaint passes the auto-loop will run before giving up. Lightly damaged photos converge in 1–2 passes; heavily damaged scans can need 8–15." />
+                <NumericUpDown x:Name="AutoLoopMaxIter" HorizontalAlignment="Stretch"
+                               Value="5" Minimum="1" Maximum="50" Increment="1"
+                               FormatString="0" />
+              </StackPanel>
+              <StackPanel Spacing="2">
+                <TextBlock Text="🛑 Stop below %"
+                           ToolTip.Tip="Auto-loop stops once the detected scratch mask covers less than this fraction of the image (in %). Lower = more aggressive (chases faint residual damage); higher = stops sooner." />
+                <NumericUpDown x:Name="AutoLoopThreshold" HorizontalAlignment="Stretch"
+                               Value="0.3" Minimum="0.01" Maximum="10" Increment="0.1"
+                               FormatString="0.00" />
+              </StackPanel>
+              <StackPanel Spacing="2">
+                <TextBlock Text="🩹 Inpaint model"
+                           ToolTip.Tip="ONNX model used by the Inpaint and Auto-loop buttons to fill the masked region. LaMa-Fourier is the only currently-registered inpainter." />
+                <ComboBox x:Name="InpaintModelCombo" HorizontalAlignment="Stretch"
+                          SelectionChanged="OnInpaintModelChanged" />
+              </StackPanel>
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <Button Content="🔍 Auto-detect" Click="OnAutoDetectScratchesClick"
+                        ToolTip.Tip="High-pass + multi-scale Frangi vesselness ridge filter (or BOPB neural net if installed). Pre-fills the mask with detected scratches. Faint hairline scratches across textured backgrounds (~5–9 luma delta) are below classical-algorithm detection — they need the brush. Always review + refine the auto-mask before clicking Inpaint." />
+                <Button Content="🔁 Auto-loop" Click="OnAutoLoopScratchClick"
+                        ToolTip.Tip="Run detect → inpaint repeatedly until the detected mask covers less than 0.3% of the image (or 5 iterations max). Hands-off scratch removal — equivalent to clicking Auto-detect + Inpaint multiple times in a row." />
                 <Button Content="🩹 Inpaint masked" Click="OnInpaintClick" FontWeight="Bold"
-                        ToolTip.Tip="Run LaMa over the painted region. The result replaces the source so subsequent restoration stages run on the inpainted image." />
+                        ToolTip.Tip="Run LaMa over the painted region. The result replaces the working source so subsequent restoration stages run on the inpainted image. The original on the left pane stays unchanged for comparison." />
                 <Button Content="🧹 Clear mask" Click="OnClearMaskClick"
                         ToolTip.Tip="Erase the entire painted mask without modifying the image." />
+              </StackPanel>
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <Button Content="🧂 Despeckle (salt &amp; pepper)" Click="OnDespeckleClick"
+                        ToolTip.Tip="Adaptive median filter — removes dust speckles, scanner CCD hot pixels, and isolated salt-and-pepper noise without blurring fine detail. Replaces only pixels that deviate strongly from their local median. Modifies the source like Inpaint does, so subsequent stages run on the cleaner image." />
               </StackPanel>
             </StackPanel>
           </Border>
 
-          <!-- Model pickers — same registry the develop window uses, so
-               picking a model here also flows through the install-prompt
-               machinery if the file isn't on disk yet. -->
+          <!-- Group B: stages that run AFTER the brush-mask scratch-removal
+               step. Order mirrors the pipeline: face restoration → recolour
+               (with chroma boost) → upscale at the very end. -->
           <Border BorderBrush="{DynamicResource PanelBorderBrush}" BorderThickness="1" CornerRadius="4" Padding="8">
             <StackPanel Spacing="6">
-              <TextBlock Text="Models" FontWeight="SemiBold" Opacity="0.85" />
-              <Grid ColumnDefinitions="120,*">
-                <TextBlock Grid.Column="0" Text="👤 Face restore"
-                           ToolTip.Tip="GFPGAN face-restoration ONNX. Operates on detected face crops at 512×512." />
-                <ComboBox Grid.Column="1" x:Name="FaceModelCombo"
-                          SelectionChanged="OnFaceModelChanged" />
-              </Grid>
-              <Grid ColumnDefinitions="120,*">
-                <TextBlock Grid.Column="0" Text="✨ Denoise"
-                           ToolTip.Tip="NAFNet (general restoration), SCUNet (despeckling / old scans), NAFNet-GoPro (motion deblur), NAFNet-SIDD (low-light, big download)." />
-                <ComboBox Grid.Column="1" x:Name="DenoiseModelCombo"
-                          SelectionChanged="OnDenoiseModelChanged" />
-              </Grid>
-              <Grid ColumnDefinitions="120,*">
-                <TextBlock Grid.Column="0" Text="🎨 Recolour"
-                           ToolTip.Tip="DeOldify Artistic = bolder colours; Stable = subdued, safer for portraits." />
-                <ComboBox Grid.Column="1" x:Name="ColourModelCombo"
-                          SelectionChanged="OnColourModelChanged" />
-              </Grid>
-              <Grid ColumnDefinitions="120,*">
-                <TextBlock Grid.Column="0" Text="🔍 Upscaler"
-                           ToolTip.Tip="Real-ESRGAN family + SwinIR + EDSR + Waifu2x. Different texture characters; pick whichever fits the photo." />
-                <ComboBox Grid.Column="1" x:Name="UpscaleModelCombo"
-                          SelectionChanged="OnUpscaleModelChanged" />
-              </Grid>
+              <TextBlock Text="3 · Restore (faces / colour / upscale)" FontWeight="SemiBold" Opacity="0.85" />
+
+              <StackPanel Spacing="2" Margin="0,4,0,0">
+                <Grid ColumnDefinitions="140,*,40,Auto">
+                  <TextBlock Grid.Column="0" Text="👤 Restore faces"
+                             ToolTip.Tip="Runs GFPGAN on each detected face: removes scratches, deblurs features, sharpens. 0 = leave faces alone. The right pane shows green rectangles around the regions face restore will operate on." />
+                  <Slider Grid.Column="1" x:Name="FaceSlider" Minimum="0" Maximum="100" Value="0"
+                          TickFrequency="5" SmallChange="5" LargeChange="10"
+                          ValueChanged="OnSettingsChangedSlider" />
+                  <TextBlock Grid.Column="2" x:Name="FaceValue" Opacity="0.7" TextAlignment="Right" Text="0" />
+                  <Button Grid.Column="3" Content="✅" Padding="6,2" Margin="4,0,0,0" Click="OnApplyFaceClick"
+                          ToolTip.Tip="Bake the face-restore result into the working source so subsequent stages run on it. Slider drops back to 0 afterwards." />
+                </Grid>
+                <ComboBox x:Name="FaceModelCombo" HorizontalAlignment="Stretch"
+                          SelectionChanged="OnFaceModelChanged"
+                          ToolTip.Tip="GFPGAN face-restoration ONNX. Operates on detected face crops at 512×512." />
+              </StackPanel>
+
+              <StackPanel Spacing="2" Margin="0,4,0,0">
+                <Grid ColumnDefinitions="140,*,40,Auto">
+                  <TextBlock Grid.Column="0" Text="🎨 Recolour"
+                             ToolTip.Tip="Restores colour to B&amp;W or near-B&amp;W photos. DDColor (paper-tiny / artistic) preserves source luminance and predicts only Lab a/b chroma — sharper detail than DeOldify. DeOldify Artistic = bolder colours; Stable = subdued, safer for portraits." />
+                  <Slider Grid.Column="1" x:Name="ColourSlider" Minimum="0" Maximum="100" Value="0"
+                          TickFrequency="5" SmallChange="5" LargeChange="10"
+                          ValueChanged="OnSettingsChangedSlider" />
+                  <TextBlock Grid.Column="2" x:Name="ColourValue" Opacity="0.7" TextAlignment="Right" Text="0" />
+                  <Button Grid.Column="3" Content="✅" Padding="6,2" Margin="4,0,0,0" Click="OnApplyColourClick"
+                          ToolTip.Tip="Bake the recolour result into the working source so subsequent stages run on it. Slider drops back to 0 afterwards." />
+                </Grid>
+                <ComboBox x:Name="ColourModelCombo" HorizontalAlignment="Stretch"
+                          SelectionChanged="OnColourModelChanged"
+                          ToolTip.Tip="DDColor — state-of-the-art Lab-chroma colorizer (recommended). DeOldify variants — older RGB-out colorizer (Artistic = bolder, Stable = subdued)." />
+                <Grid ColumnDefinitions="140,*" Margin="0,2,0,0">
+                  <TextBlock Grid.Column="0" Text="✨ Saturation ×"
+                             ToolTip.Tip="Multiplies the colorize model's predicted chroma. 1.00 = raw model output (often muted on degraded scans); 1.60 = previously-default recommended start; 3–6 = vivid; 10+ = aggressive amplification for stubbornly-grey scans. Only applies to DDColor; ignored when DeOldify is the active colorizer." />
+                  <NumericUpDown Grid.Column="1" x:Name="ChromaBoostUpDown" HorizontalAlignment="Stretch"
+                                 Minimum="1.00" Maximum="20.00" Value="1.60" Increment="0.10"
+                                 FormatString="0.00"
+                                 ValueChanged="OnChromaBoostChanged" />
+                </Grid>
+              </StackPanel>
+
+              <StackPanel Spacing="2" Margin="0,4,0,0">
+                <Grid ColumnDefinitions="140,*">
+                  <TextBlock Grid.Column="0" Text="🔍 Upscale"
+                             ToolTip.Tip="Real-ESRGAN ×4 ONNX. 1× = off, 2× / 4× / 16× / 64× — output resolution multipliers; 16× and 64× chain 4× passes." />
+                  <ComboBox Grid.Column="1" x:Name="UpscaleCombo" SelectedIndex="0"
+                            HorizontalAlignment="Stretch"
+                            SelectionChanged="OnUpscaleChanged">
+                    <ComboBoxItem Content="1× (off)" />
+                    <ComboBoxItem Content="2×" />
+                    <ComboBoxItem Content="4×" />
+                    <ComboBoxItem Content="16× (4× × 2)" />
+                    <ComboBoxItem Content="64× (4× × 3)" />
+                  </ComboBox>
+                </Grid>
+                <ComboBox x:Name="UpscaleModelCombo" HorizontalAlignment="Stretch"
+                          SelectionChanged="OnUpscaleModelChanged"
+                          ToolTip.Tip="Real-ESRGAN family + SwinIR + EDSR + Waifu2x. Different texture characters; pick whichever fits the photo." />
+              </StackPanel>
             </StackPanel>
           </Border>
 

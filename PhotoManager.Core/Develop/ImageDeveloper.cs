@@ -168,7 +168,7 @@ public static class ImageDeveloper {
     // ColorizerRouter dispatches to OnnxColorizer (DeOldify) or
     // OnnxColorizerDDColor based on the model filename — they have
     // incompatible I/O contracts (RGB-out vs Lab-ab-out).
-    return Segmentation.ColorizerRouter.Colorize(image, settings.AiColorizeModel, settings.AiColorizeAmount, ct);
+    return Segmentation.ColorizerRouter.Colorize(image, settings.AiColorizeModel, settings.AiColorizeAmount, ct: ct);
   }
 
   /// <summary>

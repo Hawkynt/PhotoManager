@@ -15,6 +15,8 @@ public sealed record RestorationSettings(
   double FaceRestoreStrength = 0.0,
   /// <summary>0 = no denoise, 1 = full denoise.</summary>
   double DenoiseStrength = 0.0,
+  /// <summary>0 = leave artifacts alone, 1 = full FBCNN JPEG / ringing / halo removal. Runs between denoise and recolour.</summary>
+  double ArtifactRemoveStrength = 0.0,
   /// <summary>0 = leave colour alone, 1 = full DeOldify recolour. Most useful for B&amp;W sources.</summary>
   double RecolourStrength = 0.0,
   /// <summary>True = run AutoTone before any AI stages; false = leave tone alone.</summary>
@@ -23,14 +25,22 @@ public sealed record RestorationSettings(
   int UpscaleFactor = 1,
   /// <summary>Optional model file-name override for the denoiser (matches DevelopSettings.AiDenoiseModel).</summary>
   string? DenoiseModel = null,
+  /// <summary>Optional model file-name override for the JPEG / artifact remover.</summary>
+  string? ArtifactRemoveModel = null,
   /// <summary>Optional model file-name override for the colorizer.</summary>
   string? ColorizeModel = null,
   /// <summary>Optional model file-name override for the upscaler.</summary>
-  string? UpscaleModel = null
+  string? UpscaleModel = null,
+  /// <summary>Multiplier applied to the colorizer's predicted chroma (a/b channels in Lab).
+  /// 1.0 = raw model output (DDColor's predictions are conservative — typical std ≈ 5–10 vs the 30–50 a saturated photo carries),
+  /// 1.6 = recommended default (visibly vivid without obvious oversaturation),
+  /// 0.0 = grayscale (no colour added). Only consumed by Lab-based colorizers (DDColor); ignored by DeOldify.</summary>
+  double ChromaBoost = 1.6
 ) {
   public bool IsIdentity =>
     this.FaceRestoreStrength <= 1e-6
     && this.DenoiseStrength <= 1e-6
+    && this.ArtifactRemoveStrength <= 1e-6
     && this.RecolourStrength <= 1e-6
     && !this.AutoTone
     && this.UpscaleFactor <= 1;
