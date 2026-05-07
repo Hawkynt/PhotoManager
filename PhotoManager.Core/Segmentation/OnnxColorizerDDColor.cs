@@ -50,6 +50,24 @@ public sealed class OnnxColorizerDDColor : IDisposable {
   public bool IsAvailable => this._session.Value != null;
 
   /// <summary>
+  /// Mean absolute value of the model's predicted (a, b) chroma on the
+  /// most recent <see cref="Colorize"/> call. Updated every successful
+  /// run; useful for diagnosing "scenes look gray after recolour" —
+  /// values below ~0.5 indicate the inference produced essentially
+  /// no chroma, which usually points at a model / EP compatibility
+  /// problem rather than a normal desaturated photograph.
+  /// </summary>
+  public static double LastInferenceMeanAbsAb { get; private set; }
+
+  /// <summary>Input pixel statistics — captured per Colorize call so
+  /// the UI can tell the user what DDColor was actually fed. Helps
+  /// diagnose "model predicted near-zero chroma": if the input mean
+  /// is at the extremes (R≈0 or R≈255) or the [min..max] span is
+  /// tiny, the image is out of DDColor's training distribution and
+  /// the low chroma is expected, not a model / pipeline bug.</summary>
+  public static string LastInputStats { get; private set; } = "(none)";
+
+  /// <summary>
   /// Returns a freshly allocated colourised copy of <paramref name="source"/>
   /// at the source's original resolution. Returns null when no model is
   /// available so the caller can fall back to a clone / no-op.
@@ -75,6 +93,34 @@ public sealed class OnnxColorizerDDColor : IDisposable {
     var srcH = source.Height;
     var inputSize = info.InputSize;
 
+    // Diagnostic: input pixel statistics. DDColor was trained on
+    // mid-range B&W photos (mean R/G/B around 100–160, full [0..255]
+    // span). Inputs at the extremes (everything dark, everything
+    // bright, or very narrow span) push the model out of distribution
+    // and cause it to predict near-zero chroma — not a bug, just an
+    // expected limitation. Surfacing the numbers tells the user
+    // whether their image is unusual.
+    {
+      long sumR = 0, sumG = 0, sumB = 0;
+      byte minR = 255, maxR = 0;
+      var pcount = 0L;
+      source.ProcessPixelRows(a => {
+        for (var y = 0; y < a.Height; y++) {
+          var row = a.GetRowSpan(y);
+          for (var x = 0; x < row.Length; x++) {
+            var p = row[x];
+            sumR += p.R; sumG += p.G; sumB += p.B;
+            if (p.R < minR) minR = p.R;
+            if (p.R > maxR) maxR = p.R;
+            pcount++;
+          }
+        }
+      });
+      LastInputStats = pcount == 0
+        ? "(empty image)"
+        : $"{srcW}x{srcH} mean=R{sumR / pcount}/G{sumG / pcount}/B{sumB / pcount} R-span[{minR}..{maxR}]";
+    }
+
     // Step 1: source RGB → full-res Lab L channel. Stays untouched all
     // the way to the final recombine — that's why DDColor preserves
     // every bit of the source's spatial detail.
@@ -87,7 +133,10 @@ public sealed class OnnxColorizerDDColor : IDisposable {
     ct.ThrowIfCancellationRequested();
 
     // Step 3: run inference. Output shape is [1, 2, inputSize, inputSize]
-    // — channel 0 = a, channel 1 = b.
+    // — channel 0 = a, channel 1 = b. Inference failures (OpenVINO
+    // device contention, malformed model, OOM) bubble up so the UI
+    // can show why the recolour produced no output instead of
+    // silently returning a grayscale image.
     float[] abOutput;
     int abH, abW;
     try {
@@ -98,9 +147,24 @@ public sealed class OnnxColorizerDDColor : IDisposable {
       abH = dims.Length >= 4 ? dims[2] : inputSize;
       abW = dims.Length >= 4 ? dims[3] : inputSize;
       abOutput = first.AsTensor<float>().ToArray();
-    } catch {
-      return null;
+    } catch (Exception ex) {
+      throw new InvalidOperationException(
+        $"DDColor inference failed on {srcW}×{srcH} input ({OnnxAcceleration.LastSelectedDevice}): {ex.Message}", ex);
     }
+
+    // Compute the model's chroma magnitude as a diagnostic. We DON'T
+    // throw on low values any more — letting the pipeline complete
+    // means the user gets to see the (possibly muted) result instead
+    // of an error wall, and the value flows back to the UI for
+    // display in the status bar. Useful range to expect on real
+    // photos: 3–15. Tests on synthetic input have measured up to ~34.
+    // Values below ~0.5 indicate the model effectively returned a
+    // no-op, but we still proceed to compose so the user can see
+    // what's happening rather than getting "nothing rendered".
+    var sumAbsAb = 0.0;
+    for (var i = 0; i < abOutput.Length; i++)
+      sumAbsAb += Math.Abs(abOutput[i]);
+    LastInferenceMeanAbsAb = sumAbsAb / abOutput.Length;
 
     ct.ThrowIfCancellationRequested();
 
@@ -282,23 +346,41 @@ public sealed class OnnxColorizerDDColor : IDisposable {
   // ---------- Session ----------
 
   private static SessionInfo? TryOpenSession(FileInfo modelFile) {
+    // Missing model file = graceful no-op. Any other failure surfaces
+    // as an exception so the recolour stage doesn't silently degrade
+    // to grayscale output.
+    if (!modelFile.Exists)
+      return null;
     try {
-      if (!modelFile.Exists)
-        return null;
-      var session = new InferenceSession(modelFile.FullName);
+      // Cached session: when the user drags the colour slider, the UI
+      // spawns multiple Task.Run pipelines in rapid succession. Each
+      // would otherwise call `new InferenceSession(modelFile.FullName)`
+      // and load the 258 MB DDColor model independently — concurrent
+      // same-model session construction in ORT can race in ways the
+      // model's output disagrees with itself between calls (one task
+      // sees correct chroma, another sees near-zero). The shared
+      // cached session removes the race: ORT's
+      // <c>InferenceSession.Run</c> is documented thread-safe, so
+      // multiple concurrent inferences against ONE session are well-
+      // defined. preferCpu=true matches the original direct-construction
+      // EP behavior on the Intel ORT build (default options = CPU EP).
+      var session = OnnxAcceleration.CreateSession(modelFile.FullName, preferCpu: true);
       var inputName = session.InputMetadata.Keys.First();
       var inputDims = session.InputMetadata[inputName].Dimensions;
       // DDColor exports are fixed-shape (256 for paper-tiny, 512 for artistic / modelscope).
       var size = inputDims.Length >= 4 && inputDims[2] > 0 ? inputDims[2] : FallbackInputSize;
       return new SessionInfo(session, inputName, size);
-    } catch {
-      return null;
+    } catch (Exception ex) {
+      throw new InvalidOperationException(
+        $"DDColor session creation failed for {modelFile.Name}: {ex.Message}", ex);
     }
   }
 
   public void Dispose() {
-    if (this._session.IsValueCreated)
-      this._session.Value?.Session.Dispose();
+    // Sessions live in the OnnxAcceleration cache for the process's
+    // lifetime — disposing here would invalidate the cache and force
+    // the next caller to re-load 258 MB of weights. Cache teardown
+    // happens via OnnxAcceleration.ResetCache() (called from tests).
   }
 
   private sealed record SessionInfo(InferenceSession Session, string InputName, int InputSize);

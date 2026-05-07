@@ -61,6 +61,7 @@
                    Stretch="Uniform"
                    RenderTransformOrigin="0,0"
                    IsHitTestVisible="False"
+                   IsVisible="False"
                    RenderOptions.BitmapInterpolationMode="None"
                    Opacity="0.5" />
             <!-- Face-detection rectangles. One opaque box per detected face,
@@ -94,6 +95,8 @@
                   <StackPanel Spacing="2" VerticalAlignment="Center">
                     <TextBlock x:Name="ProgressText" Foreground="White"
                                Text="Restoring…" FontWeight="SemiBold" />
+                    <TextBlock x:Name="ProgressTimingText" Foreground="#9DD" FontSize="11"
+                               Text="" />
                     <TextBlock Foreground="#CCC" FontSize="11"
                                Text="Cancels automatically when you change a setting." />
                   </StackPanel>
@@ -151,15 +154,13 @@
                         ToolTip.Tip="Pulls the source's histogram across the full 0–255 range before AI stages run. Cheap; cleans up faded scans." />
 
               <StackPanel Spacing="2" Margin="0,4,0,0">
-                <Grid ColumnDefinitions="140,*,40,Auto">
+                <Grid ColumnDefinitions="140,*,40">
                   <TextBlock Grid.Column="0" Text="🧊 De-artifact"
                              ToolTip.Tip="FBCNN single-pass blind removal of JPEG / DCT / wavelet compression artifacts: ringing around hard edges, 8×8 block boundaries, and halo overshoots. Most useful on highly-compressed JPEGs and downloads from social media." />
                   <Slider Grid.Column="1" x:Name="ArtifactSlider" Minimum="0" Maximum="100" Value="0"
                           TickFrequency="5" SmallChange="5" LargeChange="10"
                           ValueChanged="OnSettingsChangedSlider" />
                   <TextBlock Grid.Column="2" x:Name="ArtifactValue" Opacity="0.7" TextAlignment="Right" Text="0" />
-                  <Button Grid.Column="3" Content="✅" Padding="6,2" Margin="4,0,0,0" Click="OnApplyArtifactClick"
-                          ToolTip.Tip="Bake the de-artifact result into the working source so subsequent stages run on it. Slider drops back to 0 afterwards." />
                 </Grid>
                 <ComboBox x:Name="ArtifactModelCombo" HorizontalAlignment="Stretch"
                           SelectionChanged="OnArtifactModelChanged"
@@ -167,15 +168,13 @@
               </StackPanel>
 
               <StackPanel Spacing="2" Margin="0,4,0,0">
-                <Grid ColumnDefinitions="140,*,40,Auto">
+                <Grid ColumnDefinitions="140,*,40">
                   <TextBlock Grid.Column="0" Text="✨ Reduce noise &amp; grain"
                              ToolTip.Tip="Tile-based ONNX denoise / restoration. NAFNet / SCUNet / NAFNet-GoPro." />
                   <Slider Grid.Column="1" x:Name="DenoiseSlider" Minimum="0" Maximum="100" Value="0"
                           TickFrequency="5" SmallChange="5" LargeChange="10"
                           ValueChanged="OnSettingsChangedSlider" />
                   <TextBlock Grid.Column="2" x:Name="DenoiseValue" Opacity="0.7" TextAlignment="Right" Text="0" />
-                  <Button Grid.Column="3" Content="✅" Padding="6,2" Margin="4,0,0,0" Click="OnApplyDenoiseClick"
-                          ToolTip.Tip="Bake the denoise result into the working source so subsequent stages run on it. Slider drops back to 0 afterwards." />
                 </Grid>
                 <ComboBox x:Name="DenoiseModelCombo" HorizontalAlignment="Stretch"
                           SelectionChanged="OnDenoiseModelChanged"
@@ -208,11 +207,15 @@
                 <Button Content="↷ Redo" Click="OnRedoMaskClick"
                         ToolTip.Tip="Redo the most recently undone mask change." />
               </StackPanel>
+              <CheckBox x:Name="AutoScratchInPipelineBox" Content="🔁 Always auto-remove scratches before recolour / upscale"
+                        IsChecked="True"
+                        Click="OnSettingsChangedClick"
+                        ToolTip.Tip="When checked, every Save As / Apply runs the auto-scratch detect→inpaint loop on the working source before any colorization, face restoration, or upscale. Scratches detect best on the un-modified luminance source — running the loop after recolour misses damage the model finds on the original. Uncheck if you want to drive scratch removal manually only via the buttons below." />
               <StackPanel Spacing="2">
                 <TextBlock Text="🔁 Loop max iter"
                            ToolTip.Tip="Maximum number of detect→inpaint passes the auto-loop will run before giving up. Lightly damaged photos converge in 1–2 passes; heavily damaged scans can need 8–15." />
                 <NumericUpDown x:Name="AutoLoopMaxIter" HorizontalAlignment="Stretch"
-                               Value="5" Minimum="1" Maximum="50" Increment="1"
+                               Value="1" Minimum="1" Maximum="50" Increment="1"
                                FormatString="0" />
               </StackPanel>
               <StackPanel Spacing="2">
@@ -239,8 +242,11 @@
                         ToolTip.Tip="Erase the entire painted mask without modifying the image." />
               </StackPanel>
               <StackPanel Orientation="Horizontal" Spacing="6">
-                <Button Content="🧂 Despeckle (salt &amp; pepper)" Click="OnDespeckleClick"
-                        ToolTip.Tip="Adaptive median filter — removes dust speckles, scanner CCD hot pixels, and isolated salt-and-pepper noise without blurring fine detail. Replaces only pixels that deviate strongly from their local median. Modifies the source like Inpaint does, so subsequent stages run on the cleaner image." />
+                <CheckBox x:Name="DespeckleBox" Content="🧂 Despeckle (salt &amp; pepper)"
+                          Click="OnSettingsChangedClick"
+                          ToolTip.Tip="Adaptive median filter — removes dust speckles, scanner CCD hot pixels, and isolated salt-and-pepper noise without blurring fine detail. Replaces only pixels that deviate strongly from their local median. Runs in the pipeline between auto-scratch and recolour so subsequent stages see the cleaned image. Toggle off to remove the filter from the pipeline." />
+                <Button Content="🧂 Apply now" Click="OnDespeckleClick"
+                        ToolTip.Tip="Equivalent to ticking the Despeckle box, then re-rendering. Useful when you want to pull the filter into the pipeline without hunting for the checkbox." />
               </StackPanel>
             </StackPanel>
           </Border>
@@ -253,15 +259,13 @@
               <TextBlock Text="3 · Restore (faces / colour / upscale)" FontWeight="SemiBold" Opacity="0.85" />
 
               <StackPanel Spacing="2" Margin="0,4,0,0">
-                <Grid ColumnDefinitions="140,*,40,Auto">
+                <Grid ColumnDefinitions="140,*,40">
                   <TextBlock Grid.Column="0" Text="👤 Restore faces"
                              ToolTip.Tip="Runs GFPGAN on each detected face: removes scratches, deblurs features, sharpens. 0 = leave faces alone. The right pane shows green rectangles around the regions face restore will operate on." />
                   <Slider Grid.Column="1" x:Name="FaceSlider" Minimum="0" Maximum="100" Value="0"
                           TickFrequency="5" SmallChange="5" LargeChange="10"
                           ValueChanged="OnSettingsChangedSlider" />
                   <TextBlock Grid.Column="2" x:Name="FaceValue" Opacity="0.7" TextAlignment="Right" Text="0" />
-                  <Button Grid.Column="3" Content="✅" Padding="6,2" Margin="4,0,0,0" Click="OnApplyFaceClick"
-                          ToolTip.Tip="Bake the face-restore result into the working source so subsequent stages run on it. Slider drops back to 0 afterwards." />
                 </Grid>
                 <ComboBox x:Name="FaceModelCombo" HorizontalAlignment="Stretch"
                           SelectionChanged="OnFaceModelChanged"
@@ -269,15 +273,13 @@
               </StackPanel>
 
               <StackPanel Spacing="2" Margin="0,4,0,0">
-                <Grid ColumnDefinitions="140,*,40,Auto">
+                <Grid ColumnDefinitions="140,*,40">
                   <TextBlock Grid.Column="0" Text="🎨 Recolour"
                              ToolTip.Tip="Restores colour to B&amp;W or near-B&amp;W photos. DDColor (paper-tiny / artistic) preserves source luminance and predicts only Lab a/b chroma — sharper detail than DeOldify. DeOldify Artistic = bolder colours; Stable = subdued, safer for portraits." />
                   <Slider Grid.Column="1" x:Name="ColourSlider" Minimum="0" Maximum="100" Value="0"
                           TickFrequency="5" SmallChange="5" LargeChange="10"
                           ValueChanged="OnSettingsChangedSlider" />
                   <TextBlock Grid.Column="2" x:Name="ColourValue" Opacity="0.7" TextAlignment="Right" Text="0" />
-                  <Button Grid.Column="3" Content="✅" Padding="6,2" Margin="4,0,0,0" Click="OnApplyColourClick"
-                          ToolTip.Tip="Bake the recolour result into the working source so subsequent stages run on it. Slider drops back to 0 afterwards." />
                 </Grid>
                 <ComboBox x:Name="ColourModelCombo" HorizontalAlignment="Stretch"
                           SelectionChanged="OnColourModelChanged"
@@ -327,7 +329,8 @@
     </Grid>
 
     <Grid Grid.Row="1" ColumnDefinitions="*,Auto,Auto,Auto" Margin="0,12,0,0">
-      <TextBlock Grid.Column="0" x:Name="StatusText" VerticalAlignment="Center" Opacity="0.75" />
+      <SelectableTextBlock Grid.Column="0" x:Name="StatusText" VerticalAlignment="Center" Opacity="0.75"
+                           ToolTip.Tip="Status messages — selectable, so you can copy the diagnostic values into a bug report." />
       <Button Grid.Column="1" Content="↩️ Reset" Click="OnResetClick" Margin="6,0,0,0"
               ToolTip.Tip="Set every slider back to 0 and untoggle auto-tone." />
       <Button Grid.Column="2" Content="💾 Save as…" Click="OnSaveAsClick" FontWeight="Bold" Margin="6,0,0,0" />

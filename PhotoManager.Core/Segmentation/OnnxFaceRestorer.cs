@@ -121,7 +121,7 @@ public sealed class OnnxFaceRestorer : IDisposable {
     try {
       if (!modelFile.Exists)
         return null;
-      var session = new InferenceSession(modelFile.FullName);
+      var session = OnnxAcceleration.CreateSession(modelFile.FullName);
       var inputName = session.InputMetadata.Keys.First();
       return new SessionInfo(session, inputName);
     } catch {
@@ -130,8 +130,9 @@ public sealed class OnnxFaceRestorer : IDisposable {
   }
 
   public void Dispose() {
-    if (this._session.IsValueCreated)
-      this._session.Value?.Session.Dispose();
+    // Sessions are cached by OnnxAcceleration and shared across
+    // instances; disposing them here would break the cache.
+    // OnnxAcceleration.ResetCache() handles teardown if needed.
   }
 
   private sealed record SessionInfo(InferenceSession Session, string InputName);

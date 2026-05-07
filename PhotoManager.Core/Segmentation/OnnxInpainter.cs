@@ -251,7 +251,17 @@ public sealed class OnnxInpainter : IDisposable {
     try {
       if (!modelFile.Exists)
         return null;
-      var session = new InferenceSession(modelFile.FullName);
+      // LaMa-Fourier uses Fast Fourier Convolution (FFC) blocks that
+      // include Pad and DequantizeLinear ops OpenVINO 1.20 can't
+      // import correctly — the session creates without exceptions but
+      // Run() then silently produces a copy of the input image
+      // (verified empirically: a 10×384 px synthetic mask bar over the
+      // middle of a photo produced output identical to input). Force
+      // CPU EP here until the LaMa export is rebuilt without those ops
+      // or OpenVINO catches up. CPU is ~10× slower than NPU for LaMa
+      // but at least the output is correct — silent no-op was hiding
+      // every auto-loop run.
+      var session = OnnxAcceleration.CreateSession(modelFile.FullName, preferCpu: true);
       // The opencv mirror's input names are "image" and "mask". Pick
       // them by metadata so any future re-export with different names
       // still works (we look at element-count to disambiguate).
@@ -270,8 +280,9 @@ public sealed class OnnxInpainter : IDisposable {
   }
 
   public void Dispose() {
-    if (this._session.IsValueCreated)
-      this._session.Value?.Session.Dispose();
+    // Sessions are cached by OnnxAcceleration and shared across
+    // instances; disposing them here would break the cache.
+    // OnnxAcceleration.ResetCache() handles teardown if needed.
   }
 
   private sealed record SessionInfo(InferenceSession Session, string ImageInputName, string MaskInputName);

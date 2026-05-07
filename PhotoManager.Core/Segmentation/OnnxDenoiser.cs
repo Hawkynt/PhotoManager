@@ -48,7 +48,7 @@ public sealed class OnnxDenoiser : IDisposable {
   ///   (1.0). Outside that range gets clamped.</param>
   /// <param name="ct">Cooperatively cancels between tiles so live-preview
   ///   re-renders don't have to wait for a full pass to finish.</param>
-  public Image<Rgba32>? Denoise(Image<Rgba32> source, double strength = 1.0, CancellationToken ct = default) {
+  public Image<Rgba32>? Denoise(Image<Rgba32> source, double strength = 1.0, CancellationToken ct = default, IProgress<Develop.StageProgress>? progress = null) {
     ArgumentNullException.ThrowIfNull(source);
     var session = this._session.Value;
     if (session == null)
@@ -66,6 +66,18 @@ public sealed class OnnxDenoiser : IDisposable {
     // band of TileOverlap pixels we can ramp-blend across.
     var stride = TileSize - TileOverlap;
 
+    // Pre-count tiles so progress can compute "patch X / Y". Tile loop
+    // stays sequential because BlendTile reads-and-writes the output
+    // image in-place — the edge-feather seam between tile N and tile
+    // N-1 needs N-1's output to already be present.
+    var totalTiles = 0;
+    for (var ty = 0; ty < height; ty += stride)
+      for (var tx = 0; tx < width; tx += stride)
+        if (Math.Min(TileSize, width - tx) > 0 && Math.Min(TileSize, height - ty) > 0)
+          totalTiles++;
+    progress?.Report(new Develop.StageProgress("denoise", 0, totalTiles));
+
+    var done = 0;
     for (var ty = 0; ty < height; ty += stride) {
       for (var tx = 0; tx < width; tx += stride) {
         ct.ThrowIfCancellationRequested();
@@ -80,6 +92,8 @@ public sealed class OnnxDenoiser : IDisposable {
           continue;
 
         BlendTile(output, denoisedTile, tx, ty, w, h, blend);
+        done++;
+        progress?.Report(new Develop.StageProgress("denoise", done, totalTiles));
       }
     }
 
@@ -176,14 +190,15 @@ public sealed class OnnxDenoiser : IDisposable {
     try {
       if (!modelFile.Exists)
         return null;
-      return new InferenceSession(modelFile.FullName);
+      return OnnxAcceleration.CreateSession(modelFile.FullName);
     } catch {
       return null;
     }
   }
 
   public void Dispose() {
-    if (this._session.IsValueCreated)
-      this._session.Value?.Dispose();
+    // Sessions are cached by OnnxAcceleration and shared across
+    // instances; disposing them here would break the cache.
+    // OnnxAcceleration.ResetCache() handles teardown if needed.
   }
 }

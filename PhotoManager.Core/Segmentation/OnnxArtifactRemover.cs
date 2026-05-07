@@ -153,14 +153,15 @@ public sealed class OnnxArtifactRemover : IDisposable {
     try {
       if (!modelFile.Exists)
         return null;
-      return new InferenceSession(modelFile.FullName);
+      return OnnxAcceleration.CreateSession(modelFile.FullName);
     } catch {
       return null;
     }
   }
 
   public void Dispose() {
-    if (this._session.IsValueCreated)
-      this._session.Value?.Dispose();
+    // Sessions are cached by OnnxAcceleration and shared across
+    // instances; disposing them here would break the cache.
+    // OnnxAcceleration.ResetCache() handles teardown if needed.
   }
 }

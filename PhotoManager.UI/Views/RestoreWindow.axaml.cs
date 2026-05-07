@@ -39,17 +39,27 @@ public partial class RestoreWindow : Window {
   private const int PreviewMaxEdgePixels = 1024;
 
   private readonly FileInfo? _sourceFile;
-  // The "working" copies — modified in place by Inpaint, Despeckle,
-  // Apply-colorize, etc. The pipeline preview runs over these so each
-  // commit-action becomes the new starting point for the next stage.
+  // Immutable source copies — set once at Load time and never mutated.
+  // Every preview / Save As re-runs the pipeline end-to-end against
+  // these inputs, so the rendered output is always a deterministic
+  // function of (source, settings, brush-mask). No order-dependent
+  // bake state — the user's "harsh recolor after Apply X" case can't
+  // happen because Apply X no longer exists.
   private Image<Rgba32>? _previewSource;        // downscaled — drives the preview pipeline
   private Image<Rgba32>? _fullResolutionSource;  // full-res — used by Save As
 
-  // The "original" — what the user loaded, never modified. Always shown
-  // on the LEFT preview pane so the user can see the un-touched starting
-  // point alongside the work-in-progress on the right, even after a
-  // dozen Inpaint / Despeckle / Apply iterations.
-  private Image<Rgba32>? _originalPreviewSource;
+  // Per-stage output cache — populated by the pipeline, reused across
+  // SchedulePreviewUpdate calls. When the user moves a slider, only
+  // the changed stage and its downstream stages re-execute; earlier
+  // stage outputs are blitted in from this cache. BindToSource clears
+  // the cache when the source image identity changes (file load).
+  // Disposed on window close.
+  private readonly RestorationPipelineCache _previewCache = new();
+  // Save As needs its own cache because it operates on the full-res
+  // source (different image identity than the preview's downscaled
+  // version). Kept around so successive Save As calls with the same
+  // settings hit the cache.
+  private readonly RestorationPipelineCache _saveCache = new();
   private IReadOnlyList<NormalizedBoundingBox> _faces = Array.Empty<NormalizedBoundingBox>();
   private CancellationTokenSource? _previewCts;
   private bool _suppressEvents;
@@ -72,13 +82,39 @@ public partial class RestoreWindow : Window {
   private bool _isPainting;
   private int _brushSize = 20;
 
-  // Undo / redo of mask edits. Each entry is a clone of the mask state
-  // BEFORE a stroke / replace. null entries mean "mask was empty before".
-  // Capped at 20 to bound memory; the oldest entry is dropped when we hit
-  // the cap. New mask-mutating actions clear the redo side.
-  private readonly LinkedList<Image<Rgba32>?> _maskUndo = new();
-  private readonly LinkedList<Image<Rgba32>?> _maskRedo = new();
+  // Undo / redo of mask edits. Each ENTRY describes one rectangular
+  // tile of the mask: Bounds + the rect's old-pixel and new-pixel
+  // snapshots (row-major within Bounds). One mutation pushes an
+  // ARRAY of entries — a brush stroke uses one entry per disc stamp;
+  // a sparse merge / clear emits one entry per run of consecutive
+  // changed pixels in a row, so a row with five scattered scratches
+  // costs five tiny 1×1 entries instead of one 1×4096 row.
+  //
+  // Memory is bounded by the actual changed-pixel footprint plus a
+  // small rect-padding overhead (a 41×41 stamp stores 1681 pixels;
+  // the disc inside is 1257 — ~25% padding). Capped at 20 mutations;
+  // the oldest is dropped when full. Apply forward = write NewPixels
+  // at Bounds; apply reverse = write OldPixels. Stamps inside one
+  // mutation are reverse-iterated on undo so overlapping discs
+  // unwind back to the true pre-stroke state.
+  private readonly record struct MaskDeltaEntry(Rectangle Bounds, Rgba32[] OldPixels, Rgba32[] NewPixels);
+  private readonly LinkedList<MaskDeltaEntry[]> _maskUndo = new();
+  private readonly LinkedList<MaskDeltaEntry[]> _maskRedo = new();
   private const int MaskHistoryCap = 20;
+
+  // Per-stroke accumulator: each PaintAtScreenPos call appends one
+  // MaskDeltaEntry covering its disc's bounding rect (with old/new
+  // pixel snapshots taken in-place inside StampDisc). PointerReleased
+  // flushes the list as a single multi-entry delta so undo unwinds
+  // the whole drag, not just the last stamp.
+  private List<MaskDeltaEntry>? _strokeStamps;
+
+  // Per-stroke mode: PAINT (sets disc pixels to red) or ERASE (clears
+  // disc pixels). Determined at PointerPressed by sampling the mask
+  // under the cursor — if it's already painted there, the user wants
+  // to erase; otherwise paint. This makes a single brush behave like
+  // both pen and eraser without a separate mode toggle.
+  private bool _strokeIsErase;
 
   public RestoreWindow() : this(null) { }
 
@@ -206,10 +242,6 @@ public partial class RestoreWindow : Window {
         image.Mutate(c => c.Resize((int)(image.Width * scale), (int)(image.Height * scale)));
       }
       this._previewSource = image;
-      // Keep an immutable copy of the as-loaded preview for the LEFT
-      // pane — Inpaint / Despeckle / Apply-* will mutate _previewSource
-      // but never this. Cloning keeps the two buffers independent.
-      this._originalPreviewSource = image.Clone();
     } catch (Exception ex) {
       this.SetStatus($"Load failed: {ex.Message}");
       return;
@@ -243,15 +275,15 @@ public partial class RestoreWindow : Window {
   }
 
   /// <summary>
-  /// Paints the LEFT pane from <see cref="_originalPreviewSource"/> —
-  /// always the un-touched as-loaded image, regardless of how many
-  /// Inpaint / Despeckle / Apply-* commits have updated the working
-  /// source. So the user sees the starting point for visual comparison.
+  /// Paints the LEFT pane from <see cref="_previewSource"/> — the
+  /// un-touched as-loaded image. The pipeline never mutates this
+  /// buffer; the LEFT pane is therefore the user's reference point and
+  /// changes only when a new file is loaded.
   /// </summary>
   private void UpdateSourceBitmap() {
-    if (this._originalPreviewSource is null) return;
+    if (this._previewSource is null) return;
     using var ms = new MemoryStream();
-    this._originalPreviewSource.SaveAsJpeg(ms);
+    this._previewSource.SaveAsJpeg(ms);
     ms.Position = 0;
     var bmp = new Bitmap(ms);
     if (this.FindControl<Avalonia.Controls.Image>("SourcePreview") is { } img)
@@ -289,7 +321,11 @@ public partial class RestoreWindow : Window {
       ArtifactRemoveModel: PickedFileName(this.FindControl<ComboBox>("ArtifactModelCombo"), ModelRegistry.ArtifactRemovers),
       ColorizeModel: PickedFileName(this.FindControl<ComboBox>("ColourModelCombo"), ModelRegistry.Colorizers),
       UpscaleModel: PickedFileName(this.FindControl<ComboBox>("UpscaleModelCombo"), ModelRegistry.Upscalers),
-      ChromaBoost: chromaBoost
+      ChromaBoost: chromaBoost,
+      AutoScratchRemoval: this.FindControl<CheckBox>("AutoScratchInPipelineBox")?.IsChecked == true,
+      AutoScratchMaxIterations: (int)((double?)this.FindControl<NumericUpDown>("AutoLoopMaxIter")?.Value ?? 5),
+      AutoScratchThresholdPct: (double?)this.FindControl<NumericUpDown>("AutoLoopThreshold")?.Value ?? 0.3,
+      DespeckleStrength: this.FindControl<CheckBox>("DespeckleBox")?.IsChecked == true ? 1.0 : 0.0
     );
   }
 
@@ -345,7 +381,8 @@ public partial class RestoreWindow : Window {
     prev?.Dispose();
 
     var settings = this.ReadSettings();
-    if (settings.IsIdentity) {
+    var maskHasContent = this.MaskHasContent();
+    if (settings.IsIdentity && !maskHasContent && settings.DespeckleStrength <= 1e-6) {
       this.PaintRestored(this._previewSource);
       this.SetOverlayVisible(false);
       return;
@@ -355,6 +392,9 @@ public partial class RestoreWindow : Window {
     if (settings.AutoTone)                  stages.Add("auto-tone");
     if (settings.DenoiseStrength > 0)       stages.Add("denoise");
     if (settings.ArtifactRemoveStrength > 0) stages.Add("de-artifact");
+    if (maskHasContent)                      stages.Add("brush inpaint");
+    if (settings.AutoScratchRemoval)        stages.Add("auto-scratch");
+    if (settings.DespeckleStrength > 0)     stages.Add("despeckle");
     if (settings.RecolourStrength > 0)      stages.Add("recolour");
     if (settings.FaceRestoreStrength > 0) stages.Add("face restore");
     if (settings.UpscaleFactor > 1)       stages.Add($"{settings.UpscaleFactor}× upscale");
@@ -365,15 +405,27 @@ public partial class RestoreWindow : Window {
     var cts = new CancellationTokenSource();
     this._previewCts = cts;
     var sourceClone = this._previewSource.Clone();
+    var maskClone = maskHasContent ? this._maskImage!.Clone() : null;
     var captured = settings;
     var capturedFaces = this._faces;
 
+    var stageProgress = new Progress<PhotoManager.Core.Develop.StageProgress>(
+      p => this.OnStageProgress(p));
+    Exception? capturedError = null;
+    // Bind the cache to the live _previewSource (NOT the clone — we
+    // want reference identity that's stable across renders, so the
+    // cache only invalidates when a new file is loaded). The pipeline
+    // reads cached entries by cumulative settings hash; bind only
+    // protects against source-image change.
+    this._previewCache.BindToSource(this._previewSource);
+    var pipelineCache = this._previewCache;
     _ = Task.Run(() => {
       try {
         using (sourceClone)
-          return RestorationPipeline.Apply(sourceClone, capturedFaces, captured, cts.Token);
+        using (maskClone)
+          return RestorationPipeline.Apply(sourceClone, capturedFaces, captured, cts.Token, stageProgress, maskClone, pipelineCache);
       } catch (OperationCanceledException) { return null; }
-        catch { return null; }
+        catch (Exception ex) { capturedError = ex; return null; }
     }, cts.Token).ContinueWith(t => {
       var result = t.Status == TaskStatus.RanToCompletion ? t.Result : null;
       Avalonia.Threading.Dispatcher.UIThread.Post(() => {
@@ -383,15 +435,59 @@ public partial class RestoreWindow : Window {
         }
         if (result is null) {
           this.SetOverlayVisible(false);
-          this.SetStatus("Restoration failed — check that the required ONNX models are installed.");
+          // Surface the real exception (DDColor inference failure,
+          // OpenVINO device contention, missing model file, etc.)
+          // instead of the previous generic "models not installed".
+          this.SetStatus(capturedError is { } err
+            ? $"Restoration failed: {err.Message}"
+            : "Restoration failed — check that the required ONNX models are installed.");
           return;
         }
         this.PaintRestored(result);
+        // Diagnostic: when the pipeline thinks it ran a colorize stage
+        // but the result still looks gray, the cause is somewhere
+        // between the model's predicted chroma and the displayed
+        // bitmap. Sampling the actual pipeline output's grayness here
+        // — together with DDColor's last-inference chroma magnitude —
+        // narrows down which leg is dropping the color.
+        var diag = string.Empty;
+        if (settings.AutoScratchRemoval) {
+          diag += $"  [auto-scratch: {PhotoManager.Core.Develop.AutoScratchPipeline.LastDiagnostic}]";
+        }
+        if (settings.RecolourStrength > 0) {
+          var grayPct = ComputeGrayPercent(result);
+          var meanAb = PhotoManager.Core.Segmentation.OnnxColorizerDDColor.LastInferenceMeanAbsAb;
+          var inputStats = PhotoManager.Core.Segmentation.OnnxColorizerDDColor.LastInputStats;
+          diag += $"  [recolor: chroma={meanAb:F2}, gray={grayPct}%, src={inputStats}]";
+        }
         result.Dispose();
         this.SetOverlayVisible(false);
-        this.SetStatus("Preview updated.");
+        this.SetStatus($"Preview updated.{diag}");
       });
     });
+  }
+
+  /// <summary>Sample a 10×10 grid of pixels from <paramref name="img"/> and
+  /// return the percentage with R==G==B. Used to detect cases where the
+  /// pipeline's recolor stage ran but the visible output is grayscale —
+  /// either the model returned no chroma, or the compose blended it
+  /// out, or something downstream overwrote it.</summary>
+  private static int ComputeGrayPercent(Image<Rgba32> img) {
+    var grayCount = 0;
+    var total = 0;
+    img.ProcessPixelRows(accessor => {
+      var yStep = Math.Max(1, accessor.Height / 10);
+      for (var y = 0; y < accessor.Height; y += yStep) {
+        var row = accessor.GetRowSpan(y);
+        var xStep = Math.Max(1, row.Length / 10);
+        for (var x = 0; x < row.Length; x += xStep) {
+          total++;
+          if (row[x].R == row[x].G && row[x].G == row[x].B)
+            grayCount++;
+        }
+      }
+    });
+    return total == 0 ? 0 : grayCount * 100 / total;
   }
 
   private void PaintRestored(Image<Rgba32> image) {
@@ -403,10 +499,144 @@ public partial class RestoreWindow : Window {
       img.Source = bmp;
   }
 
+  // Live elapsed-time + ETA tracking for the progress overlay. The key is
+  // taken from whatever ProgressText says when the overlay is first shown
+  // (callers always set the label first, then toggle the overlay visible),
+  // and the duration of each completed run is cached in _stageHistory so
+  // the next time the same operation runs we can show "~M:SS remaining".
+  // History persists for the lifetime of the window — wiped when the user
+  // closes it. Cross-window persistence isn't needed: a 30-second job
+  // runs ~30s on cold start, and after the first run the user gets ETA.
+  private static readonly Dictionary<string, TimeSpan> _stageHistory = new();
+  private readonly System.Diagnostics.Stopwatch _overlayStopwatch = new();
+  private Avalonia.Threading.DispatcherTimer? _overlayTimer;
+  private string? _overlayCurrentKey;
+
   private void SetOverlayVisible(bool visible) {
     if (this.FindControl<Border>("ProgressOverlay") is { } overlay)
       overlay.IsVisible = visible;
+    if (visible)
+      this.StartOverlayTimer();
+    else
+      this.StopOverlayTimer();
   }
+
+  private void StartOverlayTimer() {
+    this._overlayCurrentKey = (this.FindControl<TextBlock>("ProgressText")?.Text) ?? "operation";
+    this._overlayStopwatch.Restart();
+    this.UpdateOverlayTiming();
+    if (this._overlayTimer is null) {
+      this._overlayTimer = new Avalonia.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
+      this._overlayTimer.Tick += (_, _) => this.UpdateOverlayTiming();
+    }
+    this._overlayTimer.Start();
+  }
+
+  private void StopOverlayTimer() {
+    this._overlayTimer?.Stop();
+    if (this._overlayStopwatch.IsRunning) {
+      this._overlayStopwatch.Stop();
+      // Store the actual run duration so the *next* invocation of the
+      // same operation can show a meaningful ETA. We overwrite rather
+      // than averaging — the most recent run is the best predictor of
+      // the next one (data sizes / settings tend to be stable session-
+      // to-session).
+      if (this._overlayCurrentKey is { } key)
+        _stageHistory[key] = this._overlayStopwatch.Elapsed;
+    }
+    if (this.FindControl<TextBlock>("ProgressTimingText") is { } t)
+      t.Text = string.Empty;
+    this._overlayCurrentKey = null;
+  }
+
+  private void UpdateOverlayTiming() {
+    if (this.FindControl<TextBlock>("ProgressTimingText") is not { } t)
+      return;
+    var elapsed = this._overlayStopwatch.Elapsed;
+    var elapsedStr = FormatMmSs(elapsed) + " elapsed";
+    if (this._overlayCurrentKey is { } key && _stageHistory.TryGetValue(key, out var prev)) {
+      var remaining = prev - elapsed;
+      if (remaining > TimeSpan.Zero)
+        t.Text = $"{elapsedStr} · ~{FormatMmSs(remaining)} remaining";
+      else
+        t.Text = $"{elapsedStr} · longer than last run ({FormatMmSs(prev)})";
+    } else {
+      t.Text = elapsedStr;
+    }
+  }
+
+  private static string FormatMmSs(TimeSpan ts)
+    => $"{(int)ts.TotalMinutes}:{ts.Seconds:00}";
+
+  // Per-stage timing memory: when a stage starts, we remember the
+  // elapsed offset and (for tile-based stages) the within-stage start
+  // time, so subsequent tile updates compute ETA from the stage's own
+  // progress rather than the whole-pipeline elapsed.
+  private string? _currentStageName;
+  private TimeSpan _currentStageStartedAt;
+
+  /// <summary>
+  /// Unified stage-progress callback for the restoration pipeline.
+  /// Handles tile-based stages (denoise, upscale) and pixel-rate
+  /// estimated single-shot stages (artifact, recolour, faces, etc.).
+  /// Stays on the UI thread because the IProgress is wrapped with
+  /// Avalonia's SynchronizationContext at creation.
+  /// </summary>
+  private void OnStageProgress(PhotoManager.Core.Develop.StageProgress p) {
+    var t = this.FindControl<TextBlock>("ProgressTimingText");
+    if (t is null) return;
+    var pt = this.FindControl<TextBlock>("ProgressText");
+    var elapsed = this._overlayStopwatch.Elapsed;
+
+    // Track stage transitions so within-stage ETA isn't polluted by the
+    // time previous stages took.
+    if (this._currentStageName != p.StageName) {
+      this._currentStageName = p.StageName;
+      this._currentStageStartedAt = elapsed;
+      // Show the human label of the current stage in ProgressText so the
+      // user always knows what's running right now.
+      if (pt is not null)
+        pt.Text = $"Restoring · {FriendlyStageName(p.StageName)}…";
+    }
+
+    var stageElapsed = elapsed - this._currentStageStartedAt;
+    var elapsedStr = FormatMmSs(elapsed);
+
+    string detail;
+    double thisStageRemainingSeconds;
+    if (p.TotalUnits > 1 && p.DoneUnits > 0) {
+      // Tile-based stage with concrete progress — most accurate ETA.
+      var fraction = p.DoneUnits / (double)p.TotalUnits;
+      var estStageTotal = stageElapsed.TotalSeconds / fraction;
+      thisStageRemainingSeconds = Math.Max(0, estStageTotal - stageElapsed.TotalSeconds);
+      detail = $"patch {p.DoneUnits}/{p.TotalUnits}, {fraction * 100:0}% of {FriendlyStageName(p.StageName)}";
+    } else if (p.EstimatedTotalSeconds > 0) {
+      // Single-shot stage — pixel-rate estimate.
+      thisStageRemainingSeconds = Math.Max(0, p.EstimatedTotalSeconds - stageElapsed.TotalSeconds);
+      detail = $"{FriendlyStageName(p.StageName)} (estimated)";
+    } else {
+      // Stage completed (DoneUnits == TotalUnits, no estimate). Don't
+      // overwrite — let the timer keep showing elapsed.
+      return;
+    }
+    // Pipeline-spanning total: time left in current stage + already-known
+    // estimate for stages that haven't started yet. Without this the user
+    // sees the ETA reset to a small number every time a stage transitions,
+    // which is misleading.
+    var totalRemaining = TimeSpan.FromSeconds(thisStageRemainingSeconds + p.EstimatedRemainingPipelineSeconds);
+    t.Text = $"{elapsedStr} elapsed · ~{FormatMmSs(totalRemaining)} remaining · {detail}";
+  }
+
+  private static string FriendlyStageName(string raw) => raw switch {
+    "auto-tone" => "auto-tone",
+    "denoise"   => "denoising",
+    "artifact"  => "removing JPEG artifacts",
+    "recolour"  => "colorising",
+    "faces"     => "restoring faces",
+    "inpaint"   => "inpainting",
+    var s when s.StartsWith("upscale") => "upscaling " + s[7..],  // "upscale (1/2)" → "upscaling (1/2)"
+    _ => raw
+  };
 
   // ---------- Presets ----------
 
@@ -482,8 +712,22 @@ public partial class RestoreWindow : Window {
     var settings = this.ReadSettings();
     var faces = this._faces;
     var fullSrc = this._fullResolutionSource.Clone();
+    // Brush mask was painted on the preview-resolution source; resize
+    // it to the full-resolution source so manual repairs land in the
+    // right place at native size. Nearest-neighbour resize keeps the
+    // mask binary — bicubic would smear into half-pixel transparency
+    // values that confuse the LaMa "is this masked" R≥128 test.
+    var fullMask = this.MaskHasContent()
+      ? this._maskImage!.Clone(c => c.Resize(
+          fullSrc.Width, fullSrc.Height,
+          SixLabors.ImageSharp.Processing.KnownResamplers.NearestNeighbor))
+      : null;
+    var saveProgress = new Progress<PhotoManager.Core.Develop.StageProgress>(
+      p => this.OnStageProgress(p));
+    this._saveCache.BindToSource(this._fullResolutionSource);
+    var saveCache = this._saveCache;
     try {
-      var result = await Task.Run(() => RestorationPipeline.Apply(fullSrc, faces, settings));
+      var result = await Task.Run(() => RestorationPipeline.Apply(fullSrc, faces, settings, default, saveProgress, fullMask, saveCache));
       try {
         await result.SaveAsJpegAsync(destPath);
         this.SetStatus($"Saved {Path.GetFileName(destPath)}.");
@@ -494,6 +738,7 @@ public partial class RestoreWindow : Window {
       this.SetStatus($"Save failed: {ex.Message}");
     } finally {
       fullSrc.Dispose();
+      fullMask?.Dispose();
       this.SetOverlayVisible(false);
     }
   }
@@ -508,9 +753,10 @@ public partial class RestoreWindow : Window {
     prev?.Cancel();
     prev?.Dispose();
     this._previewSource?.Dispose();
-    this._originalPreviewSource?.Dispose();
     this._fullResolutionSource?.Dispose();
     this._maskImage?.Dispose();
+    this._previewCache.Dispose();
+    this._saveCache.Dispose();
     this.ClearMaskHistory();
     this.Close();
   }
@@ -552,20 +798,58 @@ public partial class RestoreWindow : Window {
       return;
     }
 
-    // Left-button → paint to mask. Only acts on the RESTORED (right)
-    // preview — the LEFT pane shows the immutable as-loaded original for
-    // comparison and must stay paint-free. The mask is in _previewSource
-    // pixel coordinates, which match regardless of which pane is clicked.
+    // Left-button → paint OR erase the mask. Mode is decided here at
+    // press time and held for the whole drag. If the mask under the
+    // cursor is already painted (R≥128), the user means to erase
+    // (drag clears that region); otherwise the user means to paint
+    // (drag adds to the mask). One brush, two behaviors, no separate
+    // toggle — like an eraser overlay you flip into when you drag
+    // over an already-marked area.
     if (props.IsLeftButtonPressed && image.Name == "RestoredPreview") {
       if (this._previewSource is null)
         return;
       this.EnsureMask();
-      this.PushMaskUndo();
+      this._strokeIsErase = this.MaskHasPaintAtCursor(image, e);
+      // Start a per-stroke buffer of rect entries; each StampDisc call
+      // appends one MaskDeltaEntry covering the disc's bounding rect.
+      // PointerReleased flushes the list as a single delta so undo
+      // unwinds the entire drag, not just the last stamp. Starting a
+      // new mutation invalidates redo.
+      this._strokeStamps = new List<MaskDeltaEntry>();
+      this._maskRedo.Clear();
       this._isPainting = true;
       e.Pointer.Capture(image);
       this.PaintAtScreenPos(image, e);
       e.Handled = true;
     }
+  }
+
+  /// <summary>Sample the mask at the cursor's source-pixel coordinate
+  /// to decide whether this drag should paint or erase. Returns true
+  /// if the cursor is over an already-painted pixel (R≥128) — the
+  /// drag will erase. False if the cursor is over an empty pixel —
+  /// the drag will paint. Out-of-bounds or no-mask = false (paint).
+  /// </summary>
+  private bool MaskHasPaintAtCursor(Avalonia.Controls.Image image, PointerEventArgs e) {
+    if (this._maskImage is null || this._previewSource is null)
+      return false;
+    var localCursor = CursorInImageLocal(image, e);
+    if (localCursor is not { } local)
+      return false;
+    var ctrlW = image.Bounds.Width;
+    var ctrlH = image.Bounds.Height;
+    if (ctrlW <= 0 || ctrlH <= 0)
+      return false;
+    var imgW = this._previewSource.Width;
+    var imgH = this._previewSource.Height;
+    var baseScale = Math.Min(ctrlW / imgW, ctrlH / imgH);
+    var letterboxX = (ctrlW - imgW * baseScale) / 2.0;
+    var letterboxY = (ctrlH - imgH * baseScale) / 2.0;
+    var px = (int)Math.Round((local.X - letterboxX) / baseScale);
+    var py = (int)Math.Round((local.Y - letterboxY) / baseScale);
+    if (px < 0 || px >= imgW || py < 0 || py >= imgH)
+      return false;
+    return this._maskImage[px, py].R >= 128;
   }
 
   private void OnPreviewPointerMoved(object? sender, PointerEventArgs e) {
@@ -601,7 +885,17 @@ public partial class RestoreWindow : Window {
     if (this._isPainting) {
       this._isPainting = false;
       e.Pointer.Capture(null);
+      // Flush the per-stroke list of rect stamps onto the undo stack
+      // as ONE multi-entry delta. Each entry holds the disc's bounding
+      // rect with old/new pixel snapshots — overlapping stamps unwind
+      // correctly because ApplyDelta walks reverse on undo.
+      if (this._strokeStamps is { Count: > 0 } stamps)
+        this.PushMaskDelta(stamps.ToArray());
+      this._strokeStamps = null;
       this.RefreshMaskOverlayBitmap();
+      // Mask is declarative pipeline state — schedule a re-render so
+      // the right pane reflects the just-painted strokes.
+      this.SchedulePreviewUpdate();
       e.Handled = true;
     }
   }
@@ -655,7 +949,8 @@ public partial class RestoreWindow : Window {
     var radius = Math.Max(1, this._brushSize);
     var cx = (int)Math.Round(px);
     var cy = (int)Math.Round(py);
-    StampDisc(this._maskImage, cx, cy, radius);
+    var stamp = StampDisc(this._maskImage, cx, cy, radius, this._strokeIsErase);
+    this._strokeStamps?.Add(stamp);
     this.RefreshMaskOverlayBitmap();
   }
 
@@ -677,81 +972,199 @@ public partial class RestoreWindow : Window {
   }
 
   /// <summary>
-  /// Set every pixel within <paramref name="radius"/> of (cx, cy) to a
-  /// fully-opaque red — the mask uses R as the "inpaint here" channel
-  /// and Alpha as the display opacity for the semi-transparent overlay.
+  /// OR <paramref name="addition"/> into <paramref name="dst"/> in
+  /// place: any pixel with R≥128 in the source becomes a "masked here"
+  /// pixel in the destination. Used by Auto-detect to add detected
+  /// scratches to the user's brush strokes without wiping them.
+  ///
+  /// Returns the diff as ROW-RUN rect entries: per row, every maximal
+  /// run of consecutive pixels that flipped from not-masked to masked
+  /// becomes one 1×N rect. Sparse detection output (5 scattered
+  /// scratches across a row of 4096) costs five tiny 1×1 entries
+  /// rather than a single 1×4096 row that would be 99% padding.
   /// </summary>
-  private static void StampDisc(Image<Rgba32> mask, int cx, int cy, int radius) {
+  private static MaskDeltaEntry[] MergeMask(Image<Rgba32> dst, Image<Rgba32> addition) {
+    if (dst.Width != addition.Width || dst.Height != addition.Height) {
+      // Best-effort: skip the merge silently rather than throw mid-UI.
+      // The detector always produces a mask at source dimensions so a
+      // mismatch only happens if the user resized the working source
+      // between paint and auto-detect — not a flow we currently support.
+      return Array.Empty<MaskDeltaEntry>();
+    }
+    var addPixels = new Rgba32[addition.Width * addition.Height];
+    addition.CopyPixelDataTo(addPixels);
+    var w = dst.Width;
+    var redPixel = MaskRedPixel;
+    var entries = new List<MaskDeltaEntry>();
+    dst.ProcessPixelRows(accessor => {
+      for (var y = 0; y < accessor.Height; y++) {
+        var row = accessor.GetRowSpan(y);
+        var off = y * w;
+        var x = 0;
+        while (x < row.Length) {
+          while (x < row.Length && !(addPixels[off + x].R >= 128 && row[x].R < 128))
+            x++;
+          if (x >= row.Length) break;
+          var runStart = x;
+          while (x < row.Length && addPixels[off + x].R >= 128 && row[x].R < 128)
+            x++;
+          var runLen = x - runStart;
+          var olds = new Rgba32[runLen];
+          var news = new Rgba32[runLen];
+          for (var i = 0; i < runLen; i++) {
+            olds[i] = row[runStart + i];
+            news[i] = redPixel;
+            row[runStart + i] = redPixel;
+          }
+          entries.Add(new MaskDeltaEntry(new Rectangle(runStart, y, runLen, 1), olds, news));
+        }
+      }
+    });
+    return entries.ToArray();
+  }
+
+  /// <summary>
+  /// Stamp a disc into the mask. <paramref name="erase"/> selects the
+  /// fill: false = "paint" (set disc pixels to opaque red), true =
+  /// "erase" (clear disc pixels to transparent). Returns a
+  /// <see cref="MaskDeltaEntry"/> covering the disc's bounding rect
+  /// for undo. Same delta shape regardless of mode — only NewPixels
+  /// inside the disc differs.
+  /// </summary>
+  private static MaskDeltaEntry StampDisc(Image<Rgba32> mask, int cx, int cy, int radius, bool erase) {
     var minY = Math.Max(0, cy - radius);
     var maxY = Math.Min(mask.Height - 1, cy + radius);
     var minX = Math.Max(0, cx - radius);
     var maxX = Math.Min(mask.Width - 1, cx + radius);
+    var bw = maxX - minX + 1;
+    var bh = maxY - minY + 1;
+    var bounds = new Rectangle(minX, minY, bw, bh);
+    var oldPixels = new Rgba32[bw * bh];
+    var newPixels = new Rgba32[bw * bh];
     var r2 = radius * radius;
+    var fillPixel = erase ? default(Rgba32) : MaskRedPixel;
 
     mask.ProcessPixelRows(accessor => {
-      for (var y = minY; y <= maxY; y++) {
-        var dy = y - cy;
-        var row = accessor.GetRowSpan(y);
-        for (var x = minX; x <= maxX; x++) {
-          var dx = x - cx;
-          if (dx * dx + dy * dy <= r2)
-            row[x] = new Rgba32((byte)255, (byte)0, (byte)0, (byte)200);
+      for (var ly = 0; ly < bh; ly++) {
+        var ty = minY + ly;
+        var row = accessor.GetRowSpan(ty);
+        var dy = ty - cy;
+        var rowOff = ly * bw;
+        for (var lx = 0; lx < bw; lx++) {
+          var tx = minX + lx;
+          var idx = rowOff + lx;
+          var old = row[tx];
+          oldPixels[idx] = old;
+          var dx = tx - cx;
+          if (dx * dx + dy * dy <= r2) {
+            row[tx] = fillPixel;
+            newPixels[idx] = fillPixel;
+          } else {
+            newPixels[idx] = old;
+          }
         }
+      }
+    });
+    return new MaskDeltaEntry(bounds, oldPixels, newPixels);
+  }
+
+  /// <summary>The single Rgba32 value the mask uses for "inpaint here".
+  /// Centralised so the diff plumbing and StampDisc / MergeMask all
+  /// agree on one value.</summary>
+  private static readonly Rgba32 MaskRedPixel = new(255, 0, 0, 200);
+
+  /// <summary>
+  /// Push a sparse-diff <paramref name="delta"/> onto the undo stack
+  /// and clear the redo stack. Call AFTER applying a mask mutation —
+  /// the delta records the (oldValue, newValue) pairs for each pixel
+  /// the mutation changed. Skipping zero-change deltas keeps the stack
+  /// from filling up with no-op clicks.
+  /// </summary>
+  private void PushMaskDelta(MaskDeltaEntry[] delta) {
+    if (delta.Length == 0)
+      return;
+    this._maskUndo.AddLast(delta);
+    while (this._maskUndo.Count > MaskHistoryCap)
+      this._maskUndo.RemoveFirst();
+    this._maskRedo.Clear();
+  }
+
+  /// <summary>Drop the entire undo+redo history — call when the mask
+  /// dimensions change (e.g. opening a new file). Diff entries are
+  /// indexed against the current mask resolution so they're meaningless
+  /// across resizes.</summary>
+  private void ClearMaskHistory() {
+    this._maskUndo.Clear();
+    this._maskRedo.Clear();
+  }
+
+  /// <summary>Apply <paramref name="delta"/> to <paramref name="mask"/>
+  /// in either direction. forward=true blits NewPixels into each
+  /// rectangle (re-applies); forward=false blits OldPixels (reverses).
+  /// On reverse we walk entries from last to first so overlapping
+  /// stamps within one stroke unwind to the true pre-stroke state.
+  /// </summary>
+  private static void ApplyDelta(Image<Rgba32> mask, MaskDeltaEntry[] delta, bool forward) {
+    if (forward) {
+      for (var i = 0; i < delta.Length; i++)
+        BlitRect(mask, delta[i], forward: true);
+    } else {
+      for (var i = delta.Length - 1; i >= 0; i--)
+        BlitRect(mask, delta[i], forward: false);
+    }
+  }
+
+  /// <summary>Copy the entry's old- or new-pixel array onto the mask
+  /// at <paramref name="entry"/>.Bounds. Out-of-bounds rows / columns
+  /// are clipped silently — Bounds should already be image-clamped at
+  /// capture time, so clipping is just defensive.</summary>
+  private static void BlitRect(Image<Rgba32> mask, MaskDeltaEntry entry, bool forward) {
+    var pixels = forward ? entry.NewPixels : entry.OldPixels;
+    var bounds = entry.Bounds;
+    var bw = bounds.Width;
+    var bh = bounds.Height;
+    if (bw <= 0 || bh <= 0)
+      return;
+    mask.ProcessPixelRows(accessor => {
+      for (var ly = 0; ly < bh; ly++) {
+        var ty = bounds.Y + ly;
+        if (ty < 0 || ty >= accessor.Height) continue;
+        var row = accessor.GetRowSpan(ty);
+        var rowOff = ly * bw;
+        var startX = Math.Max(0, bounds.X);
+        var endX = Math.Min(row.Length, bounds.X + bw);
+        for (var tx = startX; tx < endX; tx++)
+          row[tx] = pixels[rowOff + (tx - bounds.X)];
       }
     });
   }
 
-  /// <summary>
-  /// Push a snapshot of the current mask onto the undo stack and clear
-  /// the redo stack. Call BEFORE every mask mutation (paint stroke,
-  /// auto-detect, clear). null = "mask was empty".
-  /// </summary>
-  private void PushMaskUndo() {
-    var snapshot = this._maskImage?.Clone();
-    this._maskUndo.AddLast(snapshot);
-    while (this._maskUndo.Count > MaskHistoryCap) {
-      this._maskUndo.First!.Value?.Dispose();
-      this._maskUndo.RemoveFirst();
-    }
-    foreach (var img in this._maskRedo)
-      img?.Dispose();
-    this._maskRedo.Clear();
-  }
-
-  /// <summary>Drop the entire undo+redo history — call when the working
-  /// source changes (Inpaint, Despeckle, Apply) since the old mask is
-  /// no longer meaningful against the new source dimensions / contents.</summary>
-  private void ClearMaskHistory() {
-    foreach (var img in this._maskUndo) img?.Dispose();
-    this._maskUndo.Clear();
-    foreach (var img in this._maskRedo) img?.Dispose();
-    this._maskRedo.Clear();
-  }
-
   private void OnUndoMaskClick(object? sender, RoutedEventArgs e) {
-    if (this._maskUndo.Count == 0) {
+    if (this._maskUndo.Count == 0 || this._maskImage is null) {
       this.SetStatus("Nothing to undo.");
       return;
     }
-    this._maskRedo.AddLast(this._maskImage);
-    var prev = this._maskUndo.Last!.Value;
+    var delta = this._maskUndo.Last!.Value;
     this._maskUndo.RemoveLast();
-    this._maskImage = prev;
+    ApplyDelta(this._maskImage, delta, forward: false);
+    this._maskRedo.AddLast(delta);
     this.RefreshMaskOverlayBitmap();
     this.SetStatus($"Undid mask change ({this._maskUndo.Count} more available).");
+    this.SchedulePreviewUpdate();
   }
 
   private void OnRedoMaskClick(object? sender, RoutedEventArgs e) {
-    if (this._maskRedo.Count == 0) {
+    if (this._maskRedo.Count == 0 || this._maskImage is null) {
       this.SetStatus("Nothing to redo.");
       return;
     }
-    this._maskUndo.AddLast(this._maskImage);
-    var next = this._maskRedo.Last!.Value;
+    var delta = this._maskRedo.Last!.Value;
     this._maskRedo.RemoveLast();
-    this._maskImage = next;
+    ApplyDelta(this._maskImage, delta, forward: true);
+    this._maskUndo.AddLast(delta);
     this.RefreshMaskOverlayBitmap();
     this.SetStatus($"Redid mask change ({this._maskRedo.Count} more available).");
+    this.SchedulePreviewUpdate();
   }
 
   /// <summary>
@@ -780,24 +1193,43 @@ public partial class RestoreWindow : Window {
   }
 
   private void OnPreviewPointerEntered(object? sender, PointerEventArgs e) {
-    if (sender is Avalonia.Controls.Image image && image.Name == "RestoredPreview")
-      this.UpdateBrushCursor(e.GetPosition(VisualParentOrSelf(image)));
+    if (sender is not Avalonia.Controls.Image image || image.Name != "RestoredPreview")
+      return;
+    this.UpdateBrushCursor(e.GetPosition(VisualParentOrSelf(image)));
+    // Mask overlay is only shown while the cursor is over the preview
+    // pane — otherwise the red splotches obscure the colorize / restore
+    // result the user is actually trying to evaluate.
+    if (this.FindControl<Avalonia.Controls.Image>("MaskOverlay") is { } mask)
+      mask.IsVisible = true;
   }
 
   private void OnPreviewPointerExited(object? sender, PointerEventArgs e) {
     if (this.FindControl<Avalonia.Controls.Shapes.Ellipse>("BrushCursor") is { } ellipse)
       ellipse.IsVisible = false;
+    // Don't hide the mask if the user is actively painting — they need
+    // to keep seeing their strokes even if the cursor briefly leaves
+    // the preview's visual bounds mid-drag.
+    if (this._isPainting)
+      return;
+    if (this.FindControl<Avalonia.Controls.Image>("MaskOverlay") is { } mask)
+      mask.IsVisible = false;
   }
 
   private void RefreshMaskOverlayBitmap() {
-    if (this._maskImage is null)
+    var overlay = this.FindControl<Avalonia.Controls.Image>("MaskOverlay");
+    if (overlay is null)
       return;
+    // Undo can land us back at "no mask ever existed" (the initial
+    // snapshot is null on the undo stack). Clear the overlay so the
+    // last-rendered bitmap doesn't linger on screen.
+    if (this._maskImage is null) {
+      overlay.Source = null;
+      return;
+    }
     using var ms = new MemoryStream();
     this._maskImage.SaveAsPng(ms);
     ms.Position = 0;
-    var bmp = new Bitmap(ms);
-    if (this.FindControl<Avalonia.Controls.Image>("MaskOverlay") is { } overlay)
-      overlay.Source = bmp;
+    overlay.Source = new Bitmap(ms);
   }
 
   /// <summary>
@@ -884,13 +1316,21 @@ public partial class RestoreWindow : Window {
     // Fallback (BOPB unavailable, or its session failed to open).
     detected ??= await Task.Run(() => ScratchDetector.Detect(src));
 
-    this.PushMaskUndo();
-    this._maskImage?.Dispose();
-    this._maskImage = detected;
+    // MERGE the detected scratches INTO the existing brush mask rather
+    // than replacing it. Otherwise the user's hand-drawn strokes
+    // (painted to cover damage the detector missed) get clobbered the
+    // moment they click Auto-detect, and the subsequent Inpaint runs
+    // against detector-only pixels with the manual marks lost. The OR
+    // semantics also lets the user click Auto-detect multiple times
+    // (with different model parameters) and accumulate findings.
+    this.EnsureMask();
+    var mergeDelta = MergeMask(this._maskImage!, detected);
+    detected.Dispose();
+    this.PushMaskDelta(mergeDelta);
     this.RefreshMaskOverlayBitmap();
 
     long count = 0;
-    detected.ProcessPixelRows(a => {
+    this._maskImage!.ProcessPixelRows(a => {
       for (var y = 0; y < a.Height; y++) {
         var row = a.GetRowSpan(y);
         for (var x = 0; x < row.Length; x++)
@@ -904,343 +1344,72 @@ public partial class RestoreWindow : Window {
     this.SetStatus(count == 0
       ? $"No obvious scratches detected ({detectorUsed}) — paint over damage manually with the brush.{hint}"
       : $"Auto-detected {pct:0.0}% of pixels as scratches via {detectorUsed}. Refine with the brush, then click Inpaint.{hint}");
+    if (count > 0)
+      this.SchedulePreviewUpdate();
   }
 
-  /// <summary>
-  /// Run the salt-and-pepper adaptive median filter over the source.
-  /// Same modify-source semantics as Inpaint — the cleaned image
-  /// replaces the source so subsequent restoration stages benefit
-  /// from the cleaner input. Pure C#, no model needed.
-  /// </summary>
-  private async void OnDespeckleClick(object? sender, RoutedEventArgs e) {
-    if (this._previewSource is null) {
-      this.SetStatus("Open a photo first.");
-      return;
-    }
-    this.SetStatus("Despeckling…");
-    this.SetOverlayVisible(true);
-    if (this.FindControl<TextBlock>("ProgressText") is { } pt)
-      pt.Text = "Adaptive median filter — removing salt & pepper noise…";
-
-    var src = this._previewSource;
-    Image<Rgba32> result;
-    try {
-      result = await Task.Run(() => SaltAndPepperFilter.Filter(src));
-    } catch (Exception ex) {
-      this.SetStatus($"Despeckle failed: {ex.Message}");
-      this.SetOverlayVisible(false);
-      return;
-    }
-
-    this._previewSource.Dispose();
-    this._previewSource = result;
-    this.ClearMaskHistory();
-    this.RefreshFaceBoxesOverlay();
-    this.UpdateSourceBitmap();
-
-    if (this._fullResolutionSource is not null) {
-      // Despeckle the full-res too so Save As gets the cleaned image.
-      // Run off-thread; status overlay shows so the user knows it's
-      // still busy on the bigger image.
-      if (this.FindControl<TextBlock>("ProgressText") is { } pt2)
-        pt2.Text = "Despeckling at full resolution…";
-      var full = this._fullResolutionSource;
-      var fullCleaned = await Task.Run(() => SaltAndPepperFilter.Filter(full));
-      this._fullResolutionSource.Dispose();
-      this._fullResolutionSource = fullCleaned;
-    }
-
-    this.SetStatus("Despeckled. The cleaned image is now the source for the rest of the restoration.");
-    this.SetOverlayVisible(false);
-    this.SchedulePreviewUpdate();
-  }
-
-  /// <summary>
-  /// Repeatedly run detect → inpaint until the detector finds essentially
-  /// nothing OR no further progress is being made between iterations.
-  /// Convergence is by mask-coverage threshold (default 0.3% of pixels),
-  /// not by a fixed iteration count — heavily-damaged scans can need
-  /// 8–15 iterations, lightly-damaged ones converge in 1–2.
-  /// </summary>
-  private async void OnAutoLoopScratchClick(object? sender, RoutedEventArgs e) {
-    if (this._previewSource is null) {
-      this.SetStatus("Open a photo first.");
-      return;
-    }
-    var convergenceThresholdPct = (double?)this.FindControl<NumericUpDown>("AutoLoopThreshold")?.Value ?? 0.3;
-    var hardCapIterations = (int)((double?)this.FindControl<NumericUpDown>("AutoLoopMaxIter")?.Value ?? 5);
-    const double noProgressDeltaPct = 0.05;       // stop when iteration-over-iteration improvement is below this
-
-    this.SetOverlayVisible(true);
-    var totalPixels = (long)this._previewSource.Width * this._previewSource.Height;
-    var prevPct = double.PositiveInfinity;
-    var iter = 0;
-
-    while (iter < hardCapIterations) {
-      iter++;
-      if (this.FindControl<TextBlock>("ProgressText") is { } pt)
-        pt.Text = $"Auto-loop scratch removal — iteration {iter} (last mask {(double.IsPositiveInfinity(prevPct) ? "—" : $"{prevPct:0.00}%")} → target <{convergenceThresholdPct}%)…";
-
-      // Detect.
-      var src = this._previewSource;
-      Image<Rgba32>? detectedMask = null;
-      try {
-        if (ModelRegistry.BopbScratchDetector.IsInstalled())
-          detectedMask = await Task.Run(() => {
-            using var bopb = new OnnxScratchDetectorBOPB();
-            return bopb.IsAvailable ? bopb.Detect(src) : null;
-          });
-        detectedMask ??= await Task.Run(() => ScratchDetector.Detect(src));
-      } catch (Exception ex) {
-        this.SetStatus($"Auto-loop failed during detect: {ex.Message}");
-        this.SetOverlayVisible(false);
-        return;
-      }
-
-      long maskedPixels = 0;
-      detectedMask.ProcessPixelRows(a => {
-        for (var y = 0; y < a.Height; y++) {
-          var row = a.GetRowSpan(y);
-          for (var x = 0; x < row.Length; x++)
-            if (row[x].R >= 128) maskedPixels++;
-        }
-      });
-      var pct = 100.0 * maskedPixels / totalPixels;
-
-      // Convergence: detector found essentially nothing → stop.
-      if (pct < convergenceThresholdPct) {
-        detectedMask.Dispose();
-        this.SetStatus($"Auto-loop converged after {iter - 1} iteration(s) — residual mask {pct:0.00}% < {convergenceThresholdPct}% threshold.");
-        break;
-      }
-
-      // No-progress safety stop: if iteration-over-iteration improvement
-      // is tiny, the detector is just oscillating on residual noise. Stop
-      // before we burn another ~10s of inpainting on no real damage.
-      if (!double.IsPositiveInfinity(prevPct) && (prevPct - pct) < noProgressDeltaPct) {
-        detectedMask.Dispose();
-        this.SetStatus($"Auto-loop stopped after {iter - 1} iteration(s) — last two iterations differ by <{noProgressDeltaPct}% (no further progress). Residual mask {pct:0.00}%.");
-        break;
-      }
-      prevPct = pct;
-
-      // Update mask overlay so the user sees progress.
-      this._maskImage?.Dispose();
-      this._maskImage = detectedMask;
-      this.RefreshMaskOverlayBitmap();
-
-      // Inpaint.
-      try {
-        var working = this._previewSource;
-        var mask = this._maskImage;
-        var inpainted = await Task.Run(() => {
-          using var inpainter = new OnnxInpainter();
-          return inpainter.IsAvailable ? inpainter.Inpaint(working, mask) : null;
-        });
-        if (inpainted is null) {
-          this.SetStatus("Auto-loop failed: LaMa inpainter not installed. Use Models… to download it.");
-          this.SetOverlayVisible(false);
-          return;
-        }
-
-        this._previewSource.Dispose();
-        this._previewSource = inpainted;
-        if (this._fullResolutionSource is not null) {
-          var fullW = this._fullResolutionSource.Width;
-          var fullH = this._fullResolutionSource.Height;
-          var resizedFull = inpainted.Clone(c => c.Resize(fullW, fullH));
-          this._fullResolutionSource.Dispose();
-          this._fullResolutionSource = resizedFull;
-        }
-
-        this.ClearMaskInPlace();
-        this.ClearMaskHistory();
-        this.RefreshFaceBoxesOverlay();
-      } catch (Exception ex) {
-        this.SetStatus($"Auto-loop failed during inpaint: {ex.Message}");
-        this.SetOverlayVisible(false);
-        return;
-      }
-
-      if (iter == hardCapIterations)
-        this.SetStatus($"Auto-loop hit safety cap of {hardCapIterations} iterations — residual mask {pct:0.00}%. Something is preventing convergence; consider painting the remainder manually.");
-    }
-
-    this.SetOverlayVisible(false);
-    this.SchedulePreviewUpdate();
-  }
-
-  // ---------- "Apply" buttons — bake one AI stage into the working source ----------
-  // Same modify-source semantics as Inpaint / Despeckle: run a single
-  // restoration stage at the slider's current strength, swap the result
-  // into _previewSource + _fullResolutionSource, then reset the slider so
-  // re-running the preview pipeline doesn't double-apply the same stage.
-
-  private async void OnApplyFaceClick(object? sender, RoutedEventArgs e) {
-    var strength = (this.FindControl<Slider>("FaceSlider")?.Value ?? 0) / 100.0;
-    if (strength <= 1e-6) {
-      this.SetStatus("Set the face slider above 0 first.");
-      return;
-    }
-    if (this._faces.Count == 0) {
-      this.SetStatus("No faces detected — nothing to apply.");
-      return;
-    }
-    await this.BakeStage(
-      "face restore",
-      s => s with { FaceRestoreStrength = strength },
-      "FaceSlider"
-    );
-  }
-
-  private async void OnApplyDenoiseClick(object? sender, RoutedEventArgs e) {
-    var strength = (this.FindControl<Slider>("DenoiseSlider")?.Value ?? 0) / 100.0;
-    if (strength <= 1e-6) {
-      this.SetStatus("Set the denoise slider above 0 first.");
-      return;
-    }
-    await this.BakeStage(
-      "denoise",
-      s => s with { DenoiseStrength = strength },
-      "DenoiseSlider"
-    );
-  }
-
-  private async void OnApplyArtifactClick(object? sender, RoutedEventArgs e) {
-    var strength = (this.FindControl<Slider>("ArtifactSlider")?.Value ?? 0) / 100.0;
-    if (strength <= 1e-6) {
-      this.SetStatus("Set the de-artifact slider above 0 first.");
-      return;
-    }
-    await this.BakeStage(
-      "de-artifact",
-      s => s with { ArtifactRemoveStrength = strength },
-      "ArtifactSlider"
-    );
-  }
-
-  private async void OnApplyColourClick(object? sender, RoutedEventArgs e) {
-    var strength = (this.FindControl<Slider>("ColourSlider")?.Value ?? 0) / 100.0;
-    if (strength <= 1e-6) {
-      this.SetStatus("Set the recolour slider above 0 first.");
-      return;
-    }
-    await this.BakeStage(
-      "recolour",
-      s => s with { RecolourStrength = strength },
-      "ColourSlider"
-    );
-  }
-
-  /// <summary>
-  /// Run the restoration pipeline with everything OFF except the one
-  /// stage <paramref name="stageBuilder"/> turns on, swap the result into
-  /// the working source (preview + full-res), then reset the slider so
-  /// the live preview pipeline doesn't re-apply the same stage on top.
-  /// </summary>
-  private async Task BakeStage(string stageName, Func<RestorationSettings, RestorationSettings> stageBuilder, string sliderName) {
-    if (this._previewSource is null) {
-      this.SetStatus("Open a photo first.");
-      return;
-    }
-
-    // Cancel any in-flight live preview so it doesn't overwrite our result.
+  /// <summary>Cancel any in-flight live-preview render. Used by the
+  /// preview scheduler when a newer settings change arrives before the
+  /// previous render finished — the in-flight task's cancellation token
+  /// is tripped so it discards its work and exits inside ~1 tile.</summary>
+  private void CancelPendingPreview() {
     var prev = Interlocked.Exchange(ref this._previewCts, null);
     prev?.Cancel();
     prev?.Dispose();
-
-    this.SetOverlayVisible(true);
-    if (this.FindControl<TextBlock>("ProgressText") is { } pt)
-      pt.Text = $"Applying {stageName}…";
-    this.SetStatus($"Applying {stageName}…");
-
-    var faces = this._faces;
-    var stageSettings = stageBuilder(new RestorationSettings(
-      DenoiseModel: PickedFileName(this.FindControl<ComboBox>("DenoiseModelCombo"), ModelRegistry.Denoisers),
-      ArtifactRemoveModel: PickedFileName(this.FindControl<ComboBox>("ArtifactModelCombo"), ModelRegistry.ArtifactRemovers),
-      ColorizeModel: PickedFileName(this.FindControl<ComboBox>("ColourModelCombo"), ModelRegistry.Colorizers),
-      UpscaleModel: PickedFileName(this.FindControl<ComboBox>("UpscaleModelCombo"), ModelRegistry.Upscalers)
-    ));
-
-    var previewSrc = this._previewSource.Clone();
-    var fullSrc = this._fullResolutionSource?.Clone();
-
-    Image<Rgba32>? previewResult = null;
-    Image<Rgba32>? fullResult = null;
-    try {
-      previewResult = await Task.Run(() => RestorationPipeline.Apply(previewSrc, faces, stageSettings));
-      if (fullSrc is not null)
-        fullResult = await Task.Run(() => RestorationPipeline.Apply(fullSrc, faces, stageSettings));
-    } catch (Exception ex) {
-      previewResult?.Dispose();
-      fullResult?.Dispose();
-      this.SetStatus($"Apply {stageName} failed: {ex.Message}");
-      this.SetOverlayVisible(false);
-      return;
-    } finally {
-      previewSrc.Dispose();
-      fullSrc?.Dispose();
-    }
-
-    this._previewSource.Dispose();
-    this._previewSource = previewResult;
-    if (fullResult is not null) {
-      this._fullResolutionSource?.Dispose();
-      this._fullResolutionSource = fullResult;
-    }
-    this.ClearMaskHistory();
-    this.RefreshFaceBoxesOverlay();
-
-    // Reset the slider so the live preview pipeline doesn't re-apply the
-    // same stage on top of the now-baked result. Suppress events so the
-    // assignment doesn't trigger an immediate preview rebuild — we'll
-    // schedule one explicitly below.
-    this._suppressEvents = true;
-    try {
-      if (this.FindControl<Slider>(sliderName) is { } slider)
-        slider.Value = 0;
-    } finally {
-      this._suppressEvents = false;
-    }
-
-    this.SetOverlayVisible(false);
-    this.SetStatus($"{stageName} applied. The result is now the source for the rest of the restoration.");
-    this.SchedulePreviewUpdate();
   }
 
   private void OnClearMaskClick(object? sender, RoutedEventArgs e) {
     if (this._maskImage is null)
       return;
-    this.PushMaskUndo();
-    this.ClearMaskInPlace();
+    var clearDelta = ClearMaskInPlace(this._maskImage);
+    this.PushMaskDelta(clearDelta);
+    this.RefreshMaskOverlayBitmap();
     this.SetStatus("Mask cleared.");
+    this.SchedulePreviewUpdate();
   }
 
-  /// <summary>Wipe the mask without touching the undo stack — used after
-  /// source-mutating ops (Inpaint / Despeckle / Apply) where the prior
-  /// mask is meaningless against the new source.</summary>
-  private void ClearMaskInPlace() {
-    if (this._maskImage is null)
-      return;
-    this._maskImage.ProcessPixelRows(a => {
+  /// <summary>Zero every currently-masked pixel and return the diff
+  /// so the operation can be pushed onto the undo stack. Same row-run
+  /// shape as <see cref="MergeMask"/>: each row's maximal runs of
+  /// previously-set pixels become 1×N rect entries. Empty masks
+  /// produce an empty diff and the push becomes a no-op.</summary>
+  private static MaskDeltaEntry[] ClearMaskInPlace(Image<Rgba32> mask) {
+    var entries = new List<MaskDeltaEntry>();
+    var emptyPixel = default(Rgba32);
+    mask.ProcessPixelRows(a => {
       for (var y = 0; y < a.Height; y++) {
         var row = a.GetRowSpan(y);
-        for (var x = 0; x < row.Length; x++)
-          row[x] = default;
+        var x = 0;
+        while (x < row.Length) {
+          while (x < row.Length && row[x].R < 128 && row[x].A == 0)
+            x++;
+          if (x >= row.Length) break;
+          var runStart = x;
+          while (x < row.Length && (row[x].R >= 128 || row[x].A != 0))
+            x++;
+          var runLen = x - runStart;
+          var olds = new Rgba32[runLen];
+          var news = new Rgba32[runLen];
+          for (var i = 0; i < runLen; i++) {
+            olds[i] = row[runStart + i];
+            news[i] = emptyPixel;
+            row[runStart + i] = emptyPixel;
+          }
+          entries.Add(new MaskDeltaEntry(new Rectangle(runStart, y, runLen, 1), olds, news));
+        }
       }
     });
-    this.RefreshMaskOverlayBitmap();
+    return entries.ToArray();
   }
 
   /// <summary>
-  /// Run LaMa over the source's masked region, replace the source with
-  /// the inpainted result, clear the mask, re-render the restored side.
-  /// We replace BOTH <see cref="_previewSource"/> and
-  /// <see cref="_fullResolutionSource"/> so a subsequent Save As renders
-  /// from the inpainted full-res copy. (For very large images we'd
-  /// ideally re-run LaMa at full resolution; for now we upscale the
-  /// inpainted preview back to source dimensions — Save As at full
-  /// resolution is a future improvement.)
+  /// "Inpaint masked" button — kept as a manual re-render trigger for
+  /// the user, but it no longer mutates the source. The brush mask is
+  /// part of declarative pipeline state: the live preview (and Save As)
+  /// already runs LaMa over the painted regions on every render. So
+  /// this button just reschedules the pipeline preview, which is
+  /// useful when the user has painted strokes while a previous render
+  /// was finishing and wants an explicit refresh.
   /// </summary>
   private async void OnInpaintClick(object? sender, RoutedEventArgs e) {
     if (this._previewSource is null) {
@@ -1248,55 +1417,46 @@ public partial class RestoreWindow : Window {
       return;
     }
     if (this._maskImage is null || !this.MaskHasContent()) {
-      this.SetStatus("Paint over the damaged region first (left-click drag on the source).");
+      this.SetStatus("Paint over the damaged region first (left-click drag on the right pane).");
       return;
     }
     if (!await ModelPrompt.EnsureInstalledAsync(this, ModelRegistry.LamaInpaint, "Inpainting"))
       return;
+    this.SchedulePreviewUpdate();
+  }
 
-    this.SetStatus("Inpainting…");
-    this.SetOverlayVisible(true);
-    if (this.FindControl<TextBlock>("ProgressText") is { } pt)
-      pt.Text = "Inpainting masked region…";
-
-    var src = this._previewSource;
-    var mask = this._maskImage;
-
-    Image<Rgba32>? result = null;
-    try {
-      result = await Task.Run(() => {
-        using var inpainter = new OnnxInpainter();
-        return inpainter.IsAvailable ? inpainter.Inpaint(src, mask) : null;
-      });
-    } catch (Exception ex) {
-      this.SetStatus($"Inpainting failed: {ex.Message}");
-      this.SetOverlayVisible(false);
+  /// <summary>
+  /// "Despeckle" button — turns the salt-and-pepper stage on as part of
+  /// the declarative pipeline state instead of one-shot mutating the
+  /// source. The pipeline always runs the cleaned filter against the
+  /// un-modified loaded image so users can toggle it off and the
+  /// speckles return.
+  /// </summary>
+  private void OnDespeckleClick(object? sender, RoutedEventArgs e) {
+    if (this._previewSource is null) {
+      this.SetStatus("Open a photo first.");
       return;
     }
-    if (result is null) {
-      this.SetStatus("Inpainting failed (model returned no result).");
-      this.SetOverlayVisible(false);
+    if (this.FindControl<CheckBox>("DespeckleBox") is { } cb)
+      cb.IsChecked = true;
+    this.SchedulePreviewUpdate();
+  }
+
+  /// <summary>
+  /// "Auto-loop scratch removal" button — equivalent to ticking
+  /// AutoScratchInPipelineBox. The detect → inpaint loop runs as a
+  /// pipeline stage, so toggling it on causes the next render to
+  /// include the loop's output. No mutation of _previewSource — the
+  /// loop runs on the as-loaded source every time, so unchecking the
+  /// pipeline box returns to the un-cleaned scan.
+  /// </summary>
+  private void OnAutoLoopScratchClick(object? sender, RoutedEventArgs e) {
+    if (this._previewSource is null) {
+      this.SetStatus("Open a photo first.");
       return;
     }
-
-    // Swap the source out for the inpainted version. The full-res copy
-    // gets the same treatment — the inpainted preview is bicubic-resized
-    // up to the source's native resolution. Coarse but visually consistent.
-    this._previewSource.Dispose();
-    this._previewSource = result;
-    this.UpdateSourceBitmap();
-
-    if (this._fullResolutionSource is not null) {
-      var fullW = this._fullResolutionSource.Width;
-      var fullH = this._fullResolutionSource.Height;
-      var resizedFull = result.Clone(c => c.Resize(fullW, fullH));
-      this._fullResolutionSource.Dispose();
-      this._fullResolutionSource = resizedFull;
-    }
-
-    this.OnClearMaskClick(this, new RoutedEventArgs());
-    this.SetStatus("Inpainted. The repaired image is now the source for the rest of the restoration.");
-    this.SetOverlayVisible(false);
+    if (this.FindControl<CheckBox>("AutoScratchInPipelineBox") is { } cb)
+      cb.IsChecked = true;
     this.SchedulePreviewUpdate();
   }
 

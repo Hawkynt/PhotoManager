@@ -1,4 +1,5 @@
 using Microsoft.ML.OnnxRuntime;
+using PhotoManager.Core.Segmentation;
 using Microsoft.ML.OnnxRuntime.Tensors;
 
 namespace PhotoManager.Core.Ml;
@@ -109,7 +110,7 @@ public sealed class OnnxClipTextEncoder : IDisposable {
     try {
       if (!modelFile.Exists)
         return null;
-      return new InferenceSession(modelFile.FullName);
+      return OnnxAcceleration.CreateSession(modelFile.FullName);
     } catch {
       return null;
     }
@@ -129,8 +130,9 @@ public sealed class OnnxClipTextEncoder : IDisposable {
   }
 
   public void Dispose() {
-    if (this._session.IsValueCreated)
-      this._session.Value?.Dispose();
+    // Sessions are cached by OnnxAcceleration and shared across
+    // instances; disposing them here would break the cache.
+    // OnnxAcceleration.ResetCache() handles teardown if needed.
   }
 
   /// <summary>

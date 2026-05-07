@@ -146,20 +146,30 @@ public sealed class OnnxScratchDetectorBOPB : IDisposable {
   }
 
   private static SessionInfo? TryOpenSession(FileInfo modelFile) {
+    if (!modelFile.Exists)
+      return null;
     try {
-      if (!modelFile.Exists)
-        return null;
-      var session = new InferenceSession(modelFile.FullName);
+      // CPU EP forced (preferCpu: true) — empirical finding: when BOPB
+      // ran on OpenVINO and DDColor ran later on CPU, DDColor's
+      // inference produced near-zero a/b (silent grayscale output).
+      // LaMa between them was unaffected. Forcing every model in the
+      // auto-scratch → recolour chain onto CPU EP avoids whatever
+      // shared-runtime state OpenVINO leaves behind when stacked
+      // before another EP's session. BOPB is small enough that CPU
+      // inference is acceptable (~1s per detect pass).
+      var session = OnnxAcceleration.CreateSession(modelFile.FullName, preferCpu: true);
       var inputName = session.InputMetadata.Keys.First();
       return new SessionInfo(session, inputName);
-    } catch {
-      return null;
+    } catch (Exception ex) {
+      throw new InvalidOperationException(
+        $"BOPB scratch detector session creation failed for {modelFile.Name} (CPU EP): {ex.Message}", ex);
     }
   }
 
   public void Dispose() {
-    if (this._session.IsValueCreated)
-      this._session.Value?.Session.Dispose();
+    // Sessions are cached by OnnxAcceleration and shared across
+    // instances; disposing them here would break the cache.
+    // OnnxAcceleration.ResetCache() handles teardown if needed.
   }
 
   private sealed record SessionInfo(InferenceSession Session, string InputName);

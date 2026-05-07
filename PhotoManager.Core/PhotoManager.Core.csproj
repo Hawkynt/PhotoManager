@@ -32,7 +32,25 @@
          AVIF/HEIF/JP2/etc. decoder works reliably on every platform. -->
     <PackageReference Include="Magick.NET-Q8-AnyCPU" Version="14.4.0" />
     <PackageReference Include="MetadataExtractor" Version="2.8.1" />
-    <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.20.1" />
+    <!-- Base ONNX Runtime (CPU EP) on Linux/macOS. Windows takes the
+         OpenVINO build below instead — the various ORT distributions
+         conflict on the native onnxruntime.dll so only one ships per
+         platform. -->
+    <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.20.1"
+                      Condition="!$([MSBuild]::IsOSPlatform('Windows'))" />
+    <!-- Intel's OpenVINO build of ONNX Runtime supersedes the base
+         package on Windows. OpenVINO's AUTO / MULTI device routing
+         load-balances inference across the Intel NPU + iGPU + CPU on
+         Lunar Lake / Meteor Lake / Arrow Lake / Ultra-series machines —
+         which the previous DirectML build couldn't reach (the NPU is
+         exposed as MCDM, not D3D12, so DML can't bind it). Trade-off:
+         OpenVINO doesn't accelerate NVIDIA / AMD discrete GPUs; on
+         those, all stages fall through to OpenVINO's CPU plugin (still
+         OneDNN-optimised, comparable to ORT's CPU EP). For systems with
+         a non-Intel discrete GPU, swap this back to
+         Microsoft.ML.OnnxRuntime.DirectML and re-test. -->
+    <PackageReference Include="Intel.ML.OnnxRuntime.OpenVino" Version="1.20.0"
+                      Condition="$([MSBuild]::IsOSPlatform('Windows'))" />
     <PackageReference Include="SixLabors.ImageSharp" Version="3.1.11" />
     <PackageReference Include="SixLabors.ImageSharp.Drawing" Version="2.1.6" />
     <!-- OpenCvSharp4 powers the hand-held panorama stitcher (C7). The

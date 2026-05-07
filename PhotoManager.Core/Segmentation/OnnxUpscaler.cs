@@ -28,10 +28,15 @@ public sealed class OnnxUpscaler : IDisposable {
   public const string DefaultModelFileName = "upscale.onnx";
 
   // Default tile size for dynamic-shape models. Fixed-shape models use the
+  // declared model dimension instead. 192 chosen as a compromise between
+  // fewer tiles (less per-Run() ORT overhead, fewer reads/writes around
+  // the seam) and tile peak memory (192-in × 4 = 768-out at 4 bytes/px =
+  // ~2.3 MB per tile, fine on any modern machine). The previous 128
+  // setting issued ~2.25× as many tile inferences for the same image.
   // size declared by their input metadata (some Real-ESRGAN exports are
   // hard-pinned at 64×64 or 128×128).
-  private const int DefaultTileSize = 128;
-  private const int DefaultTileOverlap = 32;
+  private const int DefaultTileSize = 192;
+  private const int DefaultTileOverlap = 48;
 
   private readonly Lazy<SessionInfo?> _session;
 
@@ -60,7 +65,7 @@ public sealed class OnnxUpscaler : IDisposable {
   ///   return null so the caller can fall back to no-op.</param>
   /// <param name="ct">Cooperatively cancels between tiles so live-preview
   ///   re-renders don't have to wait for a full pass to finish.</param>
-  public Image<Rgba32>? Upscale(Image<Rgba32> source, int factor = 4, CancellationToken ct = default) {
+  public Image<Rgba32>? Upscale(Image<Rgba32> source, int factor = 4, CancellationToken ct = default, IProgress<Develop.StageProgress>? progress = null) {
     ArgumentNullException.ThrowIfNull(source);
     if (factor <= 1)
       return source.Clone();
@@ -85,10 +90,6 @@ public sealed class OnnxUpscaler : IDisposable {
       return null;
 
     // Number of native (4×) passes to run, plus an optional final scale.
-    // factor=2 → one 4× pass + 0.5× downsample.
-    // factor=4 → one 4× pass.
-    // factor=16 → two 4× passes.
-    // factor=64 → three 4× passes.
     var nativeFactor = info.NativeFactor;
     var passes = factor switch {
       2 => 1,
@@ -101,7 +102,11 @@ public sealed class OnnxUpscaler : IDisposable {
     var disposeCurrent = false;
     for (var pass = 0; pass < passes; pass++) {
       ct.ThrowIfCancellationRequested();
-      var stepResult = RunSinglePass(info, current, ct);
+      // Each pass becomes its own stage in the progress feed so the UI
+      // can display "Upscale (1/2): patch X/Y" and reset the bar between
+      // passes. The ETA recomputes per stage.
+      var stageLabel = passes > 1 ? $"upscale ({pass + 1}/{passes})" : "upscale";
+      var stepResult = RunSinglePass(info, current, ct, progress, stageLabel);
       if (disposeCurrent)
         current.Dispose();
       if (stepResult == null)
@@ -122,8 +127,21 @@ public sealed class OnnxUpscaler : IDisposable {
     }
   }
 
-  /// <summary>One full native-factor (4×) pass over <paramref name="source"/>, tile by tile.</summary>
-  private static Image<Rgba32>? RunSinglePass(SessionInfo info, Image<Rgba32> source, CancellationToken ct) {
+
+  /// <summary>
+  /// One full native-factor (4×) pass over <paramref name="source"/>,
+  /// tile by tile, dispatched in parallel so OpenVINO MULTI:NPU,GPU,CPU
+  /// can keep all configured devices busy concurrently. Tiles are read
+  /// from a flat snapshot of the source pixels (ImageSharp's pixel
+  /// accessor isn't safe to share across threads), inferences run on
+  /// the shared session (ORT InferenceSession.Run is thread-safe), and
+  /// writes to the output canvas are serialised under a single lock —
+  /// the lock is held for ~0.5 ms per tile vs ~100–300 ms per Run, so
+  /// contention is negligible.
+  /// </summary>
+  private static Image<Rgba32>? RunSinglePass(
+      SessionInfo info, Image<Rgba32> source, CancellationToken ct,
+      IProgress<Develop.StageProgress>? progress, string stageLabel) {
     var nativeFactor = info.NativeFactor;
     var srcW = source.Width;
     var srcH = source.Height;
@@ -135,37 +153,104 @@ public sealed class OnnxUpscaler : IDisposable {
     if (stride <= 0)
       stride = info.TileSize;
 
+    // Snapshot source pixels once — ImageSharp's per-image accessor
+    // isn't safe to share across the parallel inference threads.
+    var srcPixels = new Rgba32[srcW * srcH];
+    source.CopyPixelDataTo(srcPixels);
+
+    // Build the tile-coordinate list up front so we know the total
+    // count for progress reporting.
+    var tiles = new List<(int tx, int ty, int w, int h)>();
     for (var ty = 0; ty < srcH; ty += stride) {
+      if (ty >= srcH) continue;
       for (var tx = 0; tx < srcW; tx += stride) {
-        ct.ThrowIfCancellationRequested();
-
-        if (tx >= srcW || ty >= srcH)
-          continue;
-
-        // Fixed-shape models reject anything other than the declared size,
-        // so for those we always feed a full TileSize tile (padding from
-        // the source's edges with the last available row / column) and
-        // crop the output back to the desired w × h × factor.
+        if (tx >= srcW) continue;
         var w = Math.Min(info.TileSize, srcW - tx);
         var h = Math.Min(info.TileSize, srcH - ty);
-        if (w <= 0 || h <= 0)
-          continue;
-
-        var tilePixels = info.IsFixedInputSize
-          ? RunFixedTile(info, source, tx, ty)
-          : RunDynamicTile(info, source, tx, ty, w, h);
-        if (tilePixels == null)
-          continue;
-
-        var tileFedW = info.IsFixedInputSize ? info.TileSize : w;
-        var tileFedH = info.IsFixedInputSize ? info.TileSize : h;
-        var destW = w * nativeFactor;
-        var destH = h * nativeFactor;
-        WriteTile(native, tilePixels, tileFedW * nativeFactor, tileFedH * nativeFactor,
-          tx * nativeFactor, ty * nativeFactor, destW, destH);
+        if (w > 0 && h > 0) tiles.Add((tx, ty, w, h));
       }
     }
+    var total = tiles.Count;
+    var done = 0;
+    progress?.Report(new Develop.StageProgress(stageLabel, 0, total));
+
+    var writeLock = new object();
+
+    try {
+      Parallel.ForEach(
+        tiles,
+        new ParallelOptions {
+          CancellationToken = ct,
+          // Cap parallelism at 4 — OpenVINO MULTI dispatches across the
+          // 3 devices internally; oversubscribing the queue past that
+          // wastes CPU cycles building input tensors that wait. On
+          // single-device fallbacks (just GPU, just CPU) the cap still
+          // gives 2-4 concurrent in-flight inferences which keeps the
+          // device pipeline fed.
+          MaxDegreeOfParallelism = Math.Min(4, Math.Max(2, Environment.ProcessorCount / 2))
+        },
+        tile => {
+          var tilePixels = info.IsFixedInputSize
+            ? RunFixedTileFromArray(info, srcPixels, srcW, srcH, tile.tx, tile.ty)
+            : RunDynamicTileFromArray(info, srcPixels, srcW, srcH, tile.tx, tile.ty, tile.w, tile.h);
+          if (tilePixels != null) {
+            var tileFedW = info.IsFixedInputSize ? info.TileSize : tile.w;
+            var tileFedH = info.IsFixedInputSize ? info.TileSize : tile.h;
+            var destW = tile.w * nativeFactor;
+            var destH = tile.h * nativeFactor;
+            lock (writeLock) {
+              WriteTile(native, tilePixels, tileFedW * nativeFactor, tileFedH * nativeFactor,
+                tile.tx * nativeFactor, tile.ty * nativeFactor, destW, destH);
+            }
+          }
+          var d = Interlocked.Increment(ref done);
+          progress?.Report(new Develop.StageProgress(stageLabel, d, total));
+        });
+    } catch (OperationCanceledException) {
+      native.Dispose();
+      throw;
+    }
     return native;
+  }
+
+  /// <summary>Array-fed counterpart to <see cref="RunDynamicTile"/>; safe
+  /// to call concurrently from multiple threads because it reads from a
+  /// flat snapshot rather than the live ImageSharp accessor.</summary>
+  private static float[]? RunDynamicTileFromArray(SessionInfo info, Rgba32[] src, int srcW, int srcH, int tx, int ty, int w, int h) {
+    var pixelCount = h * w;
+    var inputTensor = new float[1 * 3 * pixelCount];
+    for (var y = 0; y < h; y++) {
+      var srcRowOffset = (ty + y) * srcW;
+      for (var x = 0; x < w; x++) {
+        var px = src[srcRowOffset + tx + x];
+        var offset = y * w + x;
+        inputTensor[0 * pixelCount + offset] = px.R / 255f;
+        inputTensor[1 * pixelCount + offset] = px.G / 255f;
+        inputTensor[2 * pixelCount + offset] = px.B / 255f;
+      }
+    }
+    return RunSession(info, inputTensor, h, w);
+  }
+
+  /// <summary>Array-fed counterpart to <see cref="RunFixedTile"/>;
+  /// thread-safe (no ImageSharp accessor calls).</summary>
+  private static float[]? RunFixedTileFromArray(SessionInfo info, Rgba32[] src, int srcW, int srcH, int tx, int ty) {
+    var size = info.TileSize;
+    var pixelCount = size * size;
+    var inputTensor = new float[1 * 3 * pixelCount];
+    for (var y = 0; y < size; y++) {
+      var sourceY = Math.Min(ty + y, srcH - 1);
+      var rowOffset = sourceY * srcW;
+      for (var x = 0; x < size; x++) {
+        var sourceX = Math.Min(tx + x, srcW - 1);
+        var px = src[rowOffset + sourceX];
+        var offset = y * size + x;
+        inputTensor[0 * pixelCount + offset] = px.R / 255f;
+        inputTensor[1 * pixelCount + offset] = px.G / 255f;
+        inputTensor[2 * pixelCount + offset] = px.B / 255f;
+      }
+    }
+    return RunSession(info, inputTensor, size, size);
   }
 
   private static float[]? RunDynamicTile(SessionInfo info, Image<Rgba32> source, int tx, int ty, int w, int h) {
@@ -263,7 +348,7 @@ public sealed class OnnxUpscaler : IDisposable {
     try {
       if (!modelFile.Exists)
         return null;
-      var session = new InferenceSession(modelFile.FullName);
+      var session = OnnxAcceleration.CreateSession(modelFile.FullName);
       var inputName = session.InputMetadata.Keys.First();
       var inputDims = session.InputMetadata[inputName].Dimensions;
       // NCHW shape: [batch, channels, H, W]. A dimension > 0 is fixed; <= 0 is dynamic.
@@ -288,8 +373,9 @@ public sealed class OnnxUpscaler : IDisposable {
   }
 
   public void Dispose() {
-    if (this._session.IsValueCreated)
-      this._session.Value?.Session.Dispose();
+    // Sessions are cached by OnnxAcceleration and shared across
+    // instances; disposing them here would break the cache.
+    // OnnxAcceleration.ResetCache() handles teardown if needed.
   }
 
   private sealed record SessionInfo(

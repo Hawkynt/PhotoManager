@@ -1,4 +1,5 @@
 using Microsoft.ML.OnnxRuntime;
+using PhotoManager.Core.Segmentation;
 using Microsoft.ML.OnnxRuntime.Tensors;
 
 namespace PhotoManager.Core.Detection;
@@ -102,7 +103,7 @@ public sealed class YoloObjectDetector : IDetector, IDisposable {
     try {
       if (!modelFile.Exists)
         return null;
-      return new InferenceSession(modelFile.FullName);
+      return OnnxAcceleration.CreateSession(modelFile.FullName);
     } catch {
       // Corrupt / incompatible / wrong ABI — degrade gracefully.
       return null;
@@ -110,7 +111,8 @@ public sealed class YoloObjectDetector : IDetector, IDisposable {
   }
 
   public void Dispose() {
-    if (this._session.IsValueCreated)
-      this._session.Value?.Dispose();
+    // Sessions are cached by OnnxAcceleration and shared across
+    // instances; disposing them here would break the cache.
+    // OnnxAcceleration.ResetCache() handles teardown if needed.
   }
 }

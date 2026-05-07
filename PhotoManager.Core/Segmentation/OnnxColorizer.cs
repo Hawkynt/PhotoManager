@@ -140,8 +140,9 @@ public sealed class OnnxColorizer : IDisposable {
       outH = dims.Length >= 4 ? dims[2] : inputH;
       outW = dims.Length >= 4 ? dims[3] : inputW;
       outputTensor = first.AsTensor<float>().ToArray();
-    } catch {
-      return null;
+    } catch (Exception ex) {
+      throw new InvalidOperationException(
+        $"DeOldify inference failed on {source.Width}×{source.Height} input ({OnnxAcceleration.LastSelectedDevice}): {ex.Message}", ex);
     }
 
     ct.ThrowIfCancellationRequested();
@@ -333,24 +334,29 @@ public sealed class OnnxColorizer : IDisposable {
   }
 
   private static SessionInfo? TryOpenSession(FileInfo modelFile) {
+    // Missing model = graceful no-op. Other failures throw so the
+    // recolour stage doesn't silently degrade to grayscale output.
+    if (!modelFile.Exists)
+      return null;
     try {
-      if (!modelFile.Exists)
-        return null;
-      var session = new InferenceSession(modelFile.FullName);
+      // Cached session — see OnnxColorizerDDColor.TryOpenSession. UI
+      // slider drags fire multiple concurrent Colorize calls; they
+      // share one cached session instead of each loading a fresh
+      // copy of the model.
+      var session = OnnxAcceleration.CreateSession(modelFile.FullName, preferCpu: true);
       var inputName = session.InputMetadata.Keys.First();
       var inputDims = session.InputMetadata[inputName].Dimensions;
-      // NCHW: [batch, channels, H, W]. Positive = fixed; <= 0 = dynamic.
       var fixedH = inputDims.Length >= 4 && inputDims[2] > 0 ? inputDims[2] : FallbackInputSize;
       var fixedW = inputDims.Length >= 4 && inputDims[3] > 0 ? inputDims[3] : FallbackInputSize;
       return new SessionInfo(session, inputName, fixedW, fixedH);
-    } catch {
-      return null;
+    } catch (Exception ex) {
+      throw new InvalidOperationException(
+        $"DeOldify session creation failed for {modelFile.Name}: {ex.Message}", ex);
     }
   }
 
   public void Dispose() {
-    if (this._session.IsValueCreated)
-      this._session.Value?.Session.Dispose();
+    // Cached in OnnxAcceleration; do not dispose here.
   }
 
   private sealed record SessionInfo(InferenceSession Session, string InputName, int InputW, int InputH);
