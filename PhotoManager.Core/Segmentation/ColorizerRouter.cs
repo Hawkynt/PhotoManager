@@ -42,14 +42,47 @@ public static class ColorizerRouter {
       : modelFileName!;
     var modelFile = AppDataPaths.ModelFile(fileName);
 
+    // Force the source to R=G=B per pixel (Rec.709 luminance) BEFORE
+    // dispatching to the model. Upstream pipeline stages (LaMa
+    // inpaint, FBCNN, despeckle's per-channel filter) can introduce
+    // sub-byte R/G/B differences that confuse the colorizer's input
+    // distribution — DDColor paper-tiny in particular collapsed to
+    // near-zero chroma when fed slightly-coloured "B&W" input. This
+    // grayscale step makes the colorizer's input deterministic
+    // regardless of what came before.
+    using var graySource = ToLuminance(source);
+
     if (IsDDColor(fileName)) {
       using var dd = new OnnxColorizerDDColor(modelFile);
-      return dd.IsAvailable ? dd.Colorize(source, strength, chromaBoost, ct) : null;
+      return dd.IsAvailable ? dd.Colorize(graySource, strength, chromaBoost, ct) : null;
     }
 
     // chromaBoost is a Lab-only concept; DeOldify produces RGB directly so it ignores it.
     using var de = new OnnxColorizer(modelFile);
-    return de.IsAvailable ? de.Colorize(source, strength, ct) : null;
+    return de.IsAvailable ? de.Colorize(graySource, strength, ct) : null;
+  }
+
+  /// <summary>Return a freshly allocated copy of <paramref name="source"/>
+  /// with every pixel set to (Y, Y, Y, A) where Y is Rec.709 luminance.
+  /// Decouples the colorizer's input from any subtle R/G/B differences
+  /// introduced by upstream pipeline stages, so it predicts the same
+  /// chroma whether or not LaMa / despeckle / etc. ran beforehand.
+  /// </summary>
+  internal static Image<Rgba32> ToLuminance(Image<Rgba32> source) {
+    var output = source.Clone();
+    output.ProcessPixelRows(a => {
+      for (var y = 0; y < a.Height; y++) {
+        var row = a.GetRowSpan(y);
+        for (var x = 0; x < row.Length; x++) {
+          var p = row[x];
+          var luma = (byte)Math.Clamp(
+            (int)Math.Round(0.2126 * p.R + 0.7152 * p.G + 0.0722 * p.B),
+            0, 255);
+          row[x] = new Rgba32(luma, luma, luma, p.A);
+        }
+      }
+    });
+    return output;
   }
 
   /// <summary>True iff <paramref name="fileName"/> looks like a DDColor model. Filename prefix is the dispatch key (no ONNX-graph inspection needed).</summary>

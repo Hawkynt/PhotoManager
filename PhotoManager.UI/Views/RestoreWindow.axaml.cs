@@ -950,7 +950,10 @@ public partial class RestoreWindow : Window {
     var cx = (int)Math.Round(px);
     var cy = (int)Math.Round(py);
     var stamp = StampDisc(this._maskImage, cx, cy, radius, this._strokeIsErase);
-    this._strokeStamps?.Add(stamp);
+    // Skip off-canvas stamps (zero-size bounds) — they're no-ops and
+    // adding them to the undo delta just wastes entries.
+    if (stamp.Bounds.Width > 0 && stamp.Bounds.Height > 0)
+      this._strokeStamps?.Add(stamp);
     this.RefreshMaskOverlayBitmap();
   }
 
@@ -1030,6 +1033,13 @@ public partial class RestoreWindow : Window {
   /// <see cref="MaskDeltaEntry"/> covering the disc's bounding rect
   /// for undo. Same delta shape regardless of mode — only NewPixels
   /// inside the disc differs.
+  ///
+  /// Returns an EMPTY (zero-size) entry when the disc doesn't
+  /// intersect the mask at all — happens during fast cross-pane drags
+  /// where the cursor's local-image position lands far outside the
+  /// source bitmap (negative or beyond width/height). Pointer capture
+  /// keeps routing the events to RestoredPreview's handlers, so
+  /// painting code still runs but the cursor is "off the canvas".
   /// </summary>
   private static MaskDeltaEntry StampDisc(Image<Rgba32> mask, int cx, int cy, int radius, bool erase) {
     var minY = Math.Max(0, cy - radius);
@@ -1038,6 +1048,8 @@ public partial class RestoreWindow : Window {
     var maxX = Math.Min(mask.Width - 1, cx + radius);
     var bw = maxX - minX + 1;
     var bh = maxY - minY + 1;
+    if (bw <= 0 || bh <= 0)
+      return new MaskDeltaEntry(new Rectangle(0, 0, 0, 0), Array.Empty<Rgba32>(), Array.Empty<Rgba32>());
     var bounds = new Rectangle(minX, minY, bw, bh);
     var oldPixels = new Rgba32[bw * bh];
     var newPixels = new Rgba32[bw * bh];

@@ -417,6 +417,65 @@ public sealed class RestorationPipelineTests {
   }
 
   [Test]
+  public void Colorizer_input_is_grayscaled_so_subtle_color_artifacts_do_not_change_output() {
+    if (!ModelRegistry.ColorizeDDColorPaperTiny.IsInstalled())
+      Assert.Inconclusive("DDColor paper-tiny not installed.");
+
+    // Take the same gradient and produce two versions: pure grayscale
+    // (R=G=B) and "noisy near-grayscale" with a tiny per-pixel R/G/B
+    // jitter that simulates LaMa-synthesis artifacts. With the
+    // pre-grayscale step in ColorizerRouter, both should produce the
+    // same colorize output (because both get flattened to Rec.709
+    // luminance before inference).
+    using var pure = BuildGrayGradientImage();
+    using var noisy = pure.Clone();
+    var rng = new Random(1);
+    noisy.ProcessPixelRows(a => {
+      for (var y = 0; y < a.Height; y++) {
+        var row = a.GetRowSpan(y);
+        for (var x = 0; x < row.Length; x++) {
+          var p = row[x];
+          // Simulate sub-byte LaMa-style colour drift: R and B drift
+          // by ±2 around the original luminance.
+          var rDrift = (byte)Math.Clamp(p.R + rng.Next(-2, 3), 0, 255);
+          var bDrift = (byte)Math.Clamp(p.B + rng.Next(-2, 3), 0, 255);
+          row[x] = new Rgba32(rDrift, p.G, bDrift, p.A);
+        }
+      }
+    });
+
+    using var pureOut = ColorizerRouter.Colorize(pure, "ddcolor-paper-tiny.onnx", 1.0, 1.6);
+    using var noisyOut = ColorizerRouter.Colorize(noisy, "ddcolor-paper-tiny.onnx", 1.0, 1.6);
+    Assert.That(pureOut, Is.Not.Null);
+    Assert.That(noisyOut, Is.Not.Null);
+
+    // Compare a few sample pixels — they should be very close, since
+    // both inputs grayscale to nearly the same luminance per pixel.
+    // (Not bit-equal because Rec.709 luminance of a noisy pixel
+    // differs from luminance of the pure pixel by ±1; we tolerate
+    // small differences.)
+    var deltaSum = 0;
+    var sampleCount = 0;
+    pureOut!.ProcessPixelRows(noisyOut!, (pa, na) => {
+      var step = Math.Max(1, pa.Height / 20);
+      for (var y = 0; y < pa.Height; y += step) {
+        var pRow = pa.GetRowSpan(y);
+        var nRow = na.GetRowSpan(y);
+        for (var x = 0; x < pRow.Length; x += step) {
+          deltaSum += Math.Abs(pRow[x].R - nRow[x].R)
+                    + Math.Abs(pRow[x].G - nRow[x].G)
+                    + Math.Abs(pRow[x].B - nRow[x].B);
+          sampleCount++;
+        }
+      }
+    });
+    var meanDelta = (double)deltaSum / (sampleCount * 3);
+    TestContext.Out.WriteLine($"Mean per-channel delta between pure-gray and noisy-near-gray colorize outputs: {meanDelta:F2}");
+    Assert.That(meanDelta, Is.LessThan(20),
+      $"Pre-grayscale should make colorize outputs near-identical for pure vs noisy-near-grayscale inputs. Got mean delta {meanDelta:F2}.");
+  }
+
+  [Test]
   public void Cache_changing_chromaBoost_invalidates_recolour_and_re_runs() {
     if (!ModelRegistry.ColorizeDDColorPaperTiny.IsInstalled())
       Assert.Inconclusive("DDColor paper-tiny not installed.");
