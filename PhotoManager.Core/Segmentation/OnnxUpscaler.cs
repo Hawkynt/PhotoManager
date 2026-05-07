@@ -1,5 +1,6 @@
 using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
+using PhotoManager.Core.Imaging;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
@@ -119,11 +120,15 @@ public sealed class OnnxUpscaler : IDisposable {
     if (factor == producedFactor)
       return disposeCurrent ? current : current.Clone();
 
-    // factor=2 path: one 4× pass overshoots; bilinear-downsample to half.
+    // factor=2 path: one 4× pass overshoots; downsample to half.
+    // ThumbnailManager picks Box (anti-aliased averaging) for this 50%
+    // downscale — fastest AND highest-quality choice for shrinking.
+    // Older code used ImageSharp's default bicubic which on a 32MP+
+    // intermediate could take seconds; Box does it in tens of ms.
     using (disposeCurrent ? current : null) {
       var w = source.Width * factor;
       var h = source.Height * factor;
-      return current.Clone(c => c.Resize(w, h));
+      return ThumbnailManager.Resize(current, w, h);
     }
   }
 
@@ -176,39 +181,76 @@ public sealed class OnnxUpscaler : IDisposable {
 
     var writeLock = new object();
 
+    // Try the multi-EP dispatch path first: one InferenceSession per
+    // physical accelerator (NPU, GPU, CPU). Each consumer holds its
+    // own session and pulls tiles off a shared BlockingCollection —
+    // a fast device naturally takes more tiles than a slow one (work
+    // stealing). When OpenVINO can't bind a separate NPU/GPU session
+    // (single-device hardware, OV not installed), we drop to the
+    // single-session Parallel.ForEach path below.
+    IReadOnlyList<(string Device, InferenceSession Session)>? sessions = null;
     try {
-      Parallel.ForEach(
-        tiles,
-        new ParallelOptions {
-          CancellationToken = ct,
-          // Cap parallelism at 4 — OpenVINO MULTI dispatches across the
-          // 3 devices internally; oversubscribing the queue past that
-          // wastes CPU cycles building input tensors that wait. On
-          // single-device fallbacks (just GPU, just CPU) the cap still
-          // gives 2-4 concurrent in-flight inferences which keeps the
-          // device pipeline fed.
-          MaxDegreeOfParallelism = Math.Min(4, Math.Max(2, Environment.ProcessorCount / 2))
-        },
-        tile => {
-          var tilePixels = info.IsFixedInputSize
-            ? RunFixedTileFromArray(info, srcPixels, srcW, srcH, tile.tx, tile.ty)
-            : RunDynamicTileFromArray(info, srcPixels, srcW, srcH, tile.tx, tile.ty, tile.w, tile.h);
-          if (tilePixels != null) {
-            var tileFedW = info.IsFixedInputSize ? info.TileSize : tile.w;
-            var tileFedH = info.IsFixedInputSize ? info.TileSize : tile.h;
-            var destW = tile.w * nativeFactor;
-            var destH = tile.h * nativeFactor;
-            lock (writeLock) {
-              WriteTile(native, tilePixels, tileFedW * nativeFactor, tileFedH * nativeFactor,
-                tile.tx * nativeFactor, tile.ty * nativeFactor, destW, destH);
+      sessions = OnnxAcceleration.CreateMultiDeviceSessions(info.ModelPath);
+    } catch {
+      sessions = null;
+    }
+
+    void RunTileOnSession(InferenceSession session, (int tx, int ty, int w, int h) tile) {
+      var tilePixels = info.IsFixedInputSize
+        ? RunFixedTileFromArray(info, session, srcPixels, srcW, srcH, tile.tx, tile.ty)
+        : RunDynamicTileFromArray(info, session, srcPixels, srcW, srcH, tile.tx, tile.ty, tile.w, tile.h);
+      if (tilePixels != null) {
+        var tileFedW = info.IsFixedInputSize ? info.TileSize : tile.w;
+        var tileFedH = info.IsFixedInputSize ? info.TileSize : tile.h;
+        var destW = tile.w * nativeFactor;
+        var destH = tile.h * nativeFactor;
+        lock (writeLock) {
+          WriteTile(native, tilePixels, tileFedW * nativeFactor, tileFedH * nativeFactor,
+            tile.tx * nativeFactor, tile.ty * nativeFactor, destW, destH);
+        }
+      }
+      var d = Interlocked.Increment(ref done);
+      progress?.Report(new Develop.StageProgress(stageLabel, d, total));
+    }
+
+    try {
+      if (sessions != null && sessions.Count >= 2) {
+        // Producer/consumer with one consumer per session. Work
+        // stealing falls out for free: a fast accelerator drains the
+        // queue more aggressively than a slow one.
+        using var queue = new System.Collections.Concurrent.BlockingCollection<(int tx, int ty, int w, int h)>(boundedCapacity: tiles.Count + 1);
+        foreach (var tile in tiles)
+          queue.Add(tile);
+        queue.CompleteAdding();
+
+        var consumerTasks = new Task[sessions.Count];
+        for (var i = 0; i < sessions.Count; i++) {
+          var session = sessions[i].Session;
+          consumerTasks[i] = Task.Run(() => {
+            foreach (var tile in queue.GetConsumingEnumerable(ct)) {
+              RunTileOnSession(session, tile);
             }
-          }
-          var d = Interlocked.Increment(ref done);
-          progress?.Report(new Develop.StageProgress(stageLabel, d, total));
-        });
+          }, ct);
+        }
+        Task.WaitAll(consumerTasks, ct);
+      } else {
+        // Single-session fallback (no separate NPU/GPU sessions
+        // available). Same Parallel.ForEach as before, capped
+        // conservatively because all parallel calls hit one session.
+        Parallel.ForEach(
+          tiles,
+          new ParallelOptions {
+            CancellationToken = ct,
+            MaxDegreeOfParallelism = Math.Min(4, Math.Max(2, Environment.ProcessorCount / 2))
+          },
+          tile => RunTileOnSession(info.Session, tile));
+      }
     } catch (OperationCanceledException) {
       native.Dispose();
       throw;
+    } catch (AggregateException ae) when (ae.InnerExceptions.OfType<OperationCanceledException>().Any()) {
+      native.Dispose();
+      throw new OperationCanceledException(ct);
     }
     return native;
   }
@@ -216,7 +258,13 @@ public sealed class OnnxUpscaler : IDisposable {
   /// <summary>Array-fed counterpart to <see cref="RunDynamicTile"/>; safe
   /// to call concurrently from multiple threads because it reads from a
   /// flat snapshot rather than the live ImageSharp accessor.</summary>
-  private static float[]? RunDynamicTileFromArray(SessionInfo info, Rgba32[] src, int srcW, int srcH, int tx, int ty, int w, int h) {
+  private static float[]? RunDynamicTileFromArray(SessionInfo info, Rgba32[] src, int srcW, int srcH, int tx, int ty, int w, int h)
+    => RunDynamicTileFromArray(info, info.Session, src, srcW, srcH, tx, ty, w, h);
+
+  /// <summary>Same as the single-session overload but runs against an
+  /// EXPLICIT session — caller threads each hold their own EP-pinned
+  /// session and pass it here.</summary>
+  private static float[]? RunDynamicTileFromArray(SessionInfo info, InferenceSession session, Rgba32[] src, int srcW, int srcH, int tx, int ty, int w, int h) {
     var pixelCount = h * w;
     var inputTensor = new float[1 * 3 * pixelCount];
     for (var y = 0; y < h; y++) {
@@ -229,12 +277,15 @@ public sealed class OnnxUpscaler : IDisposable {
         inputTensor[2 * pixelCount + offset] = px.B / 255f;
       }
     }
-    return RunSession(info, inputTensor, h, w);
+    return RunSession(info, session, inputTensor, h, w);
   }
 
   /// <summary>Array-fed counterpart to <see cref="RunFixedTile"/>;
   /// thread-safe (no ImageSharp accessor calls).</summary>
-  private static float[]? RunFixedTileFromArray(SessionInfo info, Rgba32[] src, int srcW, int srcH, int tx, int ty) {
+  private static float[]? RunFixedTileFromArray(SessionInfo info, Rgba32[] src, int srcW, int srcH, int tx, int ty)
+    => RunFixedTileFromArray(info, info.Session, src, srcW, srcH, tx, ty);
+
+  private static float[]? RunFixedTileFromArray(SessionInfo info, InferenceSession session, Rgba32[] src, int srcW, int srcH, int tx, int ty) {
     var size = info.TileSize;
     var pixelCount = size * size;
     var inputTensor = new float[1 * 3 * pixelCount];
@@ -250,7 +301,7 @@ public sealed class OnnxUpscaler : IDisposable {
         inputTensor[2 * pixelCount + offset] = px.B / 255f;
       }
     }
-    return RunSession(info, inputTensor, size, size);
+    return RunSession(info, session, inputTensor, size, size);
   }
 
   private static float[]? RunDynamicTile(SessionInfo info, Image<Rgba32> source, int tx, int ty, int w, int h) {
@@ -298,10 +349,17 @@ public sealed class OnnxUpscaler : IDisposable {
     return RunSession(info, inputTensor, size, size);
   }
 
-  private static float[]? RunSession(SessionInfo info, float[] inputTensor, int h, int w) {
+  private static float[]? RunSession(SessionInfo info, float[] inputTensor, int h, int w)
+    => RunSession(info, info.Session, inputTensor, h, w);
+
+  /// <summary>Inference with an EXPLICIT session — used by the multi-EP
+  /// dispatch path where each consumer thread holds its own session
+  /// pinned to a specific accelerator (NPU vs GPU vs CPU). Same input
+  /// shape and output handling as the single-session overload.</summary>
+  private static float[]? RunSession(SessionInfo info, InferenceSession session, float[] inputTensor, int h, int w) {
     try {
       var input = new DenseTensor<float>(inputTensor, new[] { 1, 3, h, w });
-      using var results = info.Session.Run(new[] { NamedOnnxValue.CreateFromTensor(info.InputName, input) });
+      using var results = session.Run(new[] { NamedOnnxValue.CreateFromTensor(info.InputName, input) });
       return results.First().AsTensor<float>().ToArray();
     } catch {
       return null;
@@ -366,7 +424,7 @@ public sealed class OnnxUpscaler : IDisposable {
       if (isFixed && outputDims.Length >= 4 && outputDims[2] > 0)
         nativeFactor = Math.Max(1, outputDims[2] / fixedH);
 
-      return new SessionInfo(session, inputName, tileSize, tileOverlap, isFixed, nativeFactor);
+      return new SessionInfo(session, inputName, tileSize, tileOverlap, isFixed, nativeFactor, modelFile.FullName);
     } catch {
       return null;
     }
@@ -384,5 +442,6 @@ public sealed class OnnxUpscaler : IDisposable {
     int TileSize,
     int TileOverlap,
     bool IsFixedInputSize,
-    int NativeFactor);
+    int NativeFactor,
+    string ModelPath);
 }

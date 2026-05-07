@@ -216,6 +216,73 @@ public static class OnnxAcceleration {
     }
   }
 
+  /// <summary>
+  /// Build a list of one session PER physical device the OpenVINO
+  /// runtime can reach (NPU, GPU, then bare CPU). For tile-based
+  /// workloads (upscaler, denoiser, etc.) the caller can run a
+  /// producer/consumer queue across this list so a tile starts on
+  /// whichever device finishes its previous tile first — work-
+  /// stealing across heterogeneous accelerators.
+  ///
+  /// <para>Sessions are cached per (model, device) just like the
+  /// single-session API, so subsequent calls return the same
+  /// instances without re-loading model weights. Devices that aren't
+  /// available (no NPU on the box, OpenVINO not installed) are
+  /// silently dropped from the returned list. The CPU EP entry is
+  /// always present as a fallback so the caller can rely on a
+  /// non-empty result whenever the model file exists.</para>
+  ///
+  /// <para>Returned <see cref="InferenceSession"/> instances are NOT
+  /// owned by the caller — they live in <see cref="_sessionCache"/>
+  /// and persist for the process. Don't dispose them; use
+  /// <see cref="ResetCache"/> if you need teardown.</para>
+  /// </summary>
+  public static IReadOnlyList<(string Device, InferenceSession Session)> CreateMultiDeviceSessions(string modelPath) {
+    var fullPath = Path.GetFullPath(modelPath);
+    var sessions = new List<(string, InferenceSession)>();
+    // OpenVINO single-device sessions: each session bound to one
+    // physical accelerator. Two parallel Run() calls across two
+    // sessions on different devices truly run concurrently —
+    // unlike one MULTI:NPU,GPU,CPU session whose internal load-
+    // balancer often serialises against itself for back-to-back
+    // requests.
+    foreach (var device in new[] { "NPU", "GPU" }) {
+      var session = TryCreateOpenVinoDeviceSession(fullPath, device);
+      if (session != null)
+        sessions.Add(($"OV-{device}", session));
+    }
+    // CPU is always available as a fallback. Add only if it isn't
+    // already covered by an OpenVINO/CPU mapping (so the caller
+    // doesn't get two CPU consumers competing for the same cores).
+    var cpu = CreateSession(modelPath, preferCpu: true);
+    sessions.Add(("CPU", cpu));
+    return sessions;
+  }
+
+  /// <summary>Try to open an OpenVINO session targeting one specific
+  /// device. Returns null when OpenVINO can't find/use that device on
+  /// the current machine. Result is cached just like the single-
+  /// session API.</summary>
+  private static InferenceSession? TryCreateOpenVinoDeviceSession(string fullPath, string device) {
+    var key = fullPath + "|ov:" + device;
+    lock (_sessionCacheLock) {
+      if (_sessionCache.TryGetValue(key, out var cached))
+        return cached;
+      var options = TryBuildOpenVino(device);
+      if (options is null)
+        return null;
+      try {
+        var session = new InferenceSession(fullPath, options);
+        _sessionCache[key] = session;
+        return session;
+      } catch {
+        return null;
+      } finally {
+        options.Dispose();
+      }
+    }
+  }
+
   /// <summary>Dispose every cached session and clear the cache. Useful
   /// for tests and for "rebuild after model swap" flows.</summary>
   public static void ResetCache() {
