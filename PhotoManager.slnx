@@ -1,0 +1,14 @@
+<Solution>
+  <Folder Name="/GitHub/">
+    <File Path=".github/FUNDING.yml" />
+  </Folder>
+  <Folder Name="/Projektmappenelemente/">
+    <File Path="LICENSE" />
+    <File Path="README.md" />
+    <File Path="TODO.md" />
+  </Folder>
+  <Project Path="PhotoManager.CLI/PhotoManager.CLI.csproj" />
+  <Project Path="PhotoManager.Core/PhotoManager.Core.csproj" />
+  <Project Path="PhotoManager.Tests/PhotoManager.Tests.csproj" />
+  <Project Path="PhotoManager.UI/PhotoManager.UI.csproj" />
+</Solution>
