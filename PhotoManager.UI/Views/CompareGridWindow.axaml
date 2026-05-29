@@ -1,0 +1,27 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="960" d:DesignHeight="720"
+        x:Class="PhotoManager.UI.Views.CompareGridWindow"
+        Width="1100" Height="800"
+        MinWidth="640" MinHeight="480"
+        WindowStartupLocation="CenterOwner"
+        Title="🔲 Compare Grid">
+  <Grid RowDefinitions="*,Auto" Margin="8">
+    <!-- The photo grid is built dynamically in code-behind using a Grid with
+         computed RowDefinitions / ColumnDefinitions. Each cell holds a Border
+         (for selection highlight) wrapping an Image control. -->
+    <Grid x:Name="PhotoGrid" Grid.Row="0" />
+
+    <!-- Bottom bar -->
+    <Grid Grid.Row="1" ColumnDefinitions="*,Auto,Auto" Margin="0,8,0,0">
+      <TextBlock Grid.Column="0" x:Name="StatusText" VerticalAlignment="Center" Opacity="0.75"
+                 Text="Click a photo to select it as the pick." />
+      <Button Grid.Column="1" x:Name="PickButton" Content="✅ Pick selected" Margin="6,0,0,0"
+              Click="OnPickClick" IsEnabled="False"
+              ToolTip.Tip="Mark the highlighted photo as your pick." />
+      <Button Grid.Column="2" Content="🚪 Close" Click="OnCloseClick" IsCancel="True" Margin="6,0,0,0" />
+    </Grid>
+  </Grid>
+</Window>

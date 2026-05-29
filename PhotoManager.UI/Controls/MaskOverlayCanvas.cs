@@ -97,12 +97,16 @@ public sealed class MaskOverlayCanvas : Control {
         DrawHandle(context, new Point(c.X, c.Y + ry), fill, dotEdge);
         break;
       }
-      case LocalMaskType.Brush: {
+      case LocalMaskType.Brush:
+      case LocalMaskType.Inpaint: {
         // Dab overlays are an editing aid — only show while the pointer is
         // over the image. Hovering off lets the user see the actual develop
         // result underneath, unobscured by yellow circles.
         if (this._hoverPos.HasValue && mask.BrushDabs is { } dabs) {
-          var paintFill  = new SolidColorBrush(Color.FromArgb(70, 240, 220, 60));
+          var isInpaint = mask.Type == LocalMaskType.Inpaint;
+          var paintFill  = new SolidColorBrush(isInpaint
+            ? Color.FromArgb(70, 240, 60, 60)  // reddish tint for inpaint mask
+            : Color.FromArgb(70, 240, 220, 60));
           var eraserPen  = new Pen(new SolidColorBrush(Color.FromArgb(140, 240, 80, 80)), 1, DashStyle.Dash);
           foreach (var dab in dabs) {
             var p = this.NormToCanvas(dab.X, dab.Y, rect);
@@ -141,7 +145,7 @@ public sealed class MaskOverlayCanvas : Control {
     if (rect.Width <= 1 || rect.Height <= 1)
       return;
 
-    if (this.BrushMode && this.ActiveAdjustment.Mask.Type == LocalMaskType.Brush) {
+    if (this.BrushMode && this.ActiveAdjustment.Mask.Type is LocalMaskType.Brush or LocalMaskType.Inpaint) {
       this._painting = true;
       this.AddDab(pos, rect);
       e.Pointer.Capture(this);

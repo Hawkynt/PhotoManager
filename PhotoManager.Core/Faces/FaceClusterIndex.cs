@@ -24,6 +24,8 @@ public sealed record FaceCluster(int Id, IReadOnlyList<ScannedFace> Members) {
 /// XMP is the truth and the cluster index is a view over it.
 /// </summary>
 public sealed class FaceClusterIndex {
+  public const float DefaultSimilarityThreshold = 0.6f;
+
   public float SimilarityThreshold { get; }
   public IReadOnlyList<FaceCluster> Clusters { get; }
 
@@ -83,6 +85,169 @@ public sealed class FaceClusterIndex {
       clusters.Add(new FaceCluster(nextId++, new[] { face }));
 
     return new FaceClusterIndex(0f, clusters);
+  }
+
+  /// <summary>
+  /// Build an index with embedding-similarity-based clustering for unnamed
+  /// faces. Named faces still group by exact name. Unnamed faces that have
+  /// embeddings are clustered using single-linkage agglomerative clustering:
+  /// two clusters merge when ANY pair across them has cosine similarity
+  /// &gt;= <paramref name="similarityThreshold"/>. Unnamed faces without
+  /// embeddings remain singletons.
+  ///
+  /// Named faces with different names NEVER merge — embeddings only govern
+  /// unnamed-to-unnamed grouping.
+  /// </summary>
+  public static FaceClusterIndex BuildWithEmbeddingClustering(
+    IReadOnlyList<ScannedFace> faces,
+    float similarityThreshold = DefaultSimilarityThreshold
+  ) {
+    ArgumentNullException.ThrowIfNull(faces);
+    if (similarityThreshold < 0f || similarityThreshold > 1f)
+      throw new ArgumentOutOfRangeException(nameof(similarityThreshold), "Threshold must be between 0.0 and 1.0.");
+
+    if (faces.Count == 0)
+      return new FaceClusterIndex(similarityThreshold, Array.Empty<FaceCluster>());
+
+    // ---- Step 1: separate named from unnamed ----
+    var buckets = new Dictionary<string, List<ScannedFace>>(StringComparer.OrdinalIgnoreCase);
+    var unnamedWithEmbedding = new List<(ScannedFace Face, int OriginalIndex)>();
+    var unnamedWithoutEmbedding = new List<ScannedFace>();
+
+    for (var i = 0; i < faces.Count; i++) {
+      var face = faces[i];
+      if (!string.IsNullOrWhiteSpace(face.Name)) {
+        if (!buckets.TryGetValue(face.Name!, out var list)) {
+          list = new List<ScannedFace>();
+          buckets[face.Name!] = list;
+        }
+        list.Add(face);
+      } else if (face.HasEmbedding) {
+        unnamedWithEmbedding.Add((face, i));
+      } else {
+        unnamedWithoutEmbedding.Add(face);
+      }
+    }
+
+    // ---- Step 2: cluster unnamed faces with embeddings via union-find ----
+    var n = unnamedWithEmbedding.Count;
+    var parent = new int[n];
+    for (var i = 0; i < n; i++)
+      parent[i] = i;
+
+    // O(n^2) pairwise comparison — acceptable for typical face counts
+    // (hundreds, not millions). Single-linkage: merge if ANY pair meets
+    // the threshold.
+    for (var i = 0; i < n; i++) {
+      var embA = unnamedWithEmbedding[i].Face.Embedding!;
+      for (var j = i + 1; j < n; j++) {
+        if (Find(parent, i) == Find(parent, j))
+          continue; // already in the same cluster
+        var embB = unnamedWithEmbedding[j].Face.Embedding!;
+        if (embA.Length != embB.Length)
+          continue; // dimension mismatch — skip
+        var sim = PeopleRegistry.CosineSimilarity(embA, embB);
+        if (sim >= similarityThreshold)
+          Union(parent, i, j);
+      }
+    }
+
+    // Collect unnamed clusters by root
+    var unnamedClusters = new Dictionary<int, List<ScannedFace>>();
+    for (var i = 0; i < n; i++) {
+      var root = Find(parent, i);
+      if (!unnamedClusters.TryGetValue(root, out var list)) {
+        list = new List<ScannedFace>();
+        unnamedClusters[root] = list;
+      }
+      list.Add(unnamedWithEmbedding[i].Face);
+    }
+
+    // ---- Step 3: assemble final cluster list ----
+    var clusters = new List<FaceCluster>();
+    var nextId = 1;
+
+    // Named clusters first, alphabetical
+    foreach (var kv in buckets.OrderBy(b => b.Key, StringComparer.OrdinalIgnoreCase))
+      clusters.Add(new FaceCluster(nextId++, kv.Value));
+
+    // Unnamed embedding clusters, ordered by size descending (largest groups first)
+    foreach (var kv in unnamedClusters.OrderByDescending(c => c.Value.Count))
+      clusters.Add(new FaceCluster(nextId++, kv.Value));
+
+    // Unnamed faces without embeddings as singletons at the end
+    foreach (var face in unnamedWithoutEmbedding)
+      clusters.Add(new FaceCluster(nextId++, new[] { face }));
+
+    return new FaceClusterIndex(similarityThreshold, clusters);
+  }
+
+  /// <summary>
+  /// Compute the centroid (mean embedding) of a cluster's members that have
+  /// embeddings. Returns null if no member has an embedding or if dimension
+  /// lengths are inconsistent.
+  /// </summary>
+  public static float[]? ComputeCentroid(FaceCluster cluster) {
+    ArgumentNullException.ThrowIfNull(cluster);
+
+    var withEmbedding = cluster.Members
+      .Where(m => m.HasEmbedding)
+      .Select(m => m.Embedding!)
+      .ToList();
+
+    if (withEmbedding.Count == 0)
+      return null;
+
+    var dim = withEmbedding[0].Length;
+    if (withEmbedding.Any(e => e.Length != dim))
+      return null; // inconsistent dimensions
+
+    var centroid = new float[dim];
+    foreach (var emb in withEmbedding)
+      for (var i = 0; i < dim; i++)
+        centroid[i] += emb[i];
+
+    for (var i = 0; i < dim; i++)
+      centroid[i] /= withEmbedding.Count;
+
+    return OnnxFaceEmbedder.L2Normalize(centroid);
+  }
+
+  /// <summary>
+  /// Find the top-N named clusters nearest to <paramref name="target"/> by
+  /// centroid-to-centroid cosine similarity. Returns pairs of (cluster,
+  /// similarity) sorted by descending similarity. Only considers named
+  /// clusters that have at least one member with an embedding.
+  /// </summary>
+  public IReadOnlyList<(FaceCluster Cluster, float Similarity)> FindNearestNamedClusters(
+    FaceCluster target,
+    int topN = 5
+  ) {
+    ArgumentNullException.ThrowIfNull(target);
+    if (topN <= 0)
+      throw new ArgumentOutOfRangeException(nameof(topN));
+
+    var targetCentroid = ComputeCentroid(target);
+    if (targetCentroid == null)
+      return Array.Empty<(FaceCluster, float)>();
+
+    var candidates = new List<(FaceCluster Cluster, float Similarity)>();
+    foreach (var cluster in this.Clusters) {
+      if (!cluster.IsNamed || cluster == target)
+        continue;
+
+      var centroid = ComputeCentroid(cluster);
+      if (centroid == null || centroid.Length != targetCentroid.Length)
+        continue;
+
+      var sim = PeopleRegistry.CosineSimilarity(targetCentroid, centroid);
+      candidates.Add((cluster, sim));
+    }
+
+    return candidates
+      .OrderByDescending(c => c.Similarity)
+      .Take(topN)
+      .ToList();
   }
 
   private static IReadOnlyList<FaceCluster> BuildSingletons(IReadOnlyList<ScannedFace> faces, int startId = 1) {

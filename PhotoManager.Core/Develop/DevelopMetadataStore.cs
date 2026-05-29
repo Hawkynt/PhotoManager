@@ -333,7 +333,11 @@ public static class DevelopMetadataStore {
       var priorSettings = ReadEffectiveSettings(description);
       if (priorSettings is not null) {
         var existingHistory = ReadHistory(description);
-        var pushed = DevelopHistory.Push(existingHistory, priorSettings, snapshotLabel);
+        // Cap at 20 for XMP persistence — the XMP APP1 segment has a ~64 KB
+        // budget, so we can't store 50 full DevelopSettings blobs inline.
+        // The in-memory API (DevelopHistory.DefaultMaxDepth = 50) supports
+        // a higher cap for callers that persist elsewhere.
+        var pushed = DevelopHistory.Push(existingHistory, priorSettings, snapshotLabel, maxDepth: 20);
         WriteHistory(description, pushed);
       }
     }
@@ -938,6 +942,25 @@ public static class DevelopMetadataStore {
           maskDesc.Add(new XElement(Crs + "Dabs", dabsSeq));
         }
         break;
+      case LocalMaskType.Inpaint:
+        // Content-aware fill — stored as a pm: extension. The mask is a
+        // brush-dab cloud identical to Brush, but the "What" discriminator
+        // tells the renderer to feed it to LaMa instead of applying local
+        // develop sliders.
+        maskDesc = new XElement(Rdf + "Description",
+          new XAttribute(Crs + "What",      "Mask/Brush"),
+          new XAttribute(Crs + "MaskValue", maskValue),
+          new XAttribute(Pm + "Inpaint",    "true"));
+        if (mask.BrushDabs is { Count: > 0 } inpaintDabs) {
+          var inpaintDabsSeq = new XElement(Rdf + "Seq");
+          foreach (var d in inpaintDabs) {
+            var prefix = d.Flow >= 0 ? "u" : "e";
+            inpaintDabsSeq.Add(new XElement(Rdf + "li",
+              $"{prefix} {d.X.ToString("0.######", inv)},{d.Y.ToString("0.######", inv)},{d.Radius.ToString("0.######", inv)},{Math.Abs(d.Flow).ToString("0.##", inv)}"));
+          }
+          maskDesc.Add(new XElement(Crs + "Dabs", inpaintDabsSeq));
+        }
+        break;
       default:
         throw new InvalidOperationException("Unknown LocalMaskType " + mask.Type);
     }
@@ -1039,8 +1062,13 @@ public static class DevelopMetadataStore {
           Y1: ReadCrsDouble(maskDesc, "FullY", 1));
         break;
       case "Mask/Brush":
+        // Check for pm:Inpaint="true" — if present this is a content-aware
+        // fill mask rather than a regular brush mask.
+        var isInpaint = string.Equals(
+          maskDesc.Attribute(Pm + "Inpaint")?.Value, "true",
+          StringComparison.OrdinalIgnoreCase);
         mask = new LocalMask(
-          Type: LocalMaskType.Brush,
+          Type: isInpaint ? LocalMaskType.Inpaint : LocalMaskType.Brush,
           BrushDabs: ParseBrushDabs(maskDesc.Element(Crs + "Dabs")));
         break;
       case "Mask/CircularGradient": {

@@ -24,6 +24,11 @@ namespace PhotoManager.UI.Views;
 /// Merging is user-driven: tick the "select" checkbox on two or more
 /// clusters and click "Merge selected" to union them under the first
 /// named cluster (or the largest one if nothing is named yet).
+///
+/// When "Auto-cluster by similarity" is checked, unnamed faces with
+/// embeddings are automatically grouped by cosine similarity (single-linkage
+/// agglomerative clustering). The "Who?" button on unnamed clusters suggests
+/// the top-5 nearest named clusters by centroid distance.
 /// </summary>
 public partial class FaceGalleryWindow : Window {
   private readonly LibraryFaceScanner _scanner = new(new MetadataReader(), new SupportedFormatsService());
@@ -36,6 +41,7 @@ public partial class FaceGalleryWindow : Window {
   // the control didn't see the mutation.
   private readonly ObservableCollection<FaceClusterViewModel> _clusterViewModels = new();
   private IReadOnlyList<ScannedFace> _lastScan = Array.Empty<ScannedFace>();
+  private FaceClusterIndex? _lastIndex;
   private CancellationTokenSource? _scanCts;
   private readonly IReadOnlyList<FileInfo> _files;
 
@@ -100,27 +106,48 @@ public partial class FaceGalleryWindow : Window {
   }
 
   /// <summary>
-  /// Re-cluster the current scan using the latest "Group by name" toggle.
-  /// No disk IO — we only rerun <see cref="FaceClusterIndex.Build"/> over
-  /// the in-memory scan and refresh the VMs.
+  /// Re-cluster the current scan using the latest toggle settings.
+  /// No disk IO — we only rerun clustering over the in-memory scan
+  /// and refresh the VMs.
   /// </summary>
   private void RebuildClusters() {
     var groupByName = this.FindControl<CheckBox>("GroupByNameBox")?.IsChecked ?? true;
-    var index = FaceClusterIndex.Build(this._lastScan, groupByName: groupByName);
+    var clusterByEmbedding = this.FindControl<CheckBox>("ClusterByEmbeddingBox")?.IsChecked ?? false;
+
+    FaceClusterIndex index;
+    if (clusterByEmbedding) {
+      // Embedding-based clustering: named faces group by name, unnamed
+      // faces with embeddings cluster by cosine similarity.
+      index = FaceClusterIndex.BuildWithEmbeddingClustering(
+        this._lastScan,
+        FaceClusterIndex.DefaultSimilarityThreshold
+      );
+    } else {
+      index = FaceClusterIndex.Build(this._lastScan, groupByName: groupByName);
+    }
+
+    this._lastIndex = index;
     this.PopulateClusters(index);
 
     var withEmbedding = this._lastScan.Count(f => f.HasEmbedding);
     var hint = withEmbedding == 0 && this._lastScan.Count > 0
       ? " (no embeddings — install the ArcFace model to enable automatic grouping)"
       : "";
+    var mode = clusterByEmbedding ? "similarity-clustered" : (groupByName ? "name-grouped" : "ungrouped");
     this.SetStatus(
-      $"Found {this._lastScan.Count} face(s); {withEmbedding} with embeddings → {index.Clusters.Count} cluster(s).{hint}"
+      $"Found {this._lastScan.Count} face(s); {withEmbedding} with embeddings → {index.Clusters.Count} cluster(s) [{mode}].{hint}"
     );
   }
 
   private void OnGroupByNameChanged(object? sender, RoutedEventArgs e) {
     // Don't trigger before the first scan completes — IsChecked changes at
     // template-apply time can fire before Opened does.
+    if (this._lastScan.Count == 0)
+      return;
+    this.RebuildClusters();
+  }
+
+  private void OnClusterModeChanged(object? sender, RoutedEventArgs e) {
     if (this._lastScan.Count == 0)
       return;
     this.RebuildClusters();
@@ -183,6 +210,77 @@ public partial class FaceGalleryWindow : Window {
       this.SetStatus($"Wrote name \"{name}\" to {written} photo(s).");
     } catch (Exception ex) {
       this.SetStatus($"Apply failed: {ex.Message}");
+    }
+  }
+
+  private async void OnSuggestMergeClick(object? sender, RoutedEventArgs e) {
+    if (sender is not Button { Tag: FaceClusterViewModel vm })
+      return;
+
+    if (this._lastIndex == null) {
+      this.SetStatus("No cluster index available — run a scan first.");
+      return;
+    }
+
+    var suggestions = this._lastIndex.FindNearestNamedClusters(vm.Cluster, topN: 5);
+    if (suggestions.Count == 0) {
+      this.SetStatus("No named clusters with embeddings to compare against.");
+      return;
+    }
+
+    var dialog = new MergeSuggestionDialog(vm.Cluster, suggestions);
+    var result = await dialog.ShowDialog<MergeSuggestionResult?>(this);
+    if (result == null)
+      return;
+
+    // User chose to merge this unnamed cluster into a named one.
+    this.SetStatus($"Merging \"{vm.DisplayName}\" into \"{result.TargetCluster.DisplayName}\"...");
+
+    var mergedFaces = vm.Cluster.Members.ToList();
+    var targetName = result.TargetCluster.Label!;
+
+    try {
+      var written = await this.WriteNameToClusterAsync(
+        new FaceCluster(0, mergedFaces), targetName
+      );
+
+      var updatedFaces = mergedFaces
+        .Select(f => new ScannedFace(f.File, f.Region with { Label = targetName, Status = RegionStatus.Accepted }))
+        .ToList();
+      this.UpdateScannedFaces(updatedFaces);
+
+      // Find the target VM and the source VM, merge them in the UI
+      var targetVm = this._clusterViewModels.FirstOrDefault(c =>
+        c.Cluster.Label != null &&
+        c.Cluster.Label.Equals(targetName, StringComparison.OrdinalIgnoreCase) &&
+        c != vm);
+
+      if (targetVm != null) {
+        var allMembers = targetVm.Cluster.Members.Concat(updatedFaces).ToList();
+        var combinedCluster = new FaceCluster(targetVm.Cluster.Id, allMembers);
+        var combinedVm = new FaceClusterViewModel(combinedCluster) {
+          Name = targetName,
+          Thumbnail = targetVm.Thumbnail
+        };
+        var idx = this._clusterViewModels.IndexOf(targetVm);
+        if (idx >= 0)
+          this._clusterViewModels[idx] = combinedVm;
+        this._clusterViewModels.Remove(vm);
+      } else {
+        // Target cluster not visible — just rename the source VM
+        var renamedCluster = new FaceCluster(vm.Cluster.Id, updatedFaces);
+        var renamedVm = new FaceClusterViewModel(renamedCluster) {
+          Name = targetName,
+          Thumbnail = vm.Thumbnail
+        };
+        var idx = this._clusterViewModels.IndexOf(vm);
+        if (idx >= 0)
+          this._clusterViewModels[idx] = renamedVm;
+      }
+
+      this.SetStatus($"Merged into \"{targetName}\"; {written} photo(s) updated.");
+    } catch (Exception ex) {
+      this.SetStatus($"Merge failed: {ex.Message}");
     }
   }
 

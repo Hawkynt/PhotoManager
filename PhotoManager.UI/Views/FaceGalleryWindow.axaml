@@ -13,13 +13,16 @@
     <StackPanel Grid.Row="0" Spacing="4" Margin="0,0,0,8">
       <TextBlock Text="Face gallery" FontSize="16" FontWeight="SemiBold" />
       <TextBlock Opacity="0.75" TextWrapping="Wrap"
-                 Text="Every tagged face in your currently scanned library. Faces with embeddings (ArcFace/MobileFaceNet) can be grouped by name — name a cluster and it propagates to every photo it contains. Merge clusters that belong to the same person; double-click a tile to unmerge faces that don't." />
+                 Text="Every tagged face in your currently scanned library. Faces with embeddings (ArcFace/MobileFaceNet) can be grouped by name or by visual similarity. Name a cluster and it propagates to every photo it contains. Merge clusters that belong to the same person; double-click a tile to unmerge faces that don't." />
     </StackPanel>
 
-    <Grid Grid.Row="1" ColumnDefinitions="*,Auto" Margin="0,0,0,8">
+    <Grid Grid.Row="1" ColumnDefinitions="*,Auto,Auto" Margin="0,0,0,8">
       <TextBlock Grid.Column="0" VerticalAlignment="Center" Opacity="0.75"
                  Text="Using the main window's scanned file list." />
-      <CheckBox Grid.Column="1" x:Name="GroupByNameBox" Content="Group by name" IsChecked="True" VerticalAlignment="Center"
+      <CheckBox Grid.Column="1" x:Name="ClusterByEmbeddingBox" Content="Auto-cluster by similarity" IsChecked="False" VerticalAlignment="Center" Margin="0,0,12,0"
+                ToolTip.Tip="When checked, unnamed faces with embeddings are automatically grouped by visual similarity (cosine > threshold). Named faces still group by name."
+                Checked="OnClusterModeChanged" Unchecked="OnClusterModeChanged" />
+      <CheckBox Grid.Column="2" x:Name="GroupByNameBox" Content="Group by name" IsChecked="True" VerticalAlignment="Center"
                 ToolTip.Tip="When checked, faces sharing the exact same name merge into one cluster; unnamed faces are kept separate. When unchecked, every face is its own tile."
                 Checked="OnGroupByNameChanged" Unchecked="OnGroupByNameChanged" />
     </Grid>
@@ -52,6 +55,8 @@
                     <StackPanel Orientation="Horizontal" Spacing="4">
                       <CheckBox Content="select" IsChecked="{CompiledBinding IsSelected, Mode=TwoWay}" FontSize="11" />
                       <Button Content="Apply name" FontSize="11" Padding="6,2" Click="OnApplyNameClick" Tag="{CompiledBinding}" />
+                      <Button Content="Who?" FontSize="11" Padding="6,2" Click="OnSuggestMergeClick" Tag="{CompiledBinding}"
+                              ToolTip.Tip="Suggest which named person this unknown face might be, based on embedding similarity." />
                     </StackPanel>
                   </StackPanel>
                 </StackPanel>
@@ -64,8 +69,8 @@
 
     <Grid Grid.Row="3" ColumnDefinitions="*,Auto,Auto,Auto,Auto" Margin="0,8,0,0">
       <TextBlock Grid.Column="0" x:Name="StatusText" VerticalAlignment="Center" Opacity="0.75" />
-      <Button Grid.Column="1" Content="🔗 Merge selected" Click="OnMergeSelectedClick" />
-      <Button Grid.Column="2" Content="🚪 Close" Margin="6,0,0,0" Click="OnCloseClick" IsCancel="True" />
+      <Button Grid.Column="1" Content="&#x1F517; Merge selected" Click="OnMergeSelectedClick" />
+      <Button Grid.Column="2" Content="&#x1F6AA; Close" Margin="6,0,0,0" Click="OnCloseClick" IsCancel="True" />
     </Grid>
   </Grid>
 </Window>

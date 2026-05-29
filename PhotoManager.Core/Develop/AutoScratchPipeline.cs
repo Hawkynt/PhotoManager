@@ -174,50 +174,81 @@ public static class AutoScratchPipeline {
   }
 
   /// <summary>
-  /// 8-neighbour binary dilation by <paramref name="radius"/> pixels.
-  /// A pixel becomes part of the mask if any pixel within the radius
-  /// is already in the mask. Used to expand the scratch detector's
-  /// tight outline so LaMa inpaints the soft halo around each
-  /// detected tear, not just the centerline.
+  /// Binary dilation by <paramref name="radius"/> pixels using separable
+  /// horizontal + vertical passes.  Each pass propagates the "set" bit
+  /// outward by the full radius via a running-maximum sliding window,
+  /// giving an equivalent result to <c>radius</c> iterations of 3×3
+  /// neighbourhood dilation in O(2 × W × H) instead of
+  /// O(radius × W × H × 9).
   /// </summary>
-  private static Image<Rgba32> DilateMask(Image<Rgba32> mask, int radius) {
+  internal static Image<Rgba32> DilateMask(Image<Rgba32> mask, int radius) {
     if (radius < 1)
       return mask.Clone();
     var w = mask.Width;
     var h = mask.Height;
-    var result = mask.Clone();
-    var snap = new byte[w * h];
-    for (var iter = 0; iter < radius; iter++) {
-      result.ProcessPixelRows(a => {
-        for (var y = 0; y < h; y++) {
-          var row = a.GetRowSpan(y);
-          for (var x = 0; x < w; x++)
-            snap[y * w + x] = (byte)(row[x].R >= 128 ? 1 : 0);
-        }
-      });
-      result.ProcessPixelRows(a => {
-        for (var y = 0; y < h; y++) {
-          var row = a.GetRowSpan(y);
-          for (var x = 0; x < w; x++) {
-            if (snap[y * w + x] == 1)
-              continue;
-            var hit = false;
-            for (var dy = -1; dy <= 1 && !hit; dy++) {
-              var ny = y + dy;
-              if (ny < 0 || ny >= h) continue;
-              for (var dx = -1; dx <= 1; dx++) {
-                if (dx == 0 && dy == 0) continue;
-                var nx = x + dx;
-                if (nx < 0 || nx >= w) continue;
-                if (snap[ny * w + nx] == 1) { hit = true; break; }
-              }
-            }
-            if (hit)
-              row[x] = new Rgba32((byte)255, (byte)0, (byte)0, (byte)200);
-          }
-        }
-      });
+
+    // Snapshot the mask into a flat boolean buffer.
+    var src = new bool[w * h];
+    mask.ProcessPixelRows(a => {
+      for (var y = 0; y < h; y++) {
+        var row = a.GetRowSpan(y);
+        var off = y * w;
+        for (var x = 0; x < w; x++)
+          src[off + x] = row[x].R >= 128;
+      }
+    });
+
+    // Horizontal pass: for each row, propagate "set" left and right by
+    // `radius` pixels using a running maximum on a sliding window.
+    var mid = new bool[w * h];
+    for (var y = 0; y < h; y++) {
+      var off = y * w;
+      // Forward (left-to-right): distance to last "set" pixel.
+      var dist = radius + 1;
+      for (var x = 0; x < w; x++) {
+        dist = src[off + x] ? 0 : dist + 1;
+        if (dist <= radius)
+          mid[off + x] = true;
+      }
+      // Backward (right-to-left): distance to last "set" pixel.
+      dist = radius + 1;
+      for (var x = w - 1; x >= 0; x--) {
+        dist = src[off + x] ? 0 : dist + 1;
+        if (dist <= radius)
+          mid[off + x] = true;
+      }
     }
+
+    // Vertical pass: same idea, column by column, reading from `mid`
+    // and writing into `dst`.
+    var dst = new bool[w * h];
+    for (var x = 0; x < w; x++) {
+      var dist = radius + 1;
+      for (var y = 0; y < h; y++) {
+        dist = mid[y * w + x] ? 0 : dist + 1;
+        if (dist <= radius)
+          dst[y * w + x] = true;
+      }
+      dist = radius + 1;
+      for (var y = h - 1; y >= 0; y--) {
+        dist = mid[y * w + x] ? 0 : dist + 1;
+        if (dist <= radius)
+          dst[y * w + x] = true;
+      }
+    }
+
+    // Write the dilated result into a new image.
+    var result = mask.Clone();
+    result.ProcessPixelRows(a => {
+      for (var y = 0; y < h; y++) {
+        var row = a.GetRowSpan(y);
+        var off = y * w;
+        for (var x = 0; x < w; x++) {
+          if (dst[off + x] && !src[off + x])
+            row[x] = new Rgba32((byte)255, (byte)0, (byte)0, (byte)200);
+        }
+      }
+    });
     return result;
   }
 }

@@ -1,0 +1,25 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="560" d:DesignHeight="420"
+        x:Class="PhotoManager.UI.Views.WriteQueueDialog"
+        Width="560" Height="420"
+        WindowStartupLocation="CenterOwner"
+        Title="Metadata Write Queue">
+  <Grid RowDefinitions="Auto,*,Auto,*,Auto" Margin="12">
+    <TextBlock Grid.Row="0" Text="Pending writes" FontWeight="SemiBold" Margin="0,0,0,4" />
+    <ListBox Grid.Row="1" x:Name="PendingList" Margin="0,0,0,8" />
+
+    <TextBlock Grid.Row="2" Text="Failed writes" FontWeight="SemiBold" Margin="0,0,0,4" />
+    <ListBox Grid.Row="3" x:Name="FailedList" SelectionMode="Single" Margin="0,0,0,8" />
+
+    <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="6">
+      <Button Content="🔄 Retry selected" Click="OnRetryClick"
+              ToolTip.Tip="Move the selected failed item back to the pending queue" />
+      <Button Content="🗑 Discard selected" Click="OnDiscardClick"
+              ToolTip.Tip="Permanently remove the selected failed item" />
+      <Button Content="🚪 Close" Click="OnCloseClick" IsCancel="True" />
+    </StackPanel>
+  </Grid>
+</Window>

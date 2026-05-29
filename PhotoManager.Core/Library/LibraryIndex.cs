@@ -70,21 +70,28 @@ public sealed class LibraryIndex {
     var option = recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
     var visited = 0;
 
-    foreach (var file in root.EnumerateFiles("*", option)) {
-      cancellationToken.ThrowIfCancellationRequested();
-      if (!extensions.Contains(file.Extension))
-        continue;
+    // Collect the file list first so Parallel.ForEachAsync can partition it.
+    var files = root.EnumerateFiles("*", option)
+      .Where(f => extensions.Contains(f.Extension))
+      .ToList();
 
-      progress?.Report(file);
-      try {
-        await this._cache.GetAsync(file, cancellationToken);
-      } catch (OperationCanceledException) {
-        throw;
-      } catch {
-        // Skip unreadable files without aborting the whole scan.
-      }
-      visited++;
-    }
+    var maxDop = Math.Min(8, Environment.ProcessorCount);
+    await Parallel.ForEachAsync(files,
+      new ParallelOptions {
+        MaxDegreeOfParallelism = maxDop,
+        CancellationToken = cancellationToken
+      },
+      async (file, ct) => {
+        progress?.Report(file);
+        try {
+          await this._cache.GetAsync(file, ct);
+        } catch (OperationCanceledException) {
+          throw;
+        } catch {
+          // Skip unreadable files without aborting the whole scan.
+        }
+        Interlocked.Increment(ref visited);
+      });
 
     return visited;
   }

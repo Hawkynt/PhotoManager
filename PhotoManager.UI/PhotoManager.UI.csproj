@@ -92,4 +92,8 @@
     <Delete Files="@(_StrayPublish)" ContinueOnError="true" />
   </Target>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="PhotoManager.Tests" />
+  </ItemGroup>
+
 </Project>

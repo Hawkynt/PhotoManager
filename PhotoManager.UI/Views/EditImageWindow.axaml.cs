@@ -6,6 +6,7 @@ using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using PhotoManager.Core.Develop;
+using PhotoManager.Core.Enhance;
 using PhotoManager.Core.Models;
 using PhotoManager.Core.Segmentation;
 using PhotoManager.UI.Controls;
@@ -45,6 +46,10 @@ public partial class EditImageWindow : Window {
   private DevelopSettings _settings = new();
   private bool _suppressTemplateSelect;
   private bool _suppressSliderEvents;
+  private bool _suppressFilmSimSelect;
+  /// <summary>User's develop settings before a film-sim preset was applied, so
+  /// selecting "None" can restore the original state.</summary>
+  private DevelopSettings? _filmSimBaseSettings;
   private string? _activeEyedropper;
   /// <summary>0 = original (embedded XMP), N &gt; 0 = the basename.copyN.xmp sidecar this window edits.</summary>
   private int _copyIndex;
@@ -75,7 +80,7 @@ public partial class EditImageWindow : Window {
     ("SharpenDetailSlider",  "SharpenDetailValue",  s => s.SharpenDetail,  (s, v) => s with { SharpenDetail  = v },  "0;0;0"),
     ("SharpenMaskingSlider", "SharpenMaskingValue", s => s.SharpenMasking, (s, v) => s with { SharpenMasking = v },  "0;0;0"),
     ("DehazeSlider",     "DehazeValue",      s => s.DehazePercent,      (s, v) => s with { DehazePercent = v },      "+0;-0;0"),
-    ("CropAngleSlider",  "CropAngleValue",   s => s.CropAngleDegrees,   (s, v) => s with { CropAngleDegrees = v },   "+0.0;-0.0;0.0"),
+    ("CropAngleSlider",  null,   s => s.CropAngleDegrees,   (s, v) => s with { CropAngleDegrees = v },   "+0.0;-0.0;0.0"),
     ("VignetteAmountSlider",     "VignetteAmountValue",     s => s.VignetteAmount,             (s, v) => s with { VignetteAmount = v },             "+0;-0;0"),
     ("VignetteMidpointSlider",   "VignetteMidpointValue",   s => s.VignetteMidpoint,           (s, v) => s with { VignetteMidpoint = v },           "0;0;0"),
     ("VignetteFeatherSlider",    "VignetteFeatherValue",    s => s.VignetteFeather,            (s, v) => s with { VignetteFeather = v },            "0;0;0"),
@@ -183,6 +188,8 @@ public partial class EditImageWindow : Window {
     this.PopulateDenoiseModelCombo();
     this.PopulateColorizeModelCombo();
     this.RefreshTemplateList();
+    this.PopulateFilmSimCombo();
+    this.EnsureDetectClassFlyoutPopulated();
 
     // Hook eyedropper sampling on the preview image.
     if (this.FindControl<Avalonia.Controls.Image>("PreviewImage") is { } preview)
@@ -207,6 +214,7 @@ public partial class EditImageWindow : Window {
       cropOverlay.CropChanged += this.OnCropOverlayChanged;
 
     this.RefreshLookList();
+    this.RefreshCopiesCombo();
 
     if (sourceFile is not null)
       _ = this.LoadPreviewAsync();
@@ -780,7 +788,7 @@ public partial class EditImageWindow : Window {
     if (current is null || this._activeLocalIndex < 0 || this._activeLocalIndex >= current.Count)
       return;
     var adj = current[this._activeLocalIndex];
-    if (adj.Mask.Type != LocalMaskType.Brush)
+    if (adj.Mask.Type is not LocalMaskType.Brush and not LocalMaskType.Inpaint)
       return;
     var newDabs = (adj.Mask.BrushDabs ?? Array.Empty<BrushDab>()).ToList();
     newDabs.Add(dab);
@@ -838,7 +846,7 @@ public partial class EditImageWindow : Window {
     if (current is null || this._activeLocalIndex < 0 || this._activeLocalIndex >= current.Count)
       return;
     var adj = current[this._activeLocalIndex];
-    if (adj.Mask.Type != LocalMaskType.Brush)
+    if (adj.Mask.Type is not LocalMaskType.Brush and not LocalMaskType.Inpaint)
       return;
     var newMask = adj.Mask with { BrushDabs = Array.Empty<BrushDab>() };
     this._settings = this._settings with { LocalAdjustments = ReplaceAt(current, this._activeLocalIndex, adj with { Mask = newMask }) };
@@ -1109,13 +1117,14 @@ public partial class EditImageWindow : Window {
     // The geometry rows' visibility is set per-edit-mask further down.
     LocalAdjustment? selectedAdj = hasSelection ? current![this._activeLocalIndex] : null;
     var activeMask = selectedAdj is null ? null : (LocalMask?)this.ResolveActiveMask(selectedAdj);
-    var brushMaskActive = activeMask?.Type == LocalMaskType.Brush;
+    var brushMaskActive = activeMask?.Type is LocalMaskType.Brush or LocalMaskType.Inpaint;
 
+    var isInpaint = activeMask?.Type == LocalMaskType.Inpaint;
     if (this.FindControl<StackPanel>("BrushControlsRow") is { } brush) brush.IsVisible = hasSelection && brushMaskActive;
-    if (this.FindControl<StackPanel>("RangeMaskRow") is { } rng) rng.IsVisible = hasSelection;
-    if (this.FindControl<StackPanel>("SubMasksRow") is { } subRow) subRow.IsVisible = hasSelection;
-    if (this.FindControl<Grid>("SubMaskOpRow") is { } subOpRow) subOpRow.IsVisible = hasSelection && this._activeSubMaskIndex >= 0;
-    if (this.FindControl<StackPanel>("LocalSlidersPanel") is { } sliders) sliders.IsVisible = hasSelection;
+    if (this.FindControl<StackPanel>("RangeMaskRow") is { } rng) rng.IsVisible = hasSelection && !isInpaint;
+    if (this.FindControl<StackPanel>("SubMasksRow") is { } subRow) subRow.IsVisible = hasSelection && !isInpaint;
+    if (this.FindControl<Grid>("SubMaskOpRow") is { } subOpRow) subOpRow.IsVisible = hasSelection && this._activeSubMaskIndex >= 0 && !isInpaint;
+    if (this.FindControl<StackPanel>("LocalSlidersPanel") is { } sliders) sliders.IsVisible = hasSelection && !isInpaint;
 
     if (this.FindControl<ListBox>("SubMasksList") is { } subListBox) {
       this._suppressSliderEvents = true;
@@ -1146,7 +1155,7 @@ public partial class EditImageWindow : Window {
         overlay.IsVisible = true;
         overlay.IsHitTestVisible = true;
         overlay.SetActiveAdjustment(current![this._activeLocalIndex]);
-        overlay.BrushMode = current[this._activeLocalIndex].Mask.Type == LocalMaskType.Brush;
+        overlay.BrushMode = current[this._activeLocalIndex].Mask.Type is LocalMaskType.Brush or LocalMaskType.Inpaint;
       } else {
         overlay.IsVisible = false;
         overlay.IsHitTestVisible = false;
@@ -1513,14 +1522,20 @@ public partial class EditImageWindow : Window {
     if (this._developedPreview is not { } src)
       return;
     var hist = HistogramAnalyzer.Compute(src);
-    var next = AutoDeveloper.AutoChannelStretch(this._settings, hist);
+    var opts = this.ReadAutoOptions();
+    var next = AutoDeveloper.AutoChannelStretch(this._settings, hist, opts);
     this.ApplySettingsToUi(next);
     this.UpdatePreview();
-    this.SetStatus("Auto channel stretch: each R/G/B pushed to its 99.5% percentile.");
+    this.SetStatus($"Auto RGB stretch: top percentile={opts.StretchTopPercentile * 100:F1}%.");
   }
 
   private async Task LoadPreviewAsync() {
+    this.SetPreviewPhase(PreviewPhase.Loading, "loading source",
+      $"file={(this._sourceFile?.Name ?? "(null)")} exists={(this._sourceFile?.Exists.ToString() ?? "n/a")}");
+
     if (this._sourceFile is not { Exists: true } file) {
+      this.SetPreviewPhase(PreviewPhase.Error, "no file",
+        $"_sourceFile null or non-existent: {this._sourceFile?.FullName ?? "(null)"}");
       this.SetStatus("No file selected.");
       return;
     }
@@ -1542,10 +1557,21 @@ public partial class EditImageWindow : Window {
       }
       this._previewSource = image;
     } catch (Exception ex) {
+      this.SetPreviewPhase(PreviewPhase.Error, "load failed",
+        $"{ex.GetType().Name}: {ex.Message}");
+      this.Title = $"LOAD FAILED: {ex.GetType().Name}: {ex.Message}";
+      try {
+        var logPath = Path.Combine(Path.GetTempPath(), "photomanager-develop-diag.log");
+        File.AppendAllText(logPath,
+          $"[{DateTime.Now:HH:mm:ss.fff}] LOAD FAILED for {file.FullName}:{Environment.NewLine}" +
+          $"  {ex}{Environment.NewLine}");
+      } catch { /* logging is best-effort */ }
       this.SetStatus($"Load failed: {ex.Message}");
       return;
     }
 
+    this.SetPreviewPhase(PreviewPhase.Developing, "preparing preview",
+      $"src={this._previewSource!.Width}×{this._previewSource.Height} loaded");
     this.SetStatus($"{this._sourceFile.Name} ({this._previewSource.Width}×{this._previewSource.Height} preview)");
     // Disable upscale factors that would exceed the 32K cap on this source.
     this.RefreshUpscaleComboAvailability();
@@ -1564,12 +1590,35 @@ public partial class EditImageWindow : Window {
     DevelopSettings? embedded = null;
     try { embedded = await DevelopMetadataStore.LoadAsync(file, this._copyIndex); } catch { /* best-effort */ }
     if (embedded is not null) {
-      this.ApplySettingsToUi(embedded);
-      this.SetStatus(this._copyIndex == 0
-        ? $"Resumed embedded develop settings for {file.Name}."
-        : $"Resumed copy {this._copyIndex} settings for {file.Name}.");
+      try {
+        this.ApplySettingsToUi(embedded);
+        this.SetStatus(this._copyIndex == 0
+          ? $"Resumed embedded develop settings for {file.Name}."
+          : $"Resumed copy {this._copyIndex} settings for {file.Name}.");
+      } catch (Exception ex) {
+        this.SetPreviewPhase(PreviewPhase.Error, "apply-embedded failed",
+          $"ApplySettingsToUi: {ex.GetType().Name}: {ex.Message}");
+        try {
+          File.AppendAllText(Path.Combine(Path.GetTempPath(), "photomanager-develop-diag.log"),
+            $"[{DateTime.Now:HH:mm:ss.fff}] ApplySettingsToUi:{Environment.NewLine}  {ex}{Environment.NewLine}");
+        } catch { /* logging is best-effort */ }
+        // Continue — render with whatever defaults we have rather than bail
+        // and leave the preview blank.
+      }
     }
-    this.UpdatePreview();
+    // Wrap UpdatePreview in a try so an unobserved throw from the develop
+    // pipeline (the fire-and-forget LoadPreviewAsync would swallow it
+    // otherwise) shows up in the diagnostic strip.
+    try {
+      this.UpdatePreview();
+    } catch (Exception ex) {
+      this.SetPreviewPhase(PreviewPhase.Error, "UpdatePreview throw",
+        $"{ex.GetType().Name}: {ex.Message}");
+      try {
+        File.AppendAllText(Path.Combine(Path.GetTempPath(), "photomanager-develop-diag.log"),
+          $"[{DateTime.Now:HH:mm:ss.fff}] UpdatePreview throw:{Environment.NewLine}  {ex}{Environment.NewLine}");
+      } catch { /* logging is best-effort */ }
+    }
     this.InvalidateBaseline();
   }
 
@@ -1597,6 +1646,15 @@ public partial class EditImageWindow : Window {
 
   private void OnResetAllClick(object? sender, RoutedEventArgs e) {
     this.ApplySettingsToUi(new DevelopSettings());
+    // Clear any active film simulation so the combo goes back to "(none)".
+    this._filmSimBaseSettings = null;
+    this._suppressFilmSimSelect = true;
+    try {
+      if (this.FindControl<ComboBox>("FilmSimCombo") is { } filmCombo)
+        filmCombo.SelectedIndex = 0;
+    } finally {
+      this._suppressFilmSimSelect = false;
+    }
     this.UpdatePreview();
     this.InvalidateBaseline();
   }
@@ -1624,8 +1682,12 @@ public partial class EditImageWindow : Window {
     this._settings = this.ReadSettingsFromUi();
     this.RefreshValueLabels();
 
-    if (this._previewSource is null)
+    if (this._previewSource is null) {
+      this.SetPreviewPhase(PreviewPhase.Error, "no source",
+        "_previewSource is null in UpdatePreview");
+      this.Title = "UPDATE BAILED: _previewSource is null";
       return;
+    }
 
     // Always cancel an in-flight AI render before kicking a new pipeline —
     // settings changed, so the in-flight result is stale.
@@ -1639,6 +1701,14 @@ public partial class EditImageWindow : Window {
       // drags responsive on the UI thread. AI runs off-thread below.
       fastDeveloped = ImageDeveloper.Apply(this._previewSource, this._settings, previewMode: true);
     } catch (Exception ex) {
+      this.SetPreviewPhase(PreviewPhase.Error, "develop throw",
+        $"ImageDeveloper.Apply: {ex.GetType().Name}: {ex.Message}");
+      this.Title = $"APPLY FAILED: {ex.GetType().Name}: {ex.Message}";
+      try {
+        var logPath = Path.Combine(Path.GetTempPath(), "photomanager-develop-diag.log");
+        File.AppendAllText(logPath,
+          $"[{DateTime.Now:HH:mm:ss.fff}] APPLY FAILED:{Environment.NewLine}  {ex}{Environment.NewLine}");
+      } catch { /* logging is best-effort */ }
       this.SetStatus($"Preview failed: {ex.Message}");
       return;
     }
@@ -1661,6 +1731,7 @@ public partial class EditImageWindow : Window {
     var wantsColorize = this._settings.AiColorizeAmount > 1e-6;
     if (!wantsDenoise && !wantsUpscale && !wantsColorize) {
       this.SetAiOverlayVisible(false);
+      this.SetPreviewEta(null, null);
       return;
     }
 
@@ -1674,6 +1745,10 @@ public partial class EditImageWindow : Window {
     var label = $"Computing AI {string.Join(" + ", stages)}…";
     this.SetAiOverlayLabel(label);
     this.SetAiOverlayVisible(true);
+    this.SetPreviewPhase(PreviewPhase.AiWork, $"AI: {string.Join(" + ", stages)}",
+      $"running AI stage(s) on {fastDeveloped.Width}×{fastDeveloped.Height}");
+    this.SetPreviewEta(0, "starting…");
+    var aiStarted = DateTime.UtcNow;
 
     var cts = new CancellationTokenSource();
     this._aiPreviewCts = cts;
@@ -1692,6 +1767,7 @@ public partial class EditImageWindow : Window {
       }
     }, cts.Token).ContinueWith(t => {
       var aiResult = t.Status == TaskStatus.RanToCompletion ? t.Result : null;
+      var aiElapsed = DateTime.UtcNow - aiStarted;
       Avalonia.Threading.Dispatcher.UIThread.Post(() => {
         // Newer call already cancelled and replaced us, or our token was
         // cancelled mid-flight — discard the result either way.
@@ -1701,6 +1777,7 @@ public partial class EditImageWindow : Window {
         }
         if (aiResult is null) {
           this.SetAiOverlayVisible(false);
+          this.SetPreviewEta(null, null);
           return;
         }
         this._developedPreview?.Dispose();
@@ -1708,21 +1785,109 @@ public partial class EditImageWindow : Window {
         this.PaintPreviewImages(aiResult);
         this.RenderHistogram(aiResult);
         this.SetAiOverlayVisible(false);
+        this.SetPreviewEta(null, $"AI {string.Join("+", stages)} done in {aiElapsed.TotalSeconds:F1}s");
       });
     });
   }
 
   private void PaintPreviewImages(Image<Rgba32> developed) {
-    using var ms = new MemoryStream();
-    developed.SaveAsJpeg(ms);
-    ms.Position = 0;
-    var bitmap = new Bitmap(ms);
-    if (this.FindControl<Avalonia.Controls.Image>("PreviewImage") is { } img)
+    // Direct RGBA copy via WriteableBitmap — bypasses JPEG encode/decode
+    // and stream-disposal hazards entirely. Each Image control gets its
+    // OWN WriteableBitmap so Avalonia's per-Image render pipeline can't
+    // share decode state across them.
+    var w = developed.Width;
+    var h = developed.Height;
+    long brightSum = 0;
+    var brightSamples = 0;
+
+    Avalonia.Media.Imaging.WriteableBitmap? BuildBitmap() {
+      try {
+        var wb = new Avalonia.Media.Imaging.WriteableBitmap(
+          new Avalonia.PixelSize(w, h),
+          new Avalonia.Vector(96, 96),
+          Avalonia.Platform.PixelFormat.Bgra8888,
+          Avalonia.Platform.AlphaFormat.Premul);
+        using var fb = wb.Lock();
+        // ImageSharp is RGBA, Avalonia's Bgra8888 wants BGRA. Convert
+        // into a managed byte[] row and Marshal.Copy it into the
+        // framebuffer (avoids needing /unsafe at the project level).
+        var stride = fb.RowBytes;
+        var rowBytes = new byte[stride];
+        var basePtr = fb.Address;
+        developed.ProcessPixelRows(accessor => {
+          for (var y = 0; y < accessor.Height; y++) {
+            var row = accessor.GetRowSpan(y);
+            for (var x = 0; x < row.Length; x++) {
+              var p = row[x];
+              rowBytes[x * 4 + 0] = p.B;
+              rowBytes[x * 4 + 1] = p.G;
+              rowBytes[x * 4 + 2] = p.R;
+              rowBytes[x * 4 + 3] = p.A;
+            }
+            System.Runtime.InteropServices.Marshal.Copy(
+              rowBytes, 0, basePtr + y * stride, stride);
+          }
+        });
+        return wb;
+      } catch {
+        return null;
+      }
+    }
+
+    // Brightness probe (sparse) — tells us if the develop pipeline
+    // produced a black/transparent buffer regardless of paint success.
+    developed.ProcessPixelRows(accessor => {
+      var step = Math.Max(1, accessor.Height / 32);
+      for (var y = 0; y < accessor.Height; y += step) {
+        var row = accessor.GetRowSpan(y);
+        for (var x = 0; x < row.Length; x += step) {
+          brightSum += row[x].R + row[x].G + row[x].B;
+          brightSamples++;
+        }
+      }
+    });
+    var meanBright = brightSamples == 0 ? 0 : brightSum / (3.0 * brightSamples);
+
+    var foundPreview = false;
+    var foundSplit = false;
+    var foundSlider = false;
+    Avalonia.Media.Imaging.WriteableBitmap? bitmap = null;
+
+    void Assign(string name, ref bool found) {
+      if (this.FindControl<Avalonia.Controls.Image>(name) is not { } img)
+        return;
+      bitmap ??= BuildBitmap();
+      if (bitmap is null)
+        return;
+      found = true;
       img.Source = bitmap;
-    if (this.FindControl<Avalonia.Controls.Image>("PreviewImageSplit") is { } imgSplit)
-      imgSplit.Source = bitmap;
-    if (this.FindControl<Avalonia.Controls.Image>("PreviewImageSlider") is { } imgSlider)
-      imgSlider.Source = bitmap;
+    }
+
+    var foundOverlay = false;
+    Assign("PreviewImage",        ref foundPreview);
+    Assign("PreviewImageSplit",   ref foundSplit);
+    Assign("PreviewImageOverlay", ref foundOverlay);
+    Assign("PreviewImageSlider",  ref foundSlider);
+
+    // Count the applied edits so the rich strip can summarise. Cheap
+    // — just a handful of non-zero checks. Pure-logic helper in Core
+    // so the count is exercised by the test suite.
+    var appliedEdits = AppliedEditsCounter.Count(this._settings);
+    var diag = $"{w}×{h} mean={meanBright:F0} " +
+               $"bmp={(bitmap is null ? "FAIL" : "ok")} " +
+               $"img={(foundPreview ? "ok" : "MISS")}/" +
+               $"split={(foundSplit ? "ok" : "MISS")}/" +
+               $"slider={(foundSlider ? "ok" : "MISS")} " +
+               $"edits={appliedEdits}";
+    this.Title = $"Develop · {diag}";
+
+    var phaseLabel = (bitmap, foundPreview, foundSplit, foundSlider) switch {
+      (null, _, _, _) => "bitmap build failed",
+      (_, false, _, _) when !foundSplit && !foundSlider => "no Image controls found",
+      _ => appliedEdits == 0 ? "ready (no edits)" : $"ready ({appliedEdits} edit{(appliedEdits == 1 ? "" : "s")})",
+    };
+    var phase = bitmap is null ? PreviewPhase.Error : PreviewPhase.Ready;
+    this.SetPreviewPhase(phase, phaseLabel, diag);
   }
 
   private void SetAiOverlayVisible(bool visible) {
@@ -1780,24 +1945,51 @@ public partial class EditImageWindow : Window {
 
   // --- Auto buttons ---
 
+  private AutoAdjustOptions ReadAutoOptions() {
+    var clipPct = (double?)this.FindControl<NumericUpDown>("WbClipPctUpDown")?.Value ?? 2;
+    return new AutoAdjustOptions(
+      WbClipLowPct: clipPct / 100.0,
+      WbClipHighPct: clipPct / 100.0,
+      WbHighlightLumMin: (int)((double?)this.FindControl<NumericUpDown>("WbHiLumMinUpDown")?.Value ?? 200),
+      WbHighlightLumMax: (int)((double?)this.FindControl<NumericUpDown>("WbHiLumMaxUpDown")?.Value ?? 250),
+      WbHighlightBlendWeight: (double?)this.FindControl<NumericUpDown>("WbHighlightBlendUpDown")?.Value ?? 0.5,
+      WbTemperatureSensitivity: (double?)this.FindControl<NumericUpDown>("WbTempSensUpDown")?.Value ?? 50,
+      WbTintSensitivity: (double?)this.FindControl<NumericUpDown>("WbTempSensUpDown")?.Value ?? 50,
+      ToneBlackClipPct: ((double?)this.FindControl<NumericUpDown>("ToneClipPctUpDown")?.Value ?? 0.5) / 100.0,
+      ToneWhiteClipPct: ((double?)this.FindControl<NumericUpDown>("ToneClipPctUpDown")?.Value ?? 0.5) / 100.0,
+      ToneRecoveryStrength: (double?)this.FindControl<NumericUpDown>("ToneRecoveryUpDown")?.Value ?? 1.5,
+      StretchTopPercentile: ((double?)this.FindControl<NumericUpDown>("StretchTopPctUpDown")?.Value ?? 99.5) / 100.0
+    );
+  }
+
+  private void OnAutoSettingsToggle(object? sender, RoutedEventArgs e) {
+    if (this.FindControl<Border>("AutoSettingsPanel") is { } panel)
+      panel.IsVisible = this.FindControl<ToggleButton>("AutoSettingsToggle")?.IsChecked == true;
+  }
+
   private void OnAutoToneClick(object? sender, RoutedEventArgs e) {
     if (this._developedPreview is not { } src)
       return;
     var hist = HistogramAnalyzer.Compute(src);
-    var next = AutoDeveloper.AutoTone(this._settings, hist);
+    var opts = this.ReadAutoOptions();
+    var next = AutoDeveloper.AutoTone(this._settings, hist, opts);
     this.ApplySettingsToUi(next);
     this.UpdatePreview();
-    this.SetStatus("Auto-tone: recovered shadows + highlights from histogram.");
+    this.SetStatus($"Auto-tone: clip={opts.ToneBlackClipPct * 100:F1}%, recovery={opts.ToneRecoveryStrength:F2}×.");
   }
 
   private void OnAutoWhiteBalanceClick(object? sender, RoutedEventArgs e) {
-    if (this._developedPreview is not { } src)
+    if (this._previewSource is not { } src)
       return;
-    var hist = HistogramAnalyzer.Compute(src);
-    var next = AutoDeveloper.AutoWhiteBalance(this._settings, hist);
+    var opts = this.ReadAutoOptions();
+    var (temp, tint) = AutoWhiteBalance.Estimate(src, opts);
+    var next = this._settings with {
+      TemperatureShift = temp,
+      TintShift = tint
+    };
     this.ApplySettingsToUi(next);
     this.UpdatePreview();
-    this.SetStatus("Auto white balance: grey-world correction applied.");
+    this.SetStatus($"Auto WB: temp={temp:+0.0;-0.0} tint={tint:+0.0;-0.0} (clip={opts.WbClipLowPct * 100:F0}%, blend={opts.WbHighlightBlendWeight:F0}).");
   }
 
   private void OnResetAutoClick(object? sender, RoutedEventArgs e) {
@@ -1918,6 +2110,11 @@ public partial class EditImageWindow : Window {
         if (this.FindControl<Slider>(sliderName) is { } slider)
           slider.Value = get(target);
       }
+      // Sync the rotation NumericUpDown with the slider (they share
+      // the same CropAngleDegrees field but the UpDown gives 0.1°
+      // fine control the slider can't).
+      if (this.FindControl<NumericUpDown>("CropAngleUpDown") is { } angleUpDown)
+        angleUpDown.Value = (decimal)target.CropAngleDegrees;
       if (this.FindControl<ToneCurveEditor>("CurveEditor") is { } curve) {
         // Display the channel that's currently selected — switching channels
         // doesn't change the underlying settings, just which curve the editor shows.
@@ -1975,6 +2172,12 @@ public partial class EditImageWindow : Window {
   private void RefreshValueLabels() {
     var inv = CultureInfo.InvariantCulture;
     foreach (var (_, labelName, get, _, format) in SliderBindings) {
+      // labelName is nullable in practice — CropAngleSlider uses a
+      // NumericUpDown (not a TextBlock) for its value, so its label
+      // entry is intentionally null. Skip null-named entries so we
+      // don't throw ArgumentNullException from FindControl(null).
+      if (string.IsNullOrEmpty(labelName))
+        continue;
       if (this.FindControl<TextBlock>(labelName) is { } label)
         label.Text = get(this._settings).ToString(format, inv) + (labelName == "ExposureValue" ? " EV" : "");
     }
@@ -2055,6 +2258,9 @@ public partial class EditImageWindow : Window {
         await DevelopMetadataStore.SaveAsync(source, this._settings, this._copyIndex,
           snapshotLabel: $"Save As {Path.GetFileName(destination)}");
       this.SetStatus($"Saved {Path.GetFileName(destination)}.");
+      // Refresh the inline history panel if it's open so the new snapshot appears.
+      if (this.FindControl<ToggleButton>("HistoryToggleButton")?.IsChecked == true)
+        await this.RefreshInlineHistoryAsync();
     } catch (Exception ex) {
       this.SetStatus($"Save failed: {ex.Message}");
     }
@@ -2160,6 +2366,56 @@ public partial class EditImageWindow : Window {
       : $"Rendered {written}; {failed} failed.");
   }
 
+  // ---------- Film simulation ----------
+
+  private void PopulateFilmSimCombo() {
+    if (this.FindControl<ComboBox>("FilmSimCombo") is not { } combo)
+      return;
+    var names = new List<string> { "(none)" };
+    names.AddRange(FilmPreset.All.Select(p => p.Name));
+    this._suppressFilmSimSelect = true;
+    try {
+      combo.ItemsSource = names;
+      combo.SelectedIndex = 0;
+    } finally {
+      this._suppressFilmSimSelect = false;
+    }
+  }
+
+  private void OnFilmSimSelected(object? sender, SelectionChangedEventArgs e) {
+    if (this._suppressFilmSimSelect || this._suppressSliderEvents)
+      return;
+    if (sender is not ComboBox combo)
+      return;
+    if (combo.SelectedItem is not string name)
+      return;
+
+    if (name == "(none)") {
+      // Restore the base settings captured before the film look was applied.
+      if (this._filmSimBaseSettings is { } baseSettings) {
+        this.ApplySettingsToUi(baseSettings);
+        this._filmSimBaseSettings = null;
+        this.UpdatePreview();
+        this.SetStatus("Film simulation removed.");
+      }
+      return;
+    }
+
+    var preset = FilmPreset.All.FirstOrDefault(p => p.Name == name);
+    if (preset is null)
+      return;
+
+    // Capture the current settings as the base before applying the film look,
+    // but only if we haven't already captured them (switching between presets
+    // should re-merge from the original base, not the already-merged state).
+    this._filmSimBaseSettings ??= this._settings;
+
+    var merged = FilmPreset.MergeOnto(this._filmSimBaseSettings, preset.Adjustments);
+    this.ApplySettingsToUi(merged);
+    this.UpdatePreview();
+    this.SetStatus($"Applied film simulation \"{name}\": {preset.Description}");
+  }
+
   private async void OnDetectSubjectClick(object? sender, RoutedEventArgs e) {
     if (this._sourceFile is not { } src || !src.Exists) {
       this.SetStatus("No source image loaded.");
@@ -2203,6 +2459,514 @@ public partial class EditImageWindow : Window {
     }
   }
 
+  private async void OnDetectSkyClick(object? sender, RoutedEventArgs e) {
+    if (this._previewSource is not { } src) {
+      this.SetStatus("No source image loaded.");
+      return;
+    }
+
+    IReadOnlyList<BrushDab> dabs;
+
+    // Try ONNX model first; fall back to heuristic when model is unavailable.
+    if (ModelRegistry.SkySegmenter.IsInstalled()) {
+      this.SetStatus("Detecting sky (ONNX model)…");
+      try {
+        using var segmenter = new OnnxSkySegmenter(ModelRegistry.SkySegmenter.ResolveDestination());
+        if (!segmenter.IsAvailable) {
+          this.SetStatus("Sky segmenter model failed to load — falling back to heuristic.");
+          dabs = HeuristicSkyMask.Build(src);
+        } else {
+          using var alpha = await segmenter.SegmentSkyAsync(src);
+          if (alpha is null) {
+            this.SetStatus("Sky detection returned no result — falling back to heuristic.");
+            dabs = HeuristicSkyMask.Build(src);
+          } else {
+            dabs = BrushDabsFromAlphaMask.Build(alpha);
+          }
+        }
+      } catch (Exception ex) {
+        this.SetStatus($"ONNX sky detection failed ({ex.Message}) — falling back to heuristic.");
+        dabs = HeuristicSkyMask.Build(src);
+      }
+    } else {
+      // Model not installed — offer download, then fall back to heuristic.
+      var ok = await this.EnsureModelAsync(ModelRegistry.SkySegmenter, "sky segmenter");
+      if (ok) {
+        // User downloaded the model — retry with ONNX path.
+        OnDetectSkyClick(sender, e);
+        return;
+      }
+      this.SetStatus("Detecting sky (heuristic fallback)…");
+      dabs = HeuristicSkyMask.Build(src);
+    }
+
+    if (dabs.Count == 0) {
+      this.SetStatus("No sky pixels found.");
+      return;
+    }
+
+    var current = (this._settings.LocalAdjustments ?? Array.Empty<LocalAdjustment>()).ToList();
+    current.Add(new LocalAdjustment(
+      Mask: new LocalMask(Type: LocalMaskType.Brush, BrushDabs: dabs),
+      Name: "Sky"));
+    this._settings = this._settings with { LocalAdjustments = current };
+    this.RefreshLocalAdjustmentsList(selectIndex: current.Count - 1);
+    this.UpdatePreview();
+    this.SetStatus($"Sky mask added ({dabs.Count} dabs).");
+  }
+
+  /// <summary>
+  /// Populates the "Detect class…" flyout from <see cref="Ade20kClasses.FlyoutClasses"/>.
+  /// Each menu item wires <see cref="OnDetectAdeClassClick"/> with the class index
+  /// stored in the menu item's Tag. Safe to call multiple times — clears first.
+  /// </summary>
+  private void EnsureDetectClassFlyoutPopulated() {
+    if (this.FindControl<Button>("DetectClassButton") is not { Flyout: MenuFlyout flyout })
+      return;
+    if (flyout.Items.Count > 0)
+      return;
+    foreach (var cls in Ade20kClasses.FlyoutClasses) {
+      var item = new MenuItem {
+        Header = $"{cls.Emoji} {cls.DisplayName}",
+        Tag = cls
+      };
+      item.Click += this.OnDetectAdeClassClick;
+      flyout.Items.Add(item);
+    }
+  }
+
+  /// <summary>
+  /// Runs the SegFormer-B0 ADE20K segmenter for the picked class and
+  /// appends a brush-masked local adjustment named after the class.
+  /// Prompts to download the model if it isn't installed.
+  /// </summary>
+  private async void OnDetectAdeClassClick(object? sender, RoutedEventArgs e) {
+    if (sender is not MenuItem item || item.Tag is not Ade20kClasses.AdeClass cls)
+      return;
+    if (this._previewSource is not { } src) {
+      this.SetStatus("No source image loaded.");
+      return;
+    }
+
+    if (!ModelRegistry.SegformerAde150.IsInstalled()) {
+      var ok = await this.EnsureModelAsync(ModelRegistry.SegformerAde150, "multi-class segmenter");
+      if (!ok)
+        return;
+    }
+
+    this.SetStatus($"Detecting {cls.DisplayName.ToLowerInvariant()} (ONNX model)…");
+    IReadOnlyList<BrushDab> dabs;
+    try {
+      using var segmenter = new OnnxAdeSegmenter(ModelRegistry.SegformerAde150.ResolveDestination());
+      if (!segmenter.IsAvailable) {
+        this.SetStatus("Multi-class segmenter failed to load.");
+        return;
+      }
+      using var alpha = await segmenter.SegmentClassAsync(src, cls.Index);
+      if (alpha is null) {
+        this.SetStatus($"No {cls.DisplayName.ToLowerInvariant()} pixels found.");
+        return;
+      }
+      dabs = BrushDabsFromAlphaMask.Build(alpha);
+    } catch (Exception ex) {
+      this.SetStatus($"Detection failed: {ex.Message}");
+      return;
+    }
+
+    if (dabs.Count == 0) {
+      this.SetStatus($"No {cls.DisplayName.ToLowerInvariant()} pixels found.");
+      return;
+    }
+
+    var current = (this._settings.LocalAdjustments ?? Array.Empty<LocalAdjustment>()).ToList();
+    current.Add(new LocalAdjustment(
+      Mask: new LocalMask(Type: LocalMaskType.Brush, BrushDabs: dabs),
+      Name: cls.DisplayName));
+    this._settings = this._settings with { LocalAdjustments = current };
+    this.RefreshLocalAdjustmentsList(selectIndex: current.Count - 1);
+    this.UpdatePreview();
+    this.SetStatus($"{cls.DisplayName} mask added ({dabs.Count} dabs).");
+  }
+
+  /// <summary>
+  /// Runs Depth Anything V2 on the source, applies a depth-aware Gaussian
+  /// blur for portrait bokeh (background separated from the sharp subject),
+  /// and saves the result as a sidecar JPEG next to the original. Default
+  /// focus = closest pixel (the subject); strength = 14 px max radius.
+  /// </summary>
+  private async void OnApplyBokehBlurClick(object? sender, RoutedEventArgs e) {
+    if (this._sourceFile is not { Exists: true } srcFile) {
+      this.SetStatus("No file loaded.");
+      return;
+    }
+    if (this._previewSource is not { } src) {
+      this.SetStatus("No source image loaded.");
+      return;
+    }
+
+    if (!ModelRegistry.DepthAnythingV2Small.IsInstalled()) {
+      var ok = await this.EnsureModelAsync(ModelRegistry.DepthAnythingV2Small, "depth estimator");
+      if (!ok)
+        return;
+    }
+
+    this.SetStatus("Estimating depth (Depth Anything V2)…");
+    DepthMap? depth;
+    try {
+      using var estimator = new OnnxDepthEstimator(ModelRegistry.DepthAnythingV2Small.ResolveDestination());
+      if (!estimator.IsAvailable) {
+        this.SetStatus("Depth estimator failed to load.");
+        return;
+      }
+      depth = await estimator.EstimateAsync(src);
+    } catch (Exception ex) {
+      this.SetStatus($"Depth estimation failed: {ex.Message}");
+      return;
+    }
+    if (depth is null) {
+      this.SetStatus("Depth estimator returned no result.");
+      return;
+    }
+
+    this.SetStatus("Applying depth-aware bokeh blur…");
+    Image<Rgba32>? blurred;
+    try {
+      blurred = await Task.Run(() => DepthBokehBlur.Apply(src, depth, focus: 1.0, strength: 14.0));
+    } catch (Exception ex) {
+      this.SetStatus($"Bokeh blur failed: {ex.Message}");
+      return;
+    }
+
+    var outName = Path.Combine(srcFile.DirectoryName ?? ".", Path.GetFileNameWithoutExtension(srcFile.Name) + ".bokeh.jpg");
+    try {
+      await blurred.SaveAsJpegAsync(outName);
+    } catch (Exception ex) {
+      this.SetStatus($"Failed to save bokeh output: {ex.Message}");
+      return;
+    } finally {
+      blurred.Dispose();
+    }
+
+    this.SetStatus($"Bokeh saved: {Path.GetFileName(outName)}");
+  }
+
+  /// <summary>
+  /// Runs Zero-DCE++ on the source to brighten under-exposed regions, and
+  /// saves the result as a sidecar JPEG next to the original. Tiny model
+  /// (~52 KB), runs in milliseconds even on CPU.
+  /// </summary>
+  private async void OnBrightenLowLightClick(object? sender, RoutedEventArgs e) {
+    if (this._sourceFile is not { Exists: true } srcFile) {
+      this.SetStatus("No file loaded.");
+      return;
+    }
+    if (this._previewSource is not { } src) {
+      this.SetStatus("No source image loaded.");
+      return;
+    }
+
+    if (!ModelRegistry.ZeroDcePp.IsInstalled()) {
+      var ok = await this.EnsureModelAsync(ModelRegistry.ZeroDcePp, "low-light enhancer");
+      if (!ok)
+        return;
+    }
+
+    this.SetStatus("Enhancing low-light (Zero-DCE++)…");
+    Image<Rgba32>? enhanced;
+    try {
+      using var enhancer = new OnnxLowLightEnhancer(ModelRegistry.ZeroDcePp.ResolveDestination());
+      if (!enhancer.IsAvailable) {
+        this.SetStatus("Low-light enhancer failed to load.");
+        return;
+      }
+      enhanced = await enhancer.EnhanceAsync(src);
+    } catch (Exception ex) {
+      this.SetStatus($"Enhancement failed: {ex.Message}");
+      return;
+    }
+    if (enhanced is null) {
+      this.SetStatus("Enhancement returned no result.");
+      return;
+    }
+
+    var outName = Path.Combine(srcFile.DirectoryName ?? ".", Path.GetFileNameWithoutExtension(srcFile.Name) + ".lowlight.jpg");
+    try {
+      await enhanced.SaveAsJpegAsync(outName);
+    } catch (Exception ex) {
+      this.SetStatus($"Failed to save enhanced output: {ex.Message}");
+      return;
+    } finally {
+      enhanced.Dispose();
+    }
+
+    this.SetStatus($"Enhanced: {Path.GetFileName(outName)}");
+  }
+
+  /// <summary>
+  /// Runs AOD-Net dehazing on the source to remove atmospheric haze, and
+  /// saves the result as a sidecar JPEG next to the original.
+  /// </summary>
+  private async void OnDehazeClick(object? sender, RoutedEventArgs e) {
+    if (this._sourceFile is not { Exists: true } srcFile) {
+      this.SetStatus("No file loaded.");
+      return;
+    }
+    if (this._previewSource is not { } src) {
+      this.SetStatus("No source image loaded.");
+      return;
+    }
+
+    if (!ModelRegistry.AodNetDehazer.IsInstalled()) {
+      var ok = await this.EnsureModelAsync(ModelRegistry.AodNetDehazer, "dehazer");
+      if (!ok)
+        return;
+    }
+
+    this.SetStatus("Dehazing (AOD-Net)…");
+    Image<Rgba32>? dehazed;
+    try {
+      using var dehazer = new OnnxDehazer(ModelRegistry.AodNetDehazer.ResolveDestination());
+      if (!dehazer.IsAvailable) {
+        this.SetStatus("Dehazer failed to load.");
+        return;
+      }
+      dehazed = await dehazer.DehazeAsync(src);
+    } catch (Exception ex) {
+      this.SetStatus($"Dehazing failed: {ex.Message}");
+      return;
+    }
+    if (dehazed is null) {
+      this.SetStatus("Dehazing returned no result.");
+      return;
+    }
+
+    var outName = Path.Combine(srcFile.DirectoryName ?? ".", Path.GetFileNameWithoutExtension(srcFile.Name) + ".dehazed.jpg");
+    try {
+      await dehazed.SaveAsJpegAsync(outName);
+    } catch (Exception ex) {
+      this.SetStatus($"Failed to save dehazed output: {ex.Message}");
+      return;
+    } finally {
+      dehazed.Dispose();
+    }
+
+    this.SetStatus($"Dehazed: {Path.GetFileName(outName)}");
+  }
+
+  /// <summary>
+  /// Runs NIMA (MobileNetV2) on the current source and shows the
+  /// aesthetic score in the status bar. Mean ~5 is average snapshot
+  /// quality; >6.5 is portfolio-worthy.
+  /// </summary>
+  private async void OnScoreAestheticClick(object? sender, RoutedEventArgs e) {
+    if (this._previewSource is not { } src) {
+      this.SetStatus("No source image loaded.");
+      return;
+    }
+
+    if (!ModelRegistry.NimaMobileNetV2.IsInstalled()) {
+      var ok = await this.EnsureModelAsync(ModelRegistry.NimaMobileNetV2, "aesthetic scorer");
+      if (!ok)
+        return;
+    }
+
+    this.SetStatus("Scoring (NIMA)…");
+    try {
+      using var scorer = new OnnxAestheticScorer(ModelRegistry.NimaMobileNetV2.ResolveDestination());
+      if (!scorer.IsAvailable) {
+        this.SetStatus("Aesthetic scorer failed to load.");
+        return;
+      }
+      var result = await scorer.ScoreAsync(src);
+      if (result is null) {
+        this.SetStatus("Aesthetic scoring returned no result.");
+        return;
+      }
+      this.SetStatus($"Aesthetic score: {result.Mean:F2} / 10  (±{result.StdDev:F2})");
+    } catch (Exception ex) {
+      this.SetStatus($"Aesthetic scoring failed: {ex.Message}");
+    }
+  }
+
+  /// <summary>
+  /// One-click "fix everything" pipeline. Detects which restoration
+  /// stages apply via <see cref="PhotoIssueDetector"/>, runs only those
+  /// stages, writes the enhanced image as <c>IMG.enhanced.jpg</c> next
+  /// to the source, and reports the NIMA score delta in the status bar.
+  /// </summary>
+  private async void OnMagicEnhanceClick(object? sender, RoutedEventArgs e) {
+    if (this._sourceFile is not { Exists: true } srcFile) {
+      this.SetStatus("No file loaded.");
+      return;
+    }
+    if (this._previewSource is not { } src) {
+      this.SetStatus("No source image loaded.");
+      return;
+    }
+
+    this.SetStatus("Magic Enhance — analysing…");
+    MagicEnhanceResult result;
+    try {
+      var progress = new Progress<string>(stage =>
+        Dispatcher.UIThread.Post(() => this.SetStatus($"Magic Enhance — {stage}…")));
+      result = await MagicEnhancer.EnhanceAsync(src, options: null, ct: default, progress: progress);
+    } catch (Exception ex) {
+      this.SetStatus($"Magic Enhance failed: {ex.Message}");
+      return;
+    }
+
+    var outName = Path.Combine(srcFile.DirectoryName ?? ".", Path.GetFileNameWithoutExtension(srcFile.Name) + ".enhanced.jpg");
+    try {
+      await result.Enhanced.SaveAsJpegAsync(outName);
+    } catch (Exception ex) {
+      this.SetStatus($"Failed to save enhanced output: {ex.Message}");
+      return;
+    } finally {
+      result.Enhanced.Dispose();
+    }
+
+    var stages = string.Join(", ", result.Log.Where(l => l.StartsWith("✓")).Select(l => l.Substring(2)));
+    if (stages.Length == 0)
+      stages = "(no stages applied)";
+    var nimaDelta = result.NimaScoreBefore.HasValue && result.NimaScoreAfter.HasValue
+      ? $" — NIMA {result.NimaScoreBefore.Value:F2}→{result.NimaScoreAfter.Value:F2} ({(result.NimaScoreAfter.Value - result.NimaScoreBefore.Value):+0.00;-0.00})"
+      : string.Empty;
+    this.SetStatus($"Enhanced: {Path.GetFileName(outName)} • {stages}{nimaDelta}");
+  }
+
+  /// <summary>
+  /// Runs NAFNet-GoPro on the source to recover from camera-shake or
+  /// subject-motion blur, and saves the result as a sidecar JPEG. The
+  /// SOTA defocus-only model (DPDNet / IFAN) isn't in the catalog yet —
+  /// for now this is the all-purpose deblur option.
+  /// </summary>
+  private async void OnMotionDeblurClick(object? sender, RoutedEventArgs e) {
+    if (this._sourceFile is not { Exists: true } srcFile) {
+      this.SetStatus("No file loaded.");
+      return;
+    }
+    if (this._previewSource is not { } src) {
+      this.SetStatus("No source image loaded.");
+      return;
+    }
+
+    if (!ModelRegistry.NafnetGoPro.IsInstalled()) {
+      var ok = await this.EnsureModelAsync(ModelRegistry.NafnetGoPro, "motion deblur");
+      if (!ok)
+        return;
+    }
+
+    this.SetStatus("Deblurring (NAFNet-GoPro)…");
+    Image<Rgba32>? deblurred;
+    try {
+      using var denoiser = new OnnxDenoiser(ModelRegistry.NafnetGoPro.ResolveDestination());
+      if (!denoiser.IsAvailable) {
+        this.SetStatus("Deblurrer failed to load.");
+        return;
+      }
+      deblurred = await Task.Run(() => denoiser.Denoise(src, strength: 1.0));
+    } catch (Exception ex) {
+      this.SetStatus($"Deblur failed: {ex.Message}");
+      return;
+    }
+    if (deblurred is null) {
+      this.SetStatus("Deblur returned no result.");
+      return;
+    }
+
+    var outName = Path.Combine(srcFile.DirectoryName ?? ".", Path.GetFileNameWithoutExtension(srcFile.Name) + ".deblurred.jpg");
+    try {
+      await deblurred.SaveAsJpegAsync(outName);
+    } catch (Exception ex) {
+      this.SetStatus($"Failed to save deblurred output: {ex.Message}");
+      return;
+    } finally {
+      deblurred.Dispose();
+    }
+
+    this.SetStatus($"Deblurred: {Path.GetFileName(outName)}");
+  }
+
+  /// <summary>
+  /// Runs <see cref="NimaCropSuggester"/> to enumerate standard-aspect
+  /// crops, score each with NIMA, and save the best one as a sidecar
+  /// JPEG. The top 3 ranked suggestions are listed in the status bar
+  /// for comparison.
+  /// </summary>
+  private async void OnSuggestCropsClick(object? sender, RoutedEventArgs e) {
+    if (this._sourceFile is not { Exists: true } srcFile) {
+      this.SetStatus("No file loaded.");
+      return;
+    }
+    if (this._previewSource is not { } src) {
+      this.SetStatus("No source image loaded.");
+      return;
+    }
+
+    if (!ModelRegistry.NimaMobileNetV2.IsInstalled()) {
+      var ok = await this.EnsureModelAsync(ModelRegistry.NimaMobileNetV2, "aesthetic scorer");
+      if (!ok)
+        return;
+    }
+
+    this.SetStatus("Scoring candidate crops…");
+    IReadOnlyList<AestheticCropSuggestion> suggestions;
+    try {
+      using var scorer = new OnnxAestheticScorer(ModelRegistry.NimaMobileNetV2.ResolveDestination());
+      if (!scorer.IsAvailable) {
+        this.SetStatus("Aesthetic scorer failed to load.");
+        return;
+      }
+      suggestions = await NimaCropSuggester.SuggestAsync(src, scorer, topK: 3);
+    } catch (Exception ex) {
+      this.SetStatus($"Crop suggestions failed: {ex.Message}");
+      return;
+    }
+
+    if (suggestions.Count == 0) {
+      this.SetStatus("No crop suggestions produced.");
+      return;
+    }
+
+    var best = suggestions[0];
+    using var cropped = src.Clone(c => c.Crop(best.Rectangle));
+    var outName = Path.Combine(srcFile.DirectoryName ?? ".", Path.GetFileNameWithoutExtension(srcFile.Name) + ".cropped.jpg");
+    try {
+      await cropped.SaveAsJpegAsync(outName);
+    } catch (Exception ex) {
+      this.SetStatus($"Failed to save cropped output: {ex.Message}");
+      return;
+    }
+
+    var ranked = string.Join("  •  ", suggestions.Select((s, i) =>
+      $"{i + 1}. {s.AspectName} {s.Rectangle.Width}×{s.Rectangle.Height} → {s.Score:F2}"));
+    this.SetStatus($"Best: {Path.GetFileName(outName)}  |  {ranked}");
+  }
+
+  /// <summary>
+  /// Adds an Inpaint-type local adjustment (content-aware fill). The user
+  /// paints the mask using the existing brush overlay, and the region is
+  /// fed to LaMa inpainting at render time. Each removal is one undo entry.
+  /// </summary>
+  private async void OnRemoveObjectClick(object? sender, RoutedEventArgs e) {
+    if (this._previewSource is null) {
+      this.SetStatus("No source image loaded.");
+      return;
+    }
+
+    if (!await this.EnsureModelAsync(ModelRegistry.LamaInpaint, "LaMa inpainting"))
+      return;
+
+    var current = (this._settings.LocalAdjustments ?? Array.Empty<LocalAdjustment>()).ToList();
+    current.Add(new LocalAdjustment(
+      Mask: new LocalMask(Type: LocalMaskType.Inpaint, BrushDabs: Array.Empty<BrushDab>()),
+      Name: $"Remove {current.Count(a => a.Mask.Type == LocalMaskType.Inpaint) + 1}"));
+    this._settings = this._settings with { LocalAdjustments = current };
+    this.RefreshLocalAdjustmentsList(selectIndex: current.Count - 1);
+    this.UpdatePreview();
+    this.SetStatus("Remove Object: paint over the object to remove, then the inpainter will fill it.");
+  }
+
   /// Mirror of MainWindow's EnsureModelAsync: prompts the user via the
   /// ModelDownloadWindow if the requested model isn't installed, returning
   /// true when the file is present after the dialog closes.
@@ -2231,18 +2995,23 @@ public partial class EditImageWindow : Window {
       _ = this.RebuildBaselineAsync();
   }
 
-  private void OnCompareSliderChanged(object? sender, RangeBaseValueChangedEventArgs e) {
-    if (this._compareState.Mode == CompareMode.Slider)
-      this.UpdateSliderClip();
-  }
-
   private void ApplyCompareModeUi() {
     if (this.FindControl<Avalonia.Controls.Image>("PreviewImage") is { } single)
       single.IsVisible = this._compareState.IsAfterVisible;
     if (this.FindControl<Grid>("SplitPanel") is { } split)
       split.IsVisible = this._compareState.IsSplitVisible;
+    if (this.FindControl<Grid>("OverlayPanel") is { } overlay)
+      overlay.IsVisible = this._compareState.IsOverlayVisible;
     if (this.FindControl<Grid>("SliderPanel") is { } slider)
       slider.IsVisible = this._compareState.IsSliderVisible;
+    // The control bars for Overlay (alpha slider) and Slider (wipe handle)
+    // live OUTSIDE the zoom/pan transform so they stay at fixed screen
+    // positions when the user zooms the image. Toggled in parallel with
+    // the matching image-content panels.
+    if (this.FindControl<Border>("OverlayControlsBar") is { } overlayCtrls)
+      overlayCtrls.IsVisible = this._compareState.IsOverlayVisible;
+    if (this.FindControl<Canvas>("SliderHandleCanvas") is { } sliderCanvas)
+      sliderCanvas.IsVisible = this._compareState.IsSliderVisible;
     if (this.FindControl<Button>("CompareToggleButton") is { } btn) {
       btn.Content = this._compareState.ButtonContent;
       ToolTip.SetTip(btn, this._compareState.ButtonTooltip);
@@ -2253,20 +3022,207 @@ public partial class EditImageWindow : Window {
     }
   }
 
+  /// <summary>
+  /// Overlay alpha slider — sets the developed image's Opacity 0..1 over
+  /// the baseline so the user can dial a partial blend.
+  /// </summary>
+  private void OnOverlayAlphaChanged(object? sender, RangeBaseValueChangedEventArgs e) {
+    if (sender is not Slider slider) return;
+    var a = Math.Clamp(slider.Value, 0, 1);
+    if (this.FindControl<Avalonia.Controls.Image>("PreviewImageOverlay") is { } preview)
+      preview.Opacity = a;
+    if (this.FindControl<TextBlock>("OverlayAlphaLabel") is { } lbl)
+      lbl.Text = $"α={a:F2}";
+  }
+
+  /// <summary>Normalised position 0..1 of the wipe slider handle in CompareRoot
+  /// screen coordinates. The wipe handle stays at this fraction of the screen
+  /// width regardless of zoom/pan; the clip on the developed image is recomputed
+  /// from this + the current transform so the wipe edge ALWAYS lines up with
+  /// the visible Thumb position.</summary>
+  private double _sliderWipeFraction = 0.5;
+
+  /// <summary>
+  /// Recompute the wipe clip on PreviewImageSlider so that the clip edge,
+  /// AFTER the PreviewTransformRoot scale + translate is applied, lands at
+  /// the Thumb's screen X position. Called on:
+  ///   - drag of the Thumb
+  ///   - wheel zoom
+  ///   - right-drag pan
+  ///   - double-right-click reset
+  ///   - SizeChanged on PreviewImageSlider (initial layout)
+  /// </summary>
   private void UpdateSliderClip() {
     if (this.FindControl<Avalonia.Controls.Image>("PreviewImageSlider") is not { } preview)
       return;
-    if (this.FindControl<Slider>("CompareSlider") is not { } slider)
+    if (this.FindControl<Canvas>("SliderHandleCanvas") is not { } canvas)
       return;
-    var width  = preview.Bounds.Width;
-    var height = preview.Bounds.Height;
-    if (width <= 0 || height <= 0) {
+
+    var imageW = preview.Bounds.Width;
+    var imageH = preview.Bounds.Height;
+    var canvasW = canvas.Bounds.Width;
+    var canvasH = canvas.Bounds.Height;
+    if (imageW <= 0 || imageH <= 0 || canvasW <= 0) {
       preview.Clip = null;
       return;
     }
-    var t = Math.Clamp(slider.Value, 0.0, 1.0);
+
+    // Thumb sits in CompareRoot screen coordinates (canvas isn't
+    // inside the transform).
+    var thumbScreenX = Math.Clamp(this._sliderWipeFraction, 0, 1) * canvasW;
+
+    // Map screen X back into the IMAGE control's local coordinate space.
+    // The transform pipeline is:
+    //   screen_x = local_x * scale + translate.X
+    // ⇒ local_x = (screen_x - translate.X) / scale
+    var (scale, translateX) = this.GetPreviewTransforms() is { } tx
+      ? (tx.Scale.ScaleX, tx.Translate.X)
+      : (1.0, 0.0);
+    if (scale <= 0) scale = 1.0;
+
+    var clipLocalX = Math.Clamp((thumbScreenX - translateX) / scale, 0, imageW);
     preview.Clip = new Avalonia.Media.RectangleGeometry(
-      new Avalonia.Rect(t * width, 0, width - t * width, height));
+      new Avalonia.Rect(clipLocalX, 0, imageW - clipLocalX, imageH));
+
+    // Snap the Thumb to the screen position so its visible centre lines
+    // up with the wipe edge. (Drag offsets are applied to _sliderWipeFraction
+    // BEFORE this method runs, so we're just confirming the layout here.)
+    if (this.FindControl<Avalonia.Controls.Primitives.Thumb>("SliderHandle") is { } thumb) {
+      Canvas.SetLeft(thumb, thumbScreenX - thumb.Bounds.Width / 2);
+      thumb.Height = canvasH;
+    }
+  }
+
+  /// <summary>Pin the wipe Thumb's height to the host canvas height so the vertical line spans the full preview.</summary>
+  private void OnSliderHandleDragStarted(object? sender, Avalonia.Input.VectorEventArgs e) {
+    if (this.FindControl<Canvas>("SliderHandleCanvas") is { } canvas
+        && this.FindControl<Avalonia.Controls.Primitives.Thumb>("SliderHandle") is { } thumb)
+      thumb.Height = canvas.Bounds.Height;
+  }
+
+  /// <summary>Drag the wipe handle — convert pointer delta into a 0..1 fraction
+  /// and re-clip the developed image so the wipe edge follows the cursor.</summary>
+  private void OnSliderHandleDragDelta(object? sender, Avalonia.Input.VectorEventArgs e) {
+    if (this.FindControl<Canvas>("SliderHandleCanvas") is not { } canvas) return;
+    if (sender is not Avalonia.Controls.Primitives.Thumb thumb) return;
+    var canvasW = canvas.Bounds.Width;
+    if (canvasW <= 0) return;
+    var currentLeft = Canvas.GetLeft(thumb);
+    if (double.IsNaN(currentLeft)) currentLeft = canvasW / 2 - thumb.Bounds.Width / 2;
+    var newLeft = Math.Clamp(currentLeft + e.Vector.X, -thumb.Bounds.Width / 2, canvasW - thumb.Bounds.Width / 2);
+    Canvas.SetLeft(thumb, newLeft);
+    this._sliderWipeFraction = Math.Clamp((newLeft + thumb.Bounds.Width / 2) / canvasW, 0, 1);
+    this.UpdateSliderClip();
+  }
+
+  // ---------- Zoom + pan ----------
+
+  private double _previewZoom = 1.0;
+  private double _previewPanX;
+  private double _previewPanY;
+  private Avalonia.Point? _panStartCursor;
+  private double _panStartX;
+  private double _panStartY;
+
+  /// <summary>Read the (scale, translate) pair from PreviewTransformRoot's TransformGroup.</summary>
+  private (Avalonia.Media.ScaleTransform Scale, Avalonia.Media.TranslateTransform Translate)? GetPreviewTransforms() {
+    if (this.FindControl<Grid>("PreviewTransformRoot") is not { RenderTransform: Avalonia.Media.TransformGroup grp })
+      return null;
+    Avalonia.Media.ScaleTransform? scale = null;
+    Avalonia.Media.TranslateTransform? translate = null;
+    foreach (var t in grp.Children) {
+      if (t is Avalonia.Media.ScaleTransform s) scale = s;
+      else if (t is Avalonia.Media.TranslateTransform tr) translate = tr;
+    }
+    if (scale is null || translate is null) return null;
+    return (scale, translate);
+  }
+
+  /// <summary>Mouse wheel = zoom anchored at the cursor position.</summary>
+  private void OnPreviewWheelChanged(object? sender, Avalonia.Input.PointerWheelEventArgs e) {
+    if (this.FindControl<Grid>("CompareRoot") is not { } root) return;
+    if (this.GetPreviewTransforms() is not { } tx) return;
+    var scale = tx.Scale;
+    var translate = tx.Translate;
+
+    var oldZoom = this._previewZoom;
+    var step = e.Delta.Y > 0 ? 1.20 : 1.0 / 1.20;
+    var newZoom = Math.Clamp(oldZoom * step, 0.1, 32.0);
+    if (Math.Abs(newZoom - oldZoom) < 1e-6) return;
+
+    // Anchor the zoom at the cursor so the point under the mouse stays
+    // under the mouse: solve   newPan = cursor - (cursor - oldPan) * (newZoom / oldZoom)
+    var cursor = e.GetPosition(root);
+    var ratio = newZoom / oldZoom;
+    this._previewPanX = cursor.X - (cursor.X - this._previewPanX) * ratio;
+    this._previewPanY = cursor.Y - (cursor.Y - this._previewPanY) * ratio;
+    this._previewZoom = newZoom;
+    scale.ScaleX = newZoom;
+    scale.ScaleY = newZoom;
+    translate.X = this._previewPanX;
+    translate.Y = this._previewPanY;
+    if (this._compareState.Mode == CompareMode.Slider)
+      this.UpdateSliderClip();
+    this.UpdateZoomLabel();
+    e.Handled = true;
+  }
+
+  /// <summary>Right-click + drag begins a pan gesture; double-right-click resets zoom + pan to 100%.</summary>
+  private void OnPreviewPointerPressedForPan(object? sender, Avalonia.Input.PointerPressedEventArgs e) {
+    if (this.FindControl<Grid>("CompareRoot") is not { } root) return;
+    var pp = e.GetCurrentPoint(root);
+    if (!pp.Properties.IsRightButtonPressed) return;
+
+    // Double-right-click — snap back to 100 % zoom / no pan.
+    if (e.ClickCount >= 2) {
+      this._previewZoom = 1.0;
+      this._previewPanX = 0;
+      this._previewPanY = 0;
+      if (this.GetPreviewTransforms() is { } tx) {
+        tx.Scale.ScaleX = 1;
+        tx.Scale.ScaleY = 1;
+        tx.Translate.X = 0;
+        tx.Translate.Y = 0;
+      }
+      if (this._compareState.Mode == CompareMode.Slider)
+        this.UpdateSliderClip();
+      this.UpdateZoomLabel();
+      e.Handled = true;
+      return;
+    }
+
+    this._panStartCursor = pp.Position;
+    this._panStartX = this._previewPanX;
+    this._panStartY = this._previewPanY;
+    e.Pointer.Capture(root);
+    e.Handled = true;
+  }
+
+  private void OnPreviewPointerMovedForPan(object? sender, Avalonia.Input.PointerEventArgs e) {
+    if (this._panStartCursor is not { } start) return;
+    if (this.FindControl<Grid>("CompareRoot") is not { } root) return;
+    if (this.GetPreviewTransforms() is not { } tx) return;
+    var cur = e.GetPosition(root);
+    this._previewPanX = this._panStartX + (cur.X - start.X);
+    this._previewPanY = this._panStartY + (cur.Y - start.Y);
+    tx.Translate.X = this._previewPanX;
+    tx.Translate.Y = this._previewPanY;
+    if (this._compareState.Mode == CompareMode.Slider)
+      this.UpdateSliderClip();
+    e.Handled = true;
+  }
+
+  private void OnPreviewPointerReleasedForPan(object? sender, Avalonia.Input.PointerReleasedEventArgs e) {
+    if (this._panStartCursor is null) return;
+    if (e.InitialPressMouseButton != Avalonia.Input.MouseButton.Right) return;
+    this._panStartCursor = null;
+    e.Pointer.Capture(null);
+    e.Handled = true;
+  }
+
+  private void UpdateZoomLabel() {
+    if (this.FindControl<TextBlock>("PreviewZoomLabel") is { } lbl)
+      lbl.Text = $"zoom {this._previewZoom * 100:F0}% · wheel=zoom, right-drag=pan, double-right-click=reset";
   }
 
   private async Task RebuildBaselineAsync() {
@@ -2274,33 +3230,58 @@ public partial class EditImageWindow : Window {
       return;
 
     var clone = src.Clone();
-    Bitmap? bitmap = null;
+    byte[]? jpegBytes = null;
     try {
       await Task.Run(() => {
         using var rendered = ImageDeveloper.Apply(clone, new DevelopSettings());
         using var ms = new MemoryStream();
         rendered.SaveAsJpeg(ms);
-        ms.Position = 0;
-        bitmap = new Bitmap(ms);
+        jpegBytes = ms.ToArray();
       });
     } finally {
       clone.Dispose();
     }
 
-    if (bitmap is null)
+    if (jpegBytes is null)
       return;
 
     Dispatcher.UIThread.Post(() => {
+      // Build a fresh Bitmap per Image control (same defensive pattern as
+      // PaintPreviewImages — sharing a Bitmap reference between Image
+      // controls produced a "compare panels show baseline only" bug).
       this._baselinePreview?.Dispose();
-      this._baselinePreview = bitmap;
-      if (this.FindControl<Avalonia.Controls.Image>("BaselineImageSplit") is { } a)
-        a.Source = bitmap;
-      if (this.FindControl<Avalonia.Controls.Image>("BaselineImageSlider") is { } b)
-        b.Source = bitmap;
+      using (var msKeep = new MemoryStream(jpegBytes, writable: false))
+        this._baselinePreview = new Bitmap(msKeep);
+      if (this.FindControl<Avalonia.Controls.Image>("BaselineImageSplit") is { } a) {
+        using var freshStream = new MemoryStream(jpegBytes, writable: false);
+        a.Source = new Bitmap(freshStream);
+      }
+      if (this.FindControl<Avalonia.Controls.Image>("BaselineImageOverlay") is { } c) {
+        using var freshStream = new MemoryStream(jpegBytes, writable: false);
+        c.Source = new Bitmap(freshStream);
+      }
+      if (this.FindControl<Avalonia.Controls.Image>("BaselineImageSlider") is { } b) {
+        using var freshStream = new MemoryStream(jpegBytes, writable: false);
+        b.Source = new Bitmap(freshStream);
+      }
     });
   }
 
   // ---------- Crop drag-handles + Look (3D LUT) ----------
+
+  private void OnCropAngleUpDownChanged(object? sender, NumericUpDownValueChangedEventArgs e) {
+    if (this._suppressSliderEvents) return;
+    var val = (double?)this.FindControl<NumericUpDown>("CropAngleUpDown")?.Value ?? 0;
+    this._suppressSliderEvents = true;
+    try {
+      if (this.FindControl<Slider>("CropAngleSlider") is { } slider)
+        slider.Value = val;
+    } finally {
+      this._suppressSliderEvents = false;
+    }
+    this._settings = this._settings with { CropAngleDegrees = val };
+    this.SchedulePreviewUpdate();
+  }
 
   private void OnShowCropHandlesChanged(object? sender, RoutedEventArgs e) {
     this.SyncCropOverlay();
@@ -2332,14 +3313,14 @@ public partial class EditImageWindow : Window {
       return;
     overlay.SetCrop(this._settings.CropLeft, this._settings.CropTop, this._settings.CropRight, this._settings.CropBottom);
 
-    var hasNonDefault = this._settings.CropLeft   > 1e-6
-                     || this._settings.CropTop    > 1e-6
-                     || this._settings.CropRight  < 1 - 1e-6
-                     || this._settings.CropBottom < 1 - 1e-6;
+    // The crop overlay (with drag handles) should ONLY be visible and
+    // interactive when the user explicitly toggles "Show crop handles".
+    // Previously it also appeared whenever crop values were non-default
+    // (e.g. after auto-crop), which made the overlay intercept mouse
+    // events and interfere with other tools (geometry drag, painting).
     var toggleOn = this.FindControl<ToggleButton>("ShowCropHandlesToggle")?.IsChecked == true;
-    var visible = toggleOn || hasNonDefault;
-    overlay.IsVisible = visible;
-    overlay.IsHitTestVisible = visible;
+    overlay.IsVisible = toggleOn;
+    overlay.IsHitTestVisible = toggleOn;
   }
 
   private void RefreshLookList() {
@@ -2410,7 +3391,47 @@ public partial class EditImageWindow : Window {
     this.Close();
   }
 
-  // ---------- Edit history ----------
+  // ---------- Edit history (inline panel + separate dialog) ----------
+
+  private readonly System.Collections.ObjectModel.ObservableCollection<HistorySnapshotRow> _historyRows = new();
+
+  private async void OnHistoryToggleChanged(object? sender, RoutedEventArgs e) {
+    if (this.FindControl<Border>("HistoryPanel") is not { } panel)
+      return;
+    var isChecked = (sender as ToggleButton)?.IsChecked == true;
+    panel.IsVisible = isChecked;
+    if (isChecked)
+      await this.RefreshInlineHistoryAsync();
+  }
+
+  private async Task RefreshInlineHistoryAsync() {
+    if (this._sourceFile is not { Exists: true } file)
+      return;
+    if (this.FindControl<ListBox>("HistoryList") is { } list)
+      list.ItemsSource = this._historyRows;
+    IReadOnlyList<DevelopSnapshot> history;
+    try {
+      history = await DevelopMetadataStore.LoadHistoryAsync(file, this._copyIndex);
+    } catch {
+      this._historyRows.Clear();
+      return;
+    }
+    this._historyRows.Clear();
+    var all = DevelopHistory.GetAll(history);
+    for (var i = 0; i < all.Count; i++)
+      this._historyRows.Add(new HistorySnapshotRow(i, all[i], thumbnail: null));
+  }
+
+  private void OnHistoryEntryDoubleTapped(object? sender, Avalonia.Input.TappedEventArgs e) {
+    if (this.FindControl<ListBox>("HistoryList")?.SelectedItem is not HistorySnapshotRow row)
+      return;
+    var settings = DevelopHistory.RollbackTo(
+      this._historyRows.Select(r => r.Snapshot).ToList(), row.Index);
+    this.ApplySettingsToUi(settings);
+    this.UpdatePreview();
+    var label = string.IsNullOrWhiteSpace(row.Snapshot.Label) ? "snapshot" : $"\"{row.Snapshot.Label}\"";
+    this.SetStatus($"Restored {label} from {row.Snapshot.TimestampUtc.ToLocalTime():yyyy-MM-dd HH:mm:ss}. Adjust further or Save As… to keep.");
+  }
 
   private async void OnEditHistoryClick(object? sender, RoutedEventArgs e) {
     if (this._sourceFile is not { Exists: true } file) {
@@ -2433,6 +3454,9 @@ public partial class EditImageWindow : Window {
     this.UpdatePreview();
     var label = string.IsNullOrWhiteSpace(picked.Label) ? "snapshot" : $"\"{picked.Label}\"";
     this.SetStatus($"Restored {label} from {picked.TimestampUtc.ToLocalTime():yyyy-MM-dd HH:mm:ss}. Adjust further or Save As… to keep.");
+    // Refresh the inline panel if it's open.
+    if (this.FindControl<ToggleButton>("HistoryToggleButton")?.IsChecked == true)
+      await this.RefreshInlineHistoryAsync();
   }
 
   // ---------- Virtual copies ----------
@@ -2451,7 +3475,87 @@ public partial class EditImageWindow : Window {
     }
     this._copyIndex = nextIndex;
     this.UpdateCopyTitle();
+    this.RefreshCopiesCombo();
     this.SetStatus($"Created virtual copy {nextIndex} ({file.Name}.copy{nextIndex}.xmp). Window now targets this copy.");
+  }
+
+  private async void OnDeleteVirtualCopyClick(object? sender, RoutedEventArgs e) {
+    if (this._sourceFile is not { Exists: true } file || this._copyIndex < 1) {
+      this.SetStatus("Select a virtual copy first.");
+      return;
+    }
+    try {
+      var sidecar = VirtualCopyDiscovery.SidecarFor(file, this._copyIndex);
+      if (sidecar.Exists)
+        sidecar.Delete();
+    } catch (Exception ex) {
+      this.SetStatus($"Delete failed: {ex.Message}");
+      return;
+    }
+    this.SetStatus($"Deleted virtual copy {this._copyIndex}.");
+    this._copyIndex = 0;
+    this.UpdateCopyTitle();
+    this.RefreshCopiesCombo();
+    await this.ReloadSettingsForCurrentCopyAsync();
+  }
+
+  private async void OnCopiesComboSelectionChanged(object? sender, SelectionChangedEventArgs e) {
+    if (this._suppressSliderEvents)
+      return;
+    if (sender is not ComboBox combo || combo.SelectedItem is not ComboBoxItem item)
+      return;
+    if (item.Tag is not int newIndex || newIndex == this._copyIndex)
+      return;
+    this._copyIndex = newIndex;
+    this.UpdateCopyTitle();
+    if (this.FindControl<Button>("DeleteCopyButton") is { } delBtn)
+      delBtn.IsVisible = this._copyIndex > 0;
+    await this.ReloadSettingsForCurrentCopyAsync();
+    this.SetStatus(this._copyIndex == 0
+      ? "Switched to original."
+      : $"Switched to copy {this._copyIndex}.");
+  }
+
+  /// <summary>
+  /// Populate the copies combo with the original + all virtual copies on
+  /// disk, selecting the entry that matches <see cref="_copyIndex"/>.
+  /// </summary>
+  private void RefreshCopiesCombo() {
+    if (this.FindControl<ComboBox>("CopiesCombo") is not { } combo)
+      return;
+    if (this._sourceFile is null)
+      return;
+    this._suppressSliderEvents = true;
+    try {
+      combo.Items.Clear();
+      combo.Items.Add(new ComboBoxItem { Content = "Original", Tag = 0 });
+      var copies = VirtualCopyDiscovery.EnumerateIndices(this._sourceFile);
+      foreach (var idx in copies)
+        combo.Items.Add(new ComboBoxItem { Content = $"Copy {idx}", Tag = idx });
+      // Select the item matching the current copy index.
+      for (var i = 0; i < combo.Items.Count; i++) {
+        if (combo.Items[i] is ComboBoxItem ci && ci.Tag is int tag && tag == this._copyIndex) {
+          combo.SelectedIndex = i;
+          break;
+        }
+      }
+    } finally {
+      this._suppressSliderEvents = false;
+    }
+    if (this.FindControl<Button>("DeleteCopyButton") is { } delBtn)
+      delBtn.IsVisible = this._copyIndex > 0;
+  }
+
+  /// <summary>
+  /// Reload develop settings from the current <see cref="_copyIndex"/>
+  /// sidecar (or embedded XMP for 0) and apply them to the UI.
+  /// </summary>
+  private async Task ReloadSettingsForCurrentCopyAsync() {
+    if (this._sourceFile is not { Exists: true } file)
+      return;
+    var loaded = await DevelopMetadataStore.LoadAsync(file, this._copyIndex);
+    this.ApplySettingsToUi(loaded ?? new DevelopSettings());
+    this.UpdatePreview();
   }
 
   private void UpdateCopyTitle() {
@@ -2465,5 +3569,69 @@ public partial class EditImageWindow : Window {
   private void SetStatus(string message) {
     if (this.FindControl<TextBlock>("StatusText") is { } s)
       s.Text = message;
+  }
+
+  /// <summary>
+  /// Centralised "what is the develop window currently doing?" status
+  /// update. Drives the phase dot + label + diag strip across the top of
+  /// the preview pane so the user always sees the pipeline state.
+  /// Colour palette: grey = idle, blue = loading, green = preview ready,
+  /// orange = AI work running, red = error.
+  /// </summary>
+  private enum PreviewPhase { Idle, Loading, Developing, Ready, AiWork, Error }
+  private void SetPreviewPhase(PreviewPhase phase, string label, string? diag = null) {
+    var (dotColor, labelColor) = phase switch {
+      PreviewPhase.Loading    => ("#3498DB", "#FFFFFF"),
+      PreviewPhase.Developing => ("#F39C12", "#FFFFFF"),
+      PreviewPhase.Ready      => ("#27AE60", "#FFFFFF"),
+      PreviewPhase.AiWork     => ("#E67E22", "#FFFFFF"),
+      PreviewPhase.Error      => ("#E74C3C", "#FFCCCC"),
+      _                       => ("#888888", "#DDDDDD"),
+    };
+    var dotBrush = Avalonia.Media.SolidColorBrush.Parse(dotColor);
+    var labelBrush = Avalonia.Media.SolidColorBrush.Parse(labelColor);
+    if (this.FindControl<Avalonia.Controls.Shapes.Ellipse>("PreviewPhaseDot") is { } dot)
+      dot.Fill = dotBrush;
+    if (this.FindControl<Avalonia.Controls.Shapes.Ellipse>("BottomPhaseDot") is { } dotB)
+      dotB.Fill = dotBrush;
+    if (this.FindControl<TextBlock>("PreviewPhaseLabel") is { } lbl) {
+      lbl.Text = label;
+      lbl.Foreground = labelBrush;
+    }
+    if (this.FindControl<TextBlock>("BottomPhaseLabel") is { } lblB) {
+      lblB.Text = label;
+      lblB.Foreground = labelBrush;
+    }
+    if (diag != null) {
+      if (this.FindControl<TextBlock>("PreviewDiagText") is { } strip)
+        strip.Text = diag;
+      if (this.FindControl<TextBlock>("BottomDiagText") is { } stripB)
+        stripB.Text = diag;
+    }
+  }
+
+  /// <summary>
+  /// Show an ETA / progress for long AI passes. Pass null totalSeconds to
+  /// hide the indicator (the default idle state).
+  /// </summary>
+  private void SetPreviewEta(double? fraction, string? text) {
+    var visible = fraction.HasValue || !string.IsNullOrEmpty(text);
+    if (this.FindControl<StackPanel>("PreviewEtaPanel") is { } panel)
+      panel.IsVisible = visible;
+    if (fraction.HasValue) {
+      if (this.FindControl<ProgressBar>("PreviewEtaBar") is { } bar)
+        bar.Value = Math.Clamp(fraction.Value, 0, 1);
+      if (this.FindControl<ProgressBar>("BottomEtaBar") is { } barB) {
+        barB.IsVisible = true;
+        barB.Value = Math.Clamp(fraction.Value, 0, 1);
+      }
+    } else {
+      if (this.FindControl<ProgressBar>("BottomEtaBar") is { } barB)
+        barB.IsVisible = false;
+    }
+    if (this.FindControl<TextBlock>("PreviewEtaText") is { } et)
+      et.Text = text ?? string.Empty;
+    if (this.FindControl<TextBlock>("BottomEtaText") is { } etB)
+      etB.Text = text ?? string.Empty;
   }
 }

@@ -102,14 +102,17 @@ public static class ModelRegistry {
     ApproximateSizeBytes: 467_762_800
   );
 
-  /// <summary>FBCNN colour ONNX — blind JPEG / DCT / wavelet artifact remover, ~120 MB.</summary>
+  /// <summary>FBCNN colour ONNX — blind JPEG / DCT / wavelet artifact remover, ~120 MB.
+  /// Exported from jiaxi-jiang/FBCNN PyTorch weights to ONNX. Input: 1×3×H×W
+  /// float32 [0,1] NCHW. Output: same shape (deartifacted image).
+  /// Hosted on huggingface.co/Hawkynt/photomanager-models.</summary>
   public static readonly ModelInfo ArtifactRemoverFbcnnColor = new(
     Name: "fbcnn-color",
     FileName: "fbcnn-color.onnx",
     DisplayName: "FBCNN colour — JPEG / artifact remover (default)",
-    Description: "Flexible Blind CNN (Jiang et al. 2021) — single-pass blind restoration of JPEG / DCT / wavelet compression artifacts: ringing, blocking and halos around hard edges. Operates on the whole image at once, RGB float32 [0..1] in NCHW. ~120 MB. Mirror: huggingface.co/Hawkynt/photomanager-models.",
+    Description: "Flexible Blind CNN (Jiang et al. 2021) — single-pass blind restoration of JPEG / DCT / wavelet compression artifacts: ringing, blocking and halos around hard edges. Operates on the whole image at once, RGB float32 [0..1] in NCHW. ~120 MB.",
     DownloadUrl: "https://huggingface.co/Hawkynt/photomanager-models/resolve/main/fbcnn-color.onnx",
-    ApproximateSizeBytes: 120_000_000
+    ApproximateSizeBytes: 287_700_000
   );
 
   /// <summary>Real-ESRGAN x4 ONNX — 4× super-resolution upscaler, ~67 MB. Default model.</summary>
@@ -164,6 +167,26 @@ public static class ModelRegistry {
     Description: "Waifu2x SwinUNet ×4 trained on photos. ~18 MB. Predates Real-ESRGAN; smoother result with less aggressive sharpening — preferred by some for portraits and landscapes. Hosted on the deepghs HuggingFace mirror.",
     DownloadUrl: "https://huggingface.co/deepghs/waifu2x_onnx/resolve/main/20250502/onnx_models/swin_unet/photo/scale4x.onnx",
     ApproximateSizeBytes: 18_905_000
+  );
+
+  /// <summary>HAT-S ×4 ONNX — Hybrid Attention Transformer, fp16, ~57 MB.</summary>
+  public static readonly ModelInfo HatSX4 = new(
+    Name: "hat-s-x4",
+    FileName: "upscale-hat.onnx",
+    DisplayName: "HAT-S ×4 — Hybrid Attention Transformer",
+    Description: "4xNomos8kSCHAT-S by Helaman — Hybrid Attention Transformer (HAT-S architecture) ×4 photo upscaler, trained on Nomos8k with on-the-fly JPEG compression and blur. fp16 ONNX, ~57 MB. Sharper textures than Real-ESRGAN on natural photos; current SOTA on most benchmarks. Hosted on Phhofm/models GitHub raw.",
+    DownloadUrl: "https://github.com/Phhofm/models/raw/main/4xNomos8kSCHAT-S/4xNomos8kSCHAT-S.onnx",
+    ApproximateSizeBytes: 56_500_000
+  );
+
+  /// <summary>4x-AnimeSharp fp32 opset17 ONNX — ESRGAN-arch anime upscaler, ~67 MB.</summary>
+  public static readonly ModelInfo AnimeSharpX4 = new(
+    Name: "anime-sharp-x4",
+    FileName: "upscale-anime-sharp.onnx",
+    DisplayName: "4x-AnimeSharp — ESRGAN anime/text",
+    Description: "Kim2091's 4x-AnimeSharp ONNX (fp32, opset 16). ESRGAN architecture, ×4. ~67 MB. Often beats Waifu2x on anime and stylised illustration; also works on rasterised text. Alternative anime upscaler — pick based on the look of the source. Hosted on huggingface.co/Kim2091/AnimeSharp.",
+    DownloadUrl: "https://huggingface.co/Kim2091/AnimeSharp/resolve/main/ONNX/4x-AnimeSharp-fp32-opset16.onnx",
+    ApproximateSizeBytes: 67_000_000
   );
 
   /// <summary>EDSR ×2 ONNX — Enhanced Deep Super-Resolution, ~5 MB.</summary>
@@ -262,6 +285,16 @@ public static class ModelRegistry {
     ]
   );
 
+  /// <summary>CodeFormer ONNX — face restoration via codebook lookup transformer (NeurIPS 2022), ~377 MB.</summary>
+  public static readonly ModelInfo CodeFormer = new(
+    Name: "codeformer",
+    FileName: "face-restore-codeformer.onnx",
+    DisplayName: "CodeFormer — face restoration (severe degradation)",
+    Description: "Sczhou's CodeFormer (NeurIPS 2022) — codebook-lookup transformer for blind face restoration. ~377 MB, 1×3×512×512 input. Better than GFPGAN on severely degraded faces (heavy blur / compression / very old scans); GFPGAN is faster and often preferred for mild damage. Takes an optional fidelity weight 0..1 (lower = stronger restoration, higher = closer to source). Hosted on huggingface.co/facefusion/models-3.0.0.",
+    DownloadUrl: "https://huggingface.co/facefusion/models-3.0.0/resolve/main/codeformer.onnx",
+    ApproximateSizeBytes: 395_274_240
+  );
+
   /// <summary>GFPGAN v1.4 ONNX — face-only restoration (deblur, scratches, sharpen), ~324 MB.</summary>
   public static readonly ModelInfo GfpGanV14 = new(
     Name: "gfpgan-v1-4",
@@ -270,6 +303,73 @@ public static class ModelRegistry {
     Description: "GFPGAN v1.4 ONNX — restores faces in old / damaged photos: removes scratches across faces, deblurs features, sharpens eyes / hair / skin. Operates on 512×512 face crops; the restoration window auto-detects faces and feeds them through. ~324 MB.",
     DownloadUrl: "https://huggingface.co/Meeperomi/GFPGANv1.4-onnx/resolve/main/GFPGANv1.4.onnx",
     ApproximateSizeBytes: 340_256_686
+  );
+
+  /// <summary>Sky segmentation ONNX — predicts a per-pixel sky probability mask, ~25 MB.
+  /// Exported from a UNet-based sky segmentation model to ONNX.
+  /// Input: 1×3×512×512 float32 [0,1]. Output: 1×1×512×512 float32 [0,1].
+  /// Hosted on huggingface.co/Hawkynt/photomanager-models.</summary>
+  public static readonly ModelInfo SkySegmenter = new(
+    Name: "sky-segmenter",
+    FileName: "sky-segmenter.onnx",
+    DisplayName: "Sky segmenter (sky mask)",
+    Description: "ONNX sky segmentation model. Predicts a per-pixel sky probability map for selective sky adjustments. ~25 MB. Input: 1×3×512×512 RGB float32 in [0,1].",
+    DownloadUrl: "https://huggingface.co/Hawkynt/photomanager-models/resolve/main/sky-segmenter.onnx",
+    ApproximateSizeBytes: 15_300_000
+  );
+
+  /// <summary>NIMA MobileNetV2 aesthetic scorer ONNX — distribution over 1..10 score bins, ~9 MB.</summary>
+  public static readonly ModelInfo NimaMobileNetV2 = new(
+    Name: "nima-mobilenetv2",
+    FileName: "nima-mobilenetv2.onnx",
+    DisplayName: "NIMA MobileNetV2 — aesthetic score",
+    Description: "Neural Image Assessment (Talebi & Milanfar 2017) with MobileNetV2 backbone. Predicts an aesthetic quality score in [1.0, 10.0] from a 224×224 RGB crop. Trained on AVA. ~9 MB. Powers 'Top X% only' smart-album rules, auto-pick best from burst, and aesthetic ratings. Hosted on huggingface.co/Hawkynt/photomanager-models.",
+    DownloadUrl: "https://huggingface.co/Hawkynt/photomanager-models/resolve/main/nima-mobilenetv2.onnx",
+    ApproximateSizeBytes: 8_930_972
+  );
+
+  /// <summary>AOD-Net dehazing ONNX — atmospheric-scattering-model dehazer, ~9 KB.</summary>
+  public static readonly ModelInfo AodNetDehazer = new(
+    Name: "aod-net",
+    FileName: "aod-net.onnx",
+    DisplayName: "AOD-Net — image dehazing",
+    Description: "All-in-One Dehazing Network (Li et al., ICCV 2017). Tiny ~1.8 K-parameter CNN (~9 KB ONNX) that recovers haze-free images via the atmospheric scattering model. Modest quality vs current SOTA dehazers but ships immediately — drop in a DehazeFormer-T ONNX export at the same file path for the upgrade. Hosted on huggingface.co/Hawkynt/photomanager-models.",
+    DownloadUrl: "https://huggingface.co/Hawkynt/photomanager-models/resolve/main/aod-net.onnx",
+    ApproximateSizeBytes: 9_167
+  );
+
+  /// <summary>Zero-DCE++ low-light enhancement ONNX — pixel-wise tonal curve estimator, ~52 KB.</summary>
+  public static readonly ModelInfo ZeroDcePp = new(
+    Name: "zero-dce-pp",
+    FileName: "zero-dce-pp.onnx",
+    DisplayName: "Zero-DCE++ — low-light enhancement",
+    Description: "Zero-DCE++ (Li et al., TPAMI 2021). Tiny ~10 K-parameter network (~52 KB) that estimates pixel-wise tonal curves to lift dark regions without amplifying noise. Excellent for under-exposed snapshots / indoor / evening shots. Hosted on huggingface.co/Hawkynt/photomanager-models.",
+    DownloadUrl: "https://huggingface.co/Hawkynt/photomanager-models/resolve/main/zero-dce-pp.onnx",
+    ApproximateSizeBytes: 51_927
+  );
+
+  /// <summary>Depth Anything V2 small ONNX — monocular depth estimation (DINOv2 backbone), ~99 MB.
+  /// Input: 1×3×518×518 ImageNet-normalised float32. Output: 1×518×518 relative depth (closer = larger).
+  /// Powers depth-aware bokeh blur, depth-based masking, and parallax effects.</summary>
+  public static readonly ModelInfo DepthAnythingV2Small = new(
+    Name: "depth-anything-v2-small",
+    FileName: "depth-anything-v2-small.onnx",
+    DisplayName: "Depth Anything V2 small — monocular depth",
+    Description: "DepthAnything V2 small (ViT-S backbone, NeurIPS 2024). Predicts a relative depth map per pixel — the foundation for portrait bokeh, depth-aware masks, and atmospheric haze rendering. ~99 MB, fp32. Hosted on huggingface.co/onnx-community/depth-anything-v2-small.",
+    DownloadUrl: "https://huggingface.co/onnx-community/depth-anything-v2-small/resolve/main/onnx/model.onnx",
+    ApproximateSizeBytes: 99_060_839
+  );
+
+  /// <summary>SegFormer-B0 ADE20K 150-class ONNX — semantic segmentation across all ADE20K classes (grass / water / road / building / person / sand / rock / mountain / …), ~15 MB.
+  /// Exported from nvidia/segformer-b0-finetuned-ade-512-512. Input: 1×3×512×512 float32 [0,1]. Output: 1×150×128×128 logits.
+  /// Hosted on huggingface.co/Hawkynt/photomanager-models.</summary>
+  public static readonly ModelInfo SegformerAde150 = new(
+    Name: "segformer-ade150",
+    FileName: "segformer-ade150.onnx",
+    DisplayName: "SegFormer-B0 ADE20K (multi-class masks)",
+    Description: "SegFormer-B0 (Xie et al. 2021) fine-tuned on ADE20K. Outputs per-pixel logits across 150 semantic classes — one ONNX powers grass / water / sea / road / building / person / sand / rock / mountain / foliage / snow masks via argmax + class selection. ~15 MB. Hosted on huggingface.co/Hawkynt/photomanager-models.",
+    DownloadUrl: "https://huggingface.co/Hawkynt/photomanager-models/resolve/main/segformer-ade150.onnx",
+    ApproximateSizeBytes: 15_300_000
   );
 
   /// <summary>SigLIP base patch16-224 vision encoder — produces image embeddings for F3 auto-keyword tagging.</summary>
@@ -293,7 +393,7 @@ public static class ModelRegistry {
   );
 
   /// <summary>Every upscale model registered with the app. UI dropdown order = this list's order.</summary>
-  public static readonly IReadOnlyList<ModelInfo> Upscalers = [RealEsrganX4, RealEsrganX4Fixed128, SwinIrX4, RealEsrganX4Anime, Waifu2xPhotoX4, EdsrX2];
+  public static readonly IReadOnlyList<ModelInfo> Upscalers = [RealEsrganX4, RealEsrganX4Fixed128, HatSX4, SwinIrX4, RealEsrganX4Anime, AnimeSharpX4, Waifu2xPhotoX4, EdsrX2];
 
   /// <summary>Every denoise / restoration model registered with the app. UI dropdown order = this list's order.</summary>
   public static readonly IReadOnlyList<ModelInfo> Denoisers = [NafnetSidd, ScuNetGan, NafnetGoPro, NafnetSiddPure];
@@ -305,7 +405,7 @@ public static class ModelRegistry {
   public static readonly IReadOnlyList<ModelInfo> Colorizers = [ColorizeDDColorPaperTiny, ColorizeDDColorArtistic, ColorizeDeOldifyArtistic, ColorizeDeOldifyStable];
 
   /// <summary>Every face-restoration model registered with the app. UI dropdown order = this list's order.</summary>
-  public static readonly IReadOnlyList<ModelInfo> FaceRestorers = [GfpGanV14];
+  public static readonly IReadOnlyList<ModelInfo> FaceRestorers = [GfpGanV14, CodeFormer];
 
   /// <summary>Every scratch-detection model registered with the app. UI dropdown order = this list's order.</summary>
   public static readonly IReadOnlyList<ModelInfo> ScratchDetectors = [BopbScratchDetector];
@@ -313,7 +413,25 @@ public static class ModelRegistry {
   /// <summary>Every inpainting model registered with the app. UI dropdown order = this list's order.</summary>
   public static readonly IReadOnlyList<ModelInfo> Inpainters = [LamaInpaint];
 
-  public static readonly IReadOnlyList<ModelInfo> All = [YoloV8n, UltraFaceRfb320, ArcFace, SubjectMaskMODNet, NafnetSidd, ScuNetGan, NafnetGoPro, NafnetSiddPure, ArtifactRemoverFbcnnColor, RealEsrganX4, RealEsrganX4Fixed128, SwinIrX4, RealEsrganX4Anime, Waifu2xPhotoX4, EdsrX2, ColorizeDDColorPaperTiny, ColorizeDDColorArtistic, ColorizeDeOldifyArtistic, ColorizeDeOldifyStable, GfpGanV14, BopbScratchDetector, LamaInpaint, SiglipVision, SiglipText];
+  /// <summary>Every sky segmentation model registered with the app. UI dropdown order = this list's order.</summary>
+  public static readonly IReadOnlyList<ModelInfo> SkySegmenters = [SkySegmenter];
+
+  /// <summary>Multi-class semantic segmentation models (ADE20K 150-class etc.). UI surfaces these for the per-class mask flyout.</summary>
+  public static readonly IReadOnlyList<ModelInfo> SemanticSegmenters = [SegformerAde150];
+
+  /// <summary>Monocular depth-estimation models. UI surfaces these for the depth-aware bokeh / masking features.</summary>
+  public static readonly IReadOnlyList<ModelInfo> DepthEstimators = [DepthAnythingV2Small];
+
+  /// <summary>Low-light / exposure-correction models. UI surfaces these for the "Brighten low-light" feature.</summary>
+  public static readonly IReadOnlyList<ModelInfo> LowLightEnhancers = [ZeroDcePp];
+
+  /// <summary>Image-dehazing models. UI surfaces these for the "Remove haze" feature.</summary>
+  public static readonly IReadOnlyList<ModelInfo> Dehazers = [AodNetDehazer];
+
+  /// <summary>Aesthetic-scoring models. UI surfaces these for the "Score photo" feature + smart-album rules.</summary>
+  public static readonly IReadOnlyList<ModelInfo> AestheticScorers = [NimaMobileNetV2];
+
+  public static readonly IReadOnlyList<ModelInfo> All = [YoloV8n, UltraFaceRfb320, ArcFace, SubjectMaskMODNet, SkySegmenter, SegformerAde150, DepthAnythingV2Small, ZeroDcePp, AodNetDehazer, NimaMobileNetV2, NafnetSidd, ScuNetGan, NafnetGoPro, NafnetSiddPure, ArtifactRemoverFbcnnColor, RealEsrganX4, RealEsrganX4Fixed128, HatSX4, SwinIrX4, RealEsrganX4Anime, AnimeSharpX4, Waifu2xPhotoX4, EdsrX2, ColorizeDDColorPaperTiny, ColorizeDDColorArtistic, ColorizeDeOldifyArtistic, ColorizeDeOldifyStable, GfpGanV14, CodeFormer, BopbScratchDetector, LamaInpaint, SiglipVision, SiglipText];
 
   public static ModelInfo? FindByName(string name) =>
     All.FirstOrDefault(m => string.Equals(m.Name, name, StringComparison.OrdinalIgnoreCase));

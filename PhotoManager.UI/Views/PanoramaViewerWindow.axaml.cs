@@ -183,13 +183,15 @@ public partial class PanoramaViewerWindow : Window {
     if (raw != null) {
       try {
         using var ms = new MemoryStream(raw, writable: false);
-        return await SixLabors.ImageSharp.Image.LoadAsync<Rgba32>(ms);
+        return PhotoManager.Core.Imaging.AlphaFlattener.FlattenOntoWhite(
+          await SixLabors.ImageSharp.Image.LoadAsync<Rgba32>(ms));
       } catch {
         // Fall through.
       }
     }
     try {
-      return await SixLabors.ImageSharp.Image.LoadAsync<Rgba32>(file.FullName);
+      return PhotoManager.Core.Imaging.AlphaFlattener.FlattenOntoWhite(
+        await SixLabors.ImageSharp.Image.LoadAsync<Rgba32>(file.FullName));
     } catch {
       return null;
     }

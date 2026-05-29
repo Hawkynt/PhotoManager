@@ -224,7 +224,10 @@ public partial class PanoramaStitchWindow : Window {
         var masks = new List<Image<L8>>();
         try {
           for (var i = 0; i < snapshot.Count; i++) {
-            sources.Add(SharpImage.Load<Rgba32>(snapshot[i].FullName));
+            // Flatten alpha onto white so transparent GIF / PNG sources
+            // don't paint black through the stitch.
+            sources.Add(PhotoManager.Core.Imaging.AlphaFlattener.FlattenOntoWhite(
+              SharpImage.Load<Rgba32>(snapshot[i].FullName)));
             this.PostProgress(2 + (int)(20.0 * (i + 1) / snapshot.Count),
               $"Loading {snapshot[i].Name}");
           }

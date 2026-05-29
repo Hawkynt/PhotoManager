@@ -1,0 +1,29 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="520" d:DesignHeight="440"
+        x:Class="PhotoManager.UI.Views.MergeSuggestionDialog"
+        Width="520" Height="440"
+        MinWidth="400" MinHeight="340"
+        WindowStartupLocation="CenterOwner"
+        Title="Is this the same person?">
+  <Grid RowDefinitions="Auto,*,Auto" Margin="12">
+    <StackPanel Grid.Row="0" Spacing="4" Margin="0,0,0,8">
+      <TextBlock x:Name="HeaderText" FontSize="16" FontWeight="SemiBold" TextWrapping="Wrap" />
+      <TextBlock Opacity="0.75" TextWrapping="Wrap"
+                 Text="The closest named people by embedding similarity are listed below. Click a row to merge this cluster into that person." />
+    </StackPanel>
+
+    <Border Grid.Row="1" BorderBrush="#DDD" BorderThickness="1" CornerRadius="4">
+      <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+        <StackPanel x:Name="SuggestionsList" Spacing="2" Margin="4" />
+      </ScrollViewer>
+    </Border>
+
+    <Grid Grid.Row="2" ColumnDefinitions="*,Auto" Margin="0,8,0,0">
+      <TextBlock Grid.Column="0" x:Name="StatusText" VerticalAlignment="Center" Opacity="0.75" />
+      <Button Grid.Column="1" Content="&#x1F6AA; Cancel" Click="OnCancelClick" IsCancel="True" IsDefault="True" />
+    </Grid>
+  </Grid>
+</Window>

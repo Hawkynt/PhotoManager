@@ -107,6 +107,7 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="PhotoManager.Tests" />
+    <InternalsVisibleTo Include="PhotoManager.Benchmarks" />
   </ItemGroup>
 
   <ItemGroup>

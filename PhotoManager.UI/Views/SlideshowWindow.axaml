@@ -1,0 +1,61 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="PhotoManager.UI.Views.SlideshowWindow"
+        Title="Slideshow"
+        Width="1024" Height="768"
+        Background="Black"
+        CanResize="True">
+  <!-- Two overlapping Images for cross-fade. ImageB sits on top. -->
+  <Grid>
+    <Image x:Name="ImageA" Stretch="Uniform"
+           HorizontalAlignment="Center" VerticalAlignment="Center" />
+    <Image x:Name="ImageB" Stretch="Uniform" Opacity="0"
+           HorizontalAlignment="Center" VerticalAlignment="Center" />
+
+    <!-- Semi-transparent bottom control overlay, auto-hides after 3s -->
+    <Border x:Name="ControlOverlay"
+            VerticalAlignment="Bottom" HorizontalAlignment="Stretch"
+            Background="#AA000000" Padding="12,8" Margin="0,0,0,0"
+            CornerRadius="0">
+      <Grid ColumnDefinitions="Auto,Auto,Auto,Auto,*,Auto,Auto,Auto">
+        <Button Grid.Column="0" Content="⏮" FontSize="18" Padding="8,4"
+                Click="OnFirstClick" Foreground="White" Background="Transparent"
+                ToolTip.Tip="First (Home)" />
+        <Button Grid.Column="1" Content="◀" FontSize="18" Padding="8,4"
+                Click="OnPrevClick" Foreground="White" Background="Transparent"
+                ToolTip.Tip="Previous (Left / Backspace)" />
+        <Button Grid.Column="2" x:Name="PlayPauseButton" Content="⏯" FontSize="18" Padding="8,4"
+                Click="OnPlayPauseClick" Foreground="White" Background="Transparent"
+                ToolTip.Tip="Play / Pause (P)" />
+        <Button Grid.Column="3" Content="▶" FontSize="18" Padding="8,4"
+                Click="OnNextClick" Foreground="White" Background="Transparent"
+                ToolTip.Tip="Next (Right / Space)" />
+
+        <!-- Slide counter + interval picker centered -->
+        <StackPanel Grid.Column="4" Orientation="Horizontal" HorizontalAlignment="Center"
+                    VerticalAlignment="Center" Spacing="12">
+          <TextBlock x:Name="SlideCounter" Foreground="White" VerticalAlignment="Center"
+                     FontSize="13" Text="0 / 0" />
+          <ComboBox x:Name="IntervalCombo" Width="80" SelectedIndex="1"
+                    SelectionChanged="OnIntervalChanged"
+                    ToolTip.Tip="Auto-advance interval">
+            <ComboBoxItem Content="3s"  Tag="3" />
+            <ComboBoxItem Content="5s"  Tag="5" />
+            <ComboBoxItem Content="10s" Tag="10" />
+            <ComboBoxItem Content="30s" Tag="30" />
+          </ComboBox>
+        </StackPanel>
+
+        <Button Grid.Column="5" x:Name="ShuffleButton" Content="🔀" FontSize="18" Padding="8,4"
+                Click="OnShuffleClick" Foreground="White" Background="Transparent"
+                ToolTip.Tip="Shuffle / Unshuffle (S)" />
+        <Button Grid.Column="6" Content="⏭" FontSize="18" Padding="8,4"
+                Click="OnLastClick" Foreground="White" Background="Transparent"
+                ToolTip.Tip="Last (End)" />
+        <Button Grid.Column="7" Content="🚪" FontSize="18" Padding="8,4"
+                Click="OnExitClick" Foreground="White" Background="Transparent"
+                ToolTip.Tip="Exit slideshow (Escape)" />
+      </Grid>
+    </Border>
+  </Grid>
+</Window>

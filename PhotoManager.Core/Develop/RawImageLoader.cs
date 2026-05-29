@@ -11,6 +11,7 @@ using FileFormat.Ico;
 using FileFormat.Jpeg2000;
 using FileFormat.Pcx;
 using FileFormat.Psd;
+using PhotoManager.Core.Imaging;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 
@@ -66,6 +67,17 @@ public static class RawImageLoader {
     if (!file.Exists)
       throw new FileNotFoundException("Source image not found.", file.FullName);
 
+    var loaded = await LoadAsyncCore(file, cancellationToken);
+    // ImageSharp's JPEG encoder (used downstream for previews + Save As)
+    // bakes transparent pixels to black, which silently makes any GIF /
+    // transparent-PNG develop preview render as a mostly-black image.
+    // The develop pipeline isn't built for alpha anyway — flatten before
+    // returning so every stage downstream sees opaque RGB regardless of
+    // which loader path produced the image.
+    return AlphaFlattener.FlattenOntoWhite(loaded);
+  }
+
+  private static async Task<Image<Rgba32>> LoadAsyncCore(FileInfo file, CancellationToken cancellationToken) {
     var ext = file.Extension;
 
     if (ext.Equals(".dng", StringComparison.OrdinalIgnoreCase))
@@ -95,12 +107,33 @@ public static class RawImageLoader {
   }
 
   /// <summary>
+  /// Extensions that PNGCrushCS's FileFormat.* libs specifically claim
+  /// to handle. The Magick.NET fallback fires only for THIS set when
+  /// the PNGCrushCS decoder either fails or returns a zero buffer —
+  /// for everything else (GIF, JPG, PNG, BMP, TIFF, WebP …) we return
+  /// null so ImageSharp's own decoders take over. Critical: those
+  /// non-PNGCrushCS formats must NOT touch Magick because Magick's
+  /// GIF decoder flattens transparent regions against the GIF's
+  /// background colour (typically pure black), which made every
+  /// developed GIF preview come out black.
+  /// </summary>
+  private static readonly HashSet<string> PngCrushExtensions = new(StringComparer.OrdinalIgnoreCase) {
+    ".heic", ".heif", ".avif", ".psd", ".psb",
+    ".jp2", ".j2k", ".jpc", ".hdr", ".exr",
+    ".apng", ".dds", ".pcx", ".ico"
+  };
+
+  /// <summary>
   /// Per-extension dispatch to the matching PNGCrushCS FileFormat.* lib.
   /// Returns null for extensions we don't handle here so the caller can
   /// fall through to ImageSharp.
   /// </summary>
   private static Image<Rgba32>? FromPngCrushFormat(FileInfo file) {
-    var raw = file.Extension.ToLowerInvariant() switch {
+    var ext = file.Extension.ToLowerInvariant();
+    if (!PngCrushExtensions.Contains(ext))
+      return null;  // ImageSharp will handle it.
+
+    var raw = ext switch {
       ".heic" or ".heif"           => FormatIO.Decode<HeifFile>(file),
       ".avif"                      => FormatIO.Decode<AvifFile>(file),
       ".psd" or ".psb"             => FormatIO.Decode<PsdFile>(file),
@@ -113,20 +146,23 @@ public static class RawImageLoader {
       ".ico"                       => FormatIO.Decode<IcoFile>(file),
       _                            => null
     };
+
     // Sanity check: the upstream AVIF decoder (FileFormat.Avif at
     // ../../PNGCrushCS) returns a zero-filled buffer on certain AV1
     // profiles instead of failing — we'd otherwise paint pure black,
     // which the user reads as "decode silently broken". When that
     // happens we fall through to Magick.NET, which has libheif/libavif
     // bundled and decodes the broader set of profiles correctly.
+    // Same fallback fires when the PNGCrushCS lib couldn't decode at
+    // all (returns null) — Magick is the broader-codec last resort.
     if (raw is null || IsAllZero(raw.PixelData)) {
       var fromMagick = TryMagickDecode(file);
       if (fromMagick is not null)
         return fromMagick;
       if (raw is null)
-        return null;  // FileFormat lib didn't recognise the format AND Magick couldn't either
+        return null;  // PNGCrushCS lib didn't recognise it AND Magick couldn't either
       throw new NotSupportedException(
-        $"Decoder for {file.Extension.ToLowerInvariant()} returned an empty image for '{file.Name}', " +
+        $"Decoder for {ext} returned an empty image for '{file.Name}', " +
         "and the Magick.NET fallback also failed. Convert the file to PNG/JPEG as a workaround.");
     }
 

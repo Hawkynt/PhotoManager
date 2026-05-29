@@ -264,8 +264,8 @@ public partial class RestoreWindow : Window {
         if (this.FindControl<TextBlock>("FaceCountLabel") is { } label)
           label.Text = this._faces.Count switch {
             0 => "No faces detected — the Restore-faces slider has no effect on this image.",
-            1 => "1 face detected — the Restore-faces slider will apply GFPGAN to it.",
-            var n => $"{n} faces detected — the Restore-faces slider will apply GFPGAN to each."
+            1 => "1 face detected — the Restore-faces slider will apply the picked face restorer to it.",
+            var n => $"{n} faces detected — the Restore-faces slider will apply the picked face restorer to each."
           };
         this.RefreshFaceBoxesOverlay();
       });
@@ -315,8 +315,7 @@ public partial class RestoreWindow : Window {
       RecolourStrength: colour,
       AutoTone: autoTone,
       UpscaleFactor: upscaleFactor,
-      // RestorationSettings doesn't carry a face-model field (GFPGAN only,
-      // for now); the others mirror what the develop window stores.
+      FaceRestoreModel: PickedFileName(this.FindControl<ComboBox>("FaceModelCombo"), ModelRegistry.FaceRestorers),
       DenoiseModel: PickedFileName(this.FindControl<ComboBox>("DenoiseModelCombo"), ModelRegistry.Denoisers),
       ArtifactRemoveModel: PickedFileName(this.FindControl<ComboBox>("ArtifactModelCombo"), ModelRegistry.ArtifactRemovers),
       ColorizeModel: PickedFileName(this.FindControl<ComboBox>("ColourModelCombo"), ModelRegistry.Colorizers),

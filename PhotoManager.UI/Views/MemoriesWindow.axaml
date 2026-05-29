@@ -3,83 +3,43 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:models="using:PhotoManager.UI.Models"
-        mc:Ignorable="d" d:DesignWidth="900" d:DesignHeight="600"
+        mc:Ignorable="d" d:DesignWidth="1000" d:DesignHeight="700"
         x:Class="PhotoManager.UI.Views.MemoriesWindow"
-        Width="900" Height="600"
+        Width="1000" Height="700"
         MinWidth="640" MinHeight="400"
         WindowStartupLocation="CenterOwner"
         Title="Memories">
   <Grid RowDefinitions="Auto,*,Auto" Margin="12">
-    <TabControl Grid.Row="1" x:Name="MemoriesTabs">
-      <TabItem Header="On this day">
-        <Grid RowDefinitions="Auto,*">
-          <TextBlock Grid.Row="0" x:Name="OnThisDayHeader" Margin="4,4,4,8" Opacity="0.7" />
-          <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
-            <ItemsControl x:Name="OnThisDayList">
-              <ItemsControl.ItemsPanel>
-                <ItemsPanelTemplate>
-                  <WrapPanel Orientation="Horizontal" />
-                </ItemsPanelTemplate>
-              </ItemsControl.ItemsPanel>
-              <ItemsControl.ItemTemplate>
-                <DataTemplate DataType="models:MemoryRowViewModel">
-                  <Border Width="200" Margin="4" BorderBrush="{DynamicResource PanelBorderBrush}" BorderThickness="1" CornerRadius="4"
-                          DoubleTapped="OnTileDoubleTapped">
-                    <StackPanel>
-                      <Border Height="140" Background="{DynamicResource ThumbBackgroundBrush}">
-                        <Image Source="{CompiledBinding Thumbnail}" Stretch="Uniform" />
-                      </Border>
-                      <StackPanel Margin="6" Spacing="2">
-                        <TextBlock Text="{CompiledBinding FileName}" FontWeight="SemiBold" FontSize="11"
-                                   TextTrimming="CharacterEllipsis"
-                                   ToolTip.Tip="{CompiledBinding FileName}" />
-                        <TextBlock Text="{CompiledBinding DateText}" FontSize="11" Opacity="0.75" />
-                        <TextBlock Text="{CompiledBinding LocationText}" FontSize="11" Opacity="0.6"
-                                   TextTrimming="CharacterEllipsis" />
-                      </StackPanel>
-                    </StackPanel>
-                  </Border>
-                </DataTemplate>
-              </ItemsControl.ItemTemplate>
-            </ItemsControl>
-          </ScrollViewer>
-        </Grid>
-      </TabItem>
-      <TabItem Header="On this trip">
-        <Grid RowDefinitions="Auto,*">
-          <TextBlock Grid.Row="0" x:Name="OnThisTripHeader" Margin="4,4,4,8" Opacity="0.7" TextWrapping="Wrap" />
-          <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
-            <ItemsControl x:Name="OnThisTripList">
-              <ItemsControl.ItemsPanel>
-                <ItemsPanelTemplate>
-                  <WrapPanel Orientation="Horizontal" />
-                </ItemsPanelTemplate>
-              </ItemsControl.ItemsPanel>
-              <ItemsControl.ItemTemplate>
-                <DataTemplate DataType="models:MemoryRowViewModel">
-                  <Border Width="200" Margin="4" BorderBrush="{DynamicResource PanelBorderBrush}" BorderThickness="1" CornerRadius="4"
-                          DoubleTapped="OnTileDoubleTapped">
-                    <StackPanel>
-                      <Border Height="140" Background="{DynamicResource ThumbBackgroundBrush}">
-                        <Image Source="{CompiledBinding Thumbnail}" Stretch="Uniform" />
-                      </Border>
-                      <StackPanel Margin="6" Spacing="2">
-                        <TextBlock Text="{CompiledBinding FileName}" FontWeight="SemiBold" FontSize="11"
-                                   TextTrimming="CharacterEllipsis"
-                                   ToolTip.Tip="{CompiledBinding FileName}" />
-                        <TextBlock Text="{CompiledBinding DateText}" FontSize="11" Opacity="0.75" />
-                        <TextBlock Text="{CompiledBinding LocationText}" FontSize="11" Opacity="0.6"
-                                   TextTrimming="CharacterEllipsis" />
-                      </StackPanel>
-                    </StackPanel>
-                  </Border>
-                </DataTemplate>
-              </ItemsControl.ItemTemplate>
-            </ItemsControl>
-          </ScrollViewer>
-        </Grid>
-      </TabItem>
-    </TabControl>
+    <!-- Filter buttons at top -->
+    <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="4" Margin="0,0,0,8">
+      <TextBlock Text="Show:" VerticalAlignment="Center" Margin="0,0,8,0" />
+      <ToggleButton x:Name="FilterAll" Content="All" Padding="10,4" IsChecked="True" Click="OnFilterClick" Tag="All" />
+      <ToggleButton x:Name="FilterDay" Content="Day" Padding="10,4" Click="OnFilterClick" Tag="Day" />
+      <ToggleButton x:Name="FilterWeek" Content="Week" Padding="10,4" Click="OnFilterClick" Tag="Week" />
+      <ToggleButton x:Name="FilterMonth" Content="Month" Padding="10,4" Click="OnFilterClick" Tag="Month" />
+      <ToggleButton x:Name="FilterYear" Content="Year" Padding="10,4" Click="OnFilterClick" Tag="Year" />
+      <ToggleButton x:Name="FilterDecade" Content="Decade" Padding="10,4" Click="OnFilterClick" Tag="Decade" />
+      <ToggleButton x:Name="FilterTrip" Content="On this trip" Padding="10,4" Click="OnFilterClick" Tag="Trip" />
+      <Border Width="1" Background="#CCC" Margin="8,2,8,2" />
+      <TextBlock x:Name="SummaryText" VerticalAlignment="Center" Opacity="0.7" />
+    </StackPanel>
+
+    <!-- Main content: scrollable groups of thumbnail tiles. Each group is a
+         header + WrapPanel of tile borders, built dynamically in code-behind
+         because the heterogeneous structure (MemoriesFinder groups + legacy
+         OnThisTrip) doesn't map cleanly to a single ItemTemplate. -->
+    <ScrollViewer Grid.Row="1" x:Name="MainScrollViewer"
+                  HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+      <StackPanel x:Name="GroupsPanel" Spacing="16" />
+    </ScrollViewer>
+
+    <!-- Empty state -->
+    <StackPanel Grid.Row="1" x:Name="EmptyState" IsVisible="False"
+                HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8">
+      <TextBlock Text="No memories for today — check back tomorrow! 📷"
+                 FontSize="16" HorizontalAlignment="Center" Opacity="0.6" />
+    </StackPanel>
+
     <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="6" Margin="0,8,0,0">
       <TextBlock x:Name="StatusText" VerticalAlignment="Center" Opacity="0.7" Margin="0,0,8,0" />
       <Button Content="🚪 Close" Width="100" Click="OnCloseClick" />

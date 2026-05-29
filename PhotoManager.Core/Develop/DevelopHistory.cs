@@ -13,7 +13,7 @@ public sealed record DevelopSnapshot(DateTime TimestampUtc, string? Label, Devel
 /// callers persist the list as XMP via <see cref="DevelopMetadataStore"/>.
 /// </summary>
 public static class DevelopHistory {
-  public const int DefaultMaxDepth = 20;
+  public const int DefaultMaxDepth = 50;
 
   /// <summary>
   /// Push <paramref name="settings"/> onto the front of the stack with a UTC
@@ -35,5 +35,28 @@ public static class DevelopHistory {
     for (var i = 0; i < existing.Count && combined.Count < maxDepth; i++)
       combined.Add(existing[i]);
     return combined;
+  }
+
+  /// <summary>
+  /// Return every snapshot in the stack, newest first. Returns an empty
+  /// list when the history is empty. The returned list is a fresh copy.
+  /// </summary>
+  public static IReadOnlyList<DevelopSnapshot> GetAll(IReadOnlyList<DevelopSnapshot> history) {
+    ArgumentNullException.ThrowIfNull(history);
+    return history.ToList();
+  }
+
+  /// <summary>
+  /// Roll back to the snapshot at <paramref name="index"/> (0 = most
+  /// recent). Returns the <see cref="DevelopSettings"/> stored in that
+  /// entry. Throws <see cref="ArgumentOutOfRangeException"/> if the
+  /// index is out of bounds.
+  /// </summary>
+  public static DevelopSettings RollbackTo(IReadOnlyList<DevelopSnapshot> history, int index) {
+    ArgumentNullException.ThrowIfNull(history);
+    if (index < 0 || index >= history.Count)
+      throw new ArgumentOutOfRangeException(nameof(index), index,
+        $"Index must be 0..{history.Count - 1} but was {index}.");
+    return history[index].Settings;
   }
 }

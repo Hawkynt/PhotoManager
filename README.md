@@ -24,6 +24,18 @@ PhotoManager helps photographers and photo enthusiasts:
 
 ## Features
 
+### What's new (May 2026)
+- 🎛️ **Develop window redesign** — right-hand control surface restructured into 6 focused tabs (⚡ Basic / 🤖 AI / ✂️ Crop / 🎨 Color / 🎭 Masks / 🌈 Effects) instead of a single 1300-line vertical scroll. AI tab puts Magic Enhance, mask helpers, and per-feature AI fixers front-and-centre.
+- 🪄 **Magic Enhance** — one-click "fix everything" pipeline that auto-detects low-light / noise / haze / low-res via `PhotoIssueDetector` and runs only the matching stages (Zero-DCE++ → NAFNet → FBCNN → AOD-Net → auto-WB → auto-tone → CLAHE → upscale). Scores before/after with NIMA so the status bar reports the aesthetic delta.
+- 🔀 **4-mode compare cycle** in the develop preview — After only / Split (left/right) / **Overlay with alpha slider** (NEW: dial a partial blend between source and developed) / Slider wipe (custom grabbable handle, not the default blue circle).
+- 🔍 **Zoom + pan inside the preview** — mouse-wheel zooms anchored at the cursor (10 %–3200 %), right-drag pans, double-right-click resets. Only the image transforms; the slider thumb, alpha bar, and other controls stay at fixed screen positions. Slider-mode wipe clip is transform-aware so the wipe edge stays under the Thumb during zoom/pan.
+- 📊 **Rich bottom status bar** — phase indicator (idle / loading / developing / ready (N edits) / AI work / error) + diagnostic strip + AI ETA progress bar. Anchored to the very bottom of the window like a conventional status bar.
+- 🤖 **New AI catalog** — DDColor (paper-tiny + artistic, ECCV 2023 colorizer), FBCNN (JPEG/DCT artifact removal), SegFormer-B0 ADE20K (multi-class masks: grass / water / road / building / person / mountain / sand / rock / foliage / snow), Depth Anything V2 small (monocular depth), Zero-DCE++ (low-light), AOD-Net (dehazing), NIMA MobileNetV2 (aesthetic scoring), HAT-S ×4, AnimeSharp ×4, CodeFormer (face restoration). All flow through the existing ModelRegistry lazy-download path.
+- 📸 **Depth-aware bokeh** — Depth Anything V2 + `DepthBokehBlur` produces realistic portrait blur with depth-distance falloff. One-click "📸 Bokeh blur" button writes `IMG.bokeh.jpg` next to the source.
+- 🌫️ **Per-feature AI buttons** in the AI tab — 🔦 Brighten low-light (Zero-DCE++), 🌫️ Remove haze (AOD-Net), 💥 Motion deblur (NAFNet-GoPro), 📊 Score photo (NIMA), ✂️ Suggest crops (NIMA-ranked aspect ratios). Each writes a sidecar JPEG so source is untouched.
+- 🧹 **Pure-C# additions** — DPID detail-preserving downscaler, CLAHE local contrast, Reinhard HDR tone mapping, AutoStraighten via Hough-vote horizon detection. All measurable wins on smartphone shots, no ONNX required.
+- 🎨 **Alpha-flatten on load** — every loader path (`RawImageLoader`, `ImagePreviewLoader`, `RegionThumbnailExtractor`, `PanoramaStitchWindow`, `PanoramaViewerWindow`) now src-over composites alpha onto white via `AlphaFlattener.FlattenOntoWhite`, so transparent GIFs / PNGs render correctly through the JPEG-encoding preview path. Magick.NET fallback scoped to PNGCrushCS-handled extensions only (was flattening GIF transparency against the GIF's black background).
+
 ### What's new (April 2026)
 - 🤖 **AI denoise + AI upscale** in the develop pipeline — NAFNet-SIDD ONNX denoiser (slider 0…1) and Real-ESRGAN-x4 upscaler (1×/2×/4×). Tile-based, lazy-downloaded via the same model registry as MODNet/YOLO; degrades to a no-op when the model isn't installed.
 - 🏷️ **Auto-keyword tagging** via SigLIP — `Tools → Auto-keyword scan…` runs CLIP-style image+text embeddings against a 700+-word vocabulary and writes the top-K hits as flat `dc:subject` keywords. Library-scan flow with progress + per-file preview.
@@ -56,7 +68,7 @@ PhotoManager helps photographers and photo enthusiasts:
 - 📍 **Nearby-photo radius search** — in the world map, switch to Nearby mode, click anywhere → photos within a log-scale 100m–50km radius are highlighted, the rest dimmed.
 - ⚙️ **Settings window + Recent folders + Status-bar progress** — File → Settings consolidates theme, default rename template, recent-folders depth, geocoder/elevation toggles, rate limit. File menu lists last-5 source/output folders. A shared `OperationProgress` strip below the status bar shows long ops with a Cancel button.
 - 🎭 **AI subject mask** — MODNet ONNX segmentation auto-creates a brush-mask local adjustment so you can tweak the subject without touching the background.
-- 🔀 **Side-by-side compare** — three modes inside the develop window: After only, split view (with grid splitter), or slider-overlay wipe against the un-edited baseline.
+- 🔀 **Side-by-side compare** — four modes inside the develop window: After only, split view (with grid splitter), overlay-with-alpha-slider (partial blend), or movable wipe (grabbable Thumb handle, transform-aware so it stays under the cursor through zoom/pan).
 - 🎨 **Theme toggle** — Light / Dark / System default, persisted across sessions, theme-aware tile / border brushes.
 - 🪂 **Drag-drop** folders onto the source tree (adds them as roots) or files onto the grid (switches to target mode and scans).
 - 📤 **KML export** — `Tools → Export KML…` walks the in-memory index and writes one Placemark per geotagged photo.
@@ -92,7 +104,10 @@ PhotoManager helps photographers and photo enthusiasts:
 - ✅ Timeline scrubber strip (auto-bucketed Day/Week/Month histogram of photos-per-day, click-to-filter)
 - ✅ Quick collection (per-session bucket; B-hotkey toggle, ★ badge, filter mode, batch-edit just the bucket)
 - ✅ Memories window (on-this-day / on-this-trip discovery relative to the selected anchor)
-- ✅ Side-by-side compare (After / Split / Slider) inside the develop window
+- ✅ Side-by-side compare (After / Split / Overlay / Slider) inside the develop window, with mouse-wheel zoom + right-drag pan over the preview
+- ✅ Rich develop-window status bar (phase indicator, diagnostic strip, AI ETA progress bar) anchored to the very bottom of the window
+- ✅ Tabbed develop right panel (Basic / AI / Crop / Color / Masks / Effects) instead of a single vertical scroll
+- ✅ Magic Enhance one-click pipeline (Zero-DCE++ + NAFNet + AOD-Net + CLAHE + auto-WB + auto-tone + optional Real-ESRGAN, gated by per-issue heuristics)
 - ✅ Picasa-style picks/rejects (`xmp:Pick`/`xmp:Reject`) with P/X/U hotkeys; quality-flag scan tags blurry / over- / under-exposed photos
 - ✅ Perceptual-hash duplicate detection
 - ✅ Settings window (theme, default rename template, recent-folders depth, default develop preset, geocoder/elevation toggles, rate limit, geofence-on-scan toggle)

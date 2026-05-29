@@ -43,10 +43,20 @@ public partial class MainWindow : Window {
     var composite = new CompositeDetector(yolo, new PathDerivedDetector());
     return new DetectionService(composite, new MetadataReader(), new CompositeMetadataWriter());
   }
+
+  private async Task WriteOrEnqueueAsync(FileInfo file, MetadataEdit edit, string _label) {
+    try {
+      await this._metadataWriter.ApplyAsync(file, edit);
+    } catch (Exception ex) {
+      System.Diagnostics.Debug.WriteLine($"Metadata write failed ({_label}): {ex.Message}");
+    }
+  }
+
   private ObservableCollection<FileItemModel>? _currentFileItems;
   private FileInfo? _currentFile;
   private FullMetadata? _currentMetadata;
   private CancellationTokenSource? _previewCts;
+  private ThumbnailPreCacheService? _preCacheService;
 
   // Click-drag region creation state.
   private bool _isDrawingRegion;
@@ -582,6 +592,8 @@ public partial class MainWindow : Window {
         ? await this._controller.ScanTargetDirectoryAsync()
         : await this._controller.ScanCheckedSourcesAsync();
       this._currentFileItems = items;
+      this._controller.ViewModel.TotalPhotoCount = items.Count;
+      this._controller.ViewModel.SelectedPhotoCount = 0;
 
       if (grid != null) {
         grid.ItemsSource = items;
@@ -597,6 +609,10 @@ public partial class MainWindow : Window {
 
       this.RefreshTimelineStrip();
 
+      // Kick off low-priority background thumbnail pre-caching so grid
+      // scrolling never blocks on first-time decode.
+      this.StartThumbnailPreCache(items);
+
       // Capture-date populates lazily after the controller's metadata pass,
       // so re-render the strip a few times as data lands.
       _ = this.ScheduleTimelineRefreshesAsync();
@@ -611,6 +627,60 @@ public partial class MainWindow : Window {
       await Task.Delay(delayMs);
       await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(this.RefreshTimelineStrip);
     }
+  }
+
+  /// <summary>
+  /// Cancel any previous pre-cache run, create a fresh service, enqueue all
+  /// scanned files, and start a background polling loop that updates the
+  /// status bar with progress until every file is processed.
+  /// </summary>
+  private void StartThumbnailPreCache(ObservableCollection<FileItemModel> items) {
+    this._preCacheService?.Cancel();
+    this._preCacheService?.Dispose();
+
+    var service = new ThumbnailPreCacheService(
+      ImagePreviewLoader.Cache,
+      ImagePreviewLoader.DecodeAsync);
+    this._preCacheService = service;
+
+    var files = items
+      .Where(i => i.FileInfo is { Exists: true })
+      .Select(i => i.FileInfo!)
+      .ToList();
+
+    if (files.Count == 0)
+      return;
+
+    service.Enqueue(files);
+    _ = this.PollPreCacheProgressAsync(service);
+  }
+
+  private async Task PollPreCacheProgressAsync(ThumbnailPreCacheService service) {
+    while (service.IsRunning) {
+      var processed = service.ProcessedCount;
+      var total = service.TotalQueued;
+      var pct = total > 0 ? (int)(100.0 * processed / total) : 0;
+      await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() => {
+        if (ReferenceEquals(this._preCacheService, service)) {
+          this._controller.ViewModel.StatusMessage =
+            $"Pre-caching thumbnails… ({processed}/{total})";
+          this._controller.ViewModel.PreCachePercent = pct;
+          this._controller.ViewModel.CacheSizeBytes = ImagePreviewLoader.Cache.CurrentBytes;
+          this._controller.ViewModel.AcceleratorDevice = PhotoManager.Core.Segmentation.OnnxAcceleration.LastSelectedDevice;
+        }
+      });
+      await Task.Delay(500);
+    }
+
+    await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() => {
+      if (ReferenceEquals(this._preCacheService, service)) {
+        var total = service.TotalQueued;
+        this._controller.ViewModel.StatusMessage =
+          $"Thumbnail pre-cache complete ({total} files).";
+        this._controller.ViewModel.PreCachePercent = 100;
+        this._controller.ViewModel.CacheSizeBytes = ImagePreviewLoader.Cache.CurrentBytes;
+      }
+    });
   }
 
   private void RefreshTimelineStrip() {
@@ -971,6 +1041,15 @@ public partial class MainWindow : Window {
             || (item.CapturedDate is { } cd && cd >= dayFilter.Value.From && cd < dayFilter.Value.To)))
     );
     grid.ItemsSource = filtered;
+
+    // Update status-bar segments for filter and count.
+    this._controller.ViewModel.TotalPhotoCount = filtered.Count;
+    var filterParts = new List<string>();
+    if (minStars is { } ms) filterParts.Add($"{ms}★+");
+    if (requiredLabel is { } rl) filterParts.Add(rl);
+    if (tokens.Length > 0) filterParts.Add(string.Join(" ", tokens));
+    this._controller.ViewModel.ActiveFilterDescription =
+      filterParts.Count > 0 ? string.Join(", ", filterParts) : null;
   }
 
   private static bool MatchesAllTokens(FileItemModel item, string[] tokensLower) {
@@ -1048,6 +1127,17 @@ public partial class MainWindow : Window {
       .ToList() ?? new List<FileInfo>();
 
     var window = new FaceGalleryWindow(scanned);
+    await window.ShowDialog(this);
+  }
+
+  private async void OnOpenPersonTimelineClick(object? sender, RoutedEventArgs e) {
+    var scanned = this._currentFileItems?
+      .Select(i => i.FileInfo)
+      .Where(f => f != null && f.Exists)
+      .Cast<FileInfo>()
+      .ToList() ?? new List<FileInfo>();
+
+    var window = new PersonTimelineWindow(scanned);
     await window.ShowDialog(this);
   }
 
@@ -1398,8 +1488,11 @@ public partial class MainWindow : Window {
       .Select(i => i.FileInfo!)
       .ToList() ?? new List<FileInfo>();
 
+    // When the selected grid row is a virtual copy, open the develop window
+    // targeting that copy's sidecar so the user sees the alternate settings.
+    var copyIndex = this.PickContextFileItem()?.CopyIndex ?? 0;
     var window = new EditImageWindow(file, selection,
-      op => this._controller.ViewModel.CurrentOperation = op);
+      op => this._controller.ViewModel.CurrentOperation = op, copyIndex);
     await window.ShowDialog(this);
   }
 
@@ -1754,6 +1847,9 @@ public partial class MainWindow : Window {
   private async void OnFileSelectionChanged(object? sender, SelectionChangedEventArgs e) {
     if (sender is not DataGrid grid)
       return;
+
+    // Update the selected-count segment in the status bar.
+    this._controller.ViewModel.SelectedPhotoCount = grid.SelectedItems.Count;
 
     // Selection gone entirely (user cleared or filtered the grid): wipe the
     // current-file state and flip the edit gate off so Save/Apply/Draw etc.

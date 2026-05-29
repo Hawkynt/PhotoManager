@@ -22,6 +22,13 @@ namespace PhotoManager.Core.Segmentation;
 /// alpha-blends the seams. <c>strength</c> linearly mixes between the source
 /// (0.0) and the fully-denoised tile (1.0) so the user can dial intensity
 /// without re-running inference.
+///
+/// Tile inference is dispatched in parallel across all available accelerators
+/// (NPU, GPU, CPU) using the same multi-EP work-stealing pattern as
+/// <see cref="OnnxUpscaler"/>: one consumer task per device session pulls
+/// tiles from a shared queue, and the first finisher wins. Blend write-back
+/// is serialised under a lock because BlendTile reads-and-writes the output
+/// image's overlap band in-place.
 /// </summary>
 public sealed class OnnxDenoiser : IDisposable {
   public const string DefaultModelFileName = "denoise.onnx";
@@ -29,11 +36,11 @@ public sealed class OnnxDenoiser : IDisposable {
   private const int TileSize = 256;
   private const int TileOverlap = 16;
 
-  private readonly Lazy<InferenceSession?> _session;
+  private readonly Lazy<SessionInfo?> _session;
 
   public OnnxDenoiser(FileInfo? modelFile = null) {
     var path = modelFile ?? AppDataPaths.ModelFile(DefaultModelFileName);
-    this._session = new Lazy<InferenceSession?>(() => TryOpenSession(path));
+    this._session = new Lazy<SessionInfo?>(() => TryOpenSession(path));
   }
 
   public bool IsAvailable => this._session.Value != null;
@@ -50,8 +57,8 @@ public sealed class OnnxDenoiser : IDisposable {
   ///   re-renders don't have to wait for a full pass to finish.</param>
   public Image<Rgba32>? Denoise(Image<Rgba32> source, double strength = 1.0, CancellationToken ct = default, IProgress<Develop.StageProgress>? progress = null) {
     ArgumentNullException.ThrowIfNull(source);
-    var session = this._session.Value;
-    if (session == null)
+    var info = this._session.Value;
+    if (info == null)
       return null;
 
     var blend = (float)Math.Clamp(strength, 0.0, 1.0);
@@ -66,61 +73,116 @@ public sealed class OnnxDenoiser : IDisposable {
     // band of TileOverlap pixels we can ramp-blend across.
     var stride = TileSize - TileOverlap;
 
-    // Pre-count tiles so progress can compute "patch X / Y". Tile loop
-    // stays sequential because BlendTile reads-and-writes the output
-    // image in-place — the edge-feather seam between tile N and tile
-    // N-1 needs N-1's output to already be present.
-    var totalTiles = 0;
-    for (var ty = 0; ty < height; ty += stride)
-      for (var tx = 0; tx < width; tx += stride)
-        if (Math.Min(TileSize, width - tx) > 0 && Math.Min(TileSize, height - ty) > 0)
-          totalTiles++;
-    progress?.Report(new Develop.StageProgress("denoise", 0, totalTiles));
+    // Snapshot source pixels once — ImageSharp's per-image accessor
+    // isn't safe to share across the parallel inference threads.
+    var srcPixels = new Rgba32[width * height];
+    source.CopyPixelDataTo(srcPixels);
 
-    var done = 0;
+    // Build tile coordinates up front for progress + queue sizing.
+    var tiles = new List<(int tx, int ty, int w, int h)>();
     for (var ty = 0; ty < height; ty += stride) {
       for (var tx = 0; tx < width; tx += stride) {
-        ct.ThrowIfCancellationRequested();
-
         var w = Math.Min(TileSize, width - tx);
         var h = Math.Min(TileSize, height - ty);
-        if (w <= 0 || h <= 0)
-          continue;
-
-        var denoisedTile = RunTile(session, output, tx, ty, w, h);
-        if (denoisedTile == null)
-          continue;
-
-        BlendTile(output, denoisedTile, tx, ty, w, h, blend);
-        done++;
-        progress?.Report(new Develop.StageProgress("denoise", done, totalTiles));
+        if (w > 0 && h > 0)
+          tiles.Add((tx, ty, w, h));
       }
+    }
+    var totalTiles = tiles.Count;
+    var done = 0;
+    progress?.Report(new Develop.StageProgress("denoise", 0, totalTiles));
+
+    var writeLock = new object();
+
+    void RunTileOnSession(InferenceSession session, (int tx, int ty, int w, int h) tile) {
+      var denoisedTile = RunTileFromArray(info, session, srcPixels, width, height, tile.tx, tile.ty, tile.w, tile.h);
+      if (denoisedTile != null) {
+        lock (writeLock) {
+          BlendTile(output, denoisedTile, tile.tx, tile.ty, tile.w, tile.h, blend);
+        }
+      }
+      var d = Interlocked.Increment(ref done);
+      progress?.Report(new Develop.StageProgress("denoise", d, totalTiles));
+    }
+
+    // Try the multi-EP dispatch path first: one InferenceSession per
+    // physical accelerator (NPU, GPU, CPU). Each consumer holds its
+    // own session and pulls tiles off a shared BlockingCollection —
+    // a fast device naturally takes more tiles than a slow one (work
+    // stealing). When OpenVINO can't bind a separate NPU/GPU session
+    // (single-device hardware, OV not installed), we drop to the
+    // single-session Parallel.ForEach path below.
+    IReadOnlyList<(string Device, InferenceSession Session)>? sessions = null;
+    try {
+      sessions = OnnxAcceleration.CreateMultiDeviceSessions(info.ModelPath);
+    } catch {
+      sessions = null;
+    }
+
+    try {
+      if (sessions != null && sessions.Count >= 2) {
+        // Producer/consumer with one consumer per session. Work
+        // stealing falls out for free: a fast accelerator drains the
+        // queue more aggressively than a slow one.
+        using var queue = new System.Collections.Concurrent.BlockingCollection<(int tx, int ty, int w, int h)>(boundedCapacity: tiles.Count + 1);
+        foreach (var tile in tiles)
+          queue.Add(tile);
+        queue.CompleteAdding();
+
+        var consumerTasks = new Task[sessions.Count];
+        for (var i = 0; i < sessions.Count; i++) {
+          var session = sessions[i].Session;
+          consumerTasks[i] = Task.Run(() => {
+            foreach (var tile in queue.GetConsumingEnumerable(ct)) {
+              RunTileOnSession(session, tile);
+            }
+          }, ct);
+        }
+        Task.WaitAll(consumerTasks, ct);
+      } else {
+        // Single-session fallback (no separate NPU/GPU sessions
+        // available). Same Parallel.ForEach as upscaler, capped
+        // conservatively because all parallel calls hit one session.
+        Parallel.ForEach(
+          tiles,
+          new ParallelOptions {
+            CancellationToken = ct,
+            MaxDegreeOfParallelism = Math.Min(4, Math.Max(2, Environment.ProcessorCount / 2))
+          },
+          tile => RunTileOnSession(info.Session, tile));
+      }
+    } catch (OperationCanceledException) {
+      output.Dispose();
+      throw;
+    } catch (AggregateException ae) when (ae.InnerExceptions.OfType<OperationCanceledException>().Any()) {
+      output.Dispose();
+      throw new OperationCanceledException(ct);
     }
 
     return output;
   }
 
-  private static float[]? RunTile(InferenceSession session, Image<Rgba32> source, int tx, int ty, int w, int h) {
+  /// <summary>Array-fed tile inference; safe to call concurrently from
+  /// multiple threads because it reads from a flat snapshot rather than
+  /// the live ImageSharp accessor.</summary>
+  private static float[]? RunTileFromArray(SessionInfo info, InferenceSession session, Rgba32[] src, int srcW, int srcH, int tx, int ty, int w, int h) {
     var inputTensor = new float[1 * 3 * h * w];
     var pixelCount = h * w;
 
-    source.ProcessPixelRows(accessor => {
-      for (var y = 0; y < h; y++) {
-        var row = accessor.GetRowSpan(ty + y);
-        for (var x = 0; x < w; x++) {
-          var px = row[tx + x];
-          var offset = y * w + x;
-          inputTensor[0 * pixelCount + offset] = px.R / 255f;
-          inputTensor[1 * pixelCount + offset] = px.G / 255f;
-          inputTensor[2 * pixelCount + offset] = px.B / 255f;
-        }
+    for (var y = 0; y < h; y++) {
+      var srcRowOffset = (ty + y) * srcW;
+      for (var x = 0; x < w; x++) {
+        var px = src[srcRowOffset + tx + x];
+        var offset = y * w + x;
+        inputTensor[0 * pixelCount + offset] = px.R / 255f;
+        inputTensor[1 * pixelCount + offset] = px.G / 255f;
+        inputTensor[2 * pixelCount + offset] = px.B / 255f;
       }
-    });
+    }
 
     try {
-      var inputName = session.InputMetadata.Keys.First();
       var input = new DenseTensor<float>(inputTensor, new[] { 1, 3, h, w });
-      using var results = session.Run(new[] { NamedOnnxValue.CreateFromTensor(inputName, input) });
+      using var results = session.Run(new[] { NamedOnnxValue.CreateFromTensor(info.InputName, input) });
       return results.First().AsTensor<float>().ToArray();
     } catch {
       return null;
@@ -186,11 +248,13 @@ public sealed class OnnxDenoiser : IDisposable {
     return (byte)Math.Round(v * 255f);
   }
 
-  private static InferenceSession? TryOpenSession(FileInfo modelFile) {
+  private static SessionInfo? TryOpenSession(FileInfo modelFile) {
     try {
       if (!modelFile.Exists)
         return null;
-      return OnnxAcceleration.CreateSession(modelFile.FullName);
+      var session = OnnxAcceleration.CreateSession(modelFile.FullName);
+      var inputName = session.InputMetadata.Keys.First();
+      return new SessionInfo(session, inputName, modelFile.FullName);
     } catch {
       return null;
     }
@@ -201,4 +265,9 @@ public sealed class OnnxDenoiser : IDisposable {
     // instances; disposing them here would break the cache.
     // OnnxAcceleration.ResetCache() handles teardown if needed.
   }
+
+  private sealed record SessionInfo(
+    InferenceSession Session,
+    string InputName,
+    string ModelPath);
 }

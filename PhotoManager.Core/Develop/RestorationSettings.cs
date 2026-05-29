@@ -23,6 +23,8 @@ public sealed record RestorationSettings(
   bool AutoTone = false,
   /// <summary>1 = no upscale; 2 / 4 / 16 / 64 = output size multiplier.</summary>
   int UpscaleFactor = 1,
+  /// <summary>Optional model file-name override for the face restorer (GFPGAN by default, CodeFormer also supported).</summary>
+  string? FaceRestoreModel = null,
   /// <summary>Optional model file-name override for the denoiser (matches DevelopSettings.AiDenoiseModel).</summary>
   string? DenoiseModel = null,
   /// <summary>Optional model file-name override for the JPEG / artifact remover.</summary>

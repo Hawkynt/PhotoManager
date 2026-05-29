@@ -184,6 +184,8 @@
         <MenuItem Header="🎯 Apply _geofences to selection..." Click="OnOpenGeofenceBatchClick"
                   ToolTip.Tip="For every selected geotagged photo, apply the place fields of any saved bookmark whose radius contains the photo's GPS." />
         <MenuItem Header="👤 _Face gallery..." Click="OnOpenFaceGalleryClick" />
+        <MenuItem Header="👤 Person _timeline..." Click="OnOpenPersonTimelineClick"
+                  ToolTip.Tip="For each detected person, see when they first and last appeared and how many photos per year." />
         <MenuItem Header="🎨 _Develop image..." Click="OnOpenDevelopClick" InputGesture="Ctrl+E"
                   IsEnabled="{Binding HasSelectedFile}" />
         <MenuItem Header="🪄 _Restore old photo..." Click="OnOpenRestoreClick"
@@ -705,7 +707,27 @@
     </StackPanel>
 
     <Grid Grid.Row="3" ColumnDefinitions="*,Auto" Margin="8,6,8,8">
-      <TextBlock Grid.Column="0" Text="{Binding StatusMessage}" VerticalAlignment="Center" />
+      <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+        <Border Background="#E8EDF2" CornerRadius="8" Padding="8,3">
+          <TextBlock Text="{Binding PhotoCountSegment}" FontSize="12" />
+        </Border>
+        <Border Background="#E8EDF2" CornerRadius="8" Padding="8,3"
+                IsVisible="{Binding HasActiveFilter}">
+          <TextBlock Text="{Binding ActiveFilterSegment}" FontSize="12" />
+        </Border>
+        <Border Background="#E8EDF2" CornerRadius="8" Padding="8,3">
+          <TextBlock Text="{Binding AcceleratorDevice}" FontSize="12" />
+        </Border>
+        <Border Background="#E8EDF2" CornerRadius="8" Padding="8,3">
+          <TextBlock Text="{Binding CacheSizeDisplay}" FontSize="12" />
+        </Border>
+        <Border Background="#E8EDF2" CornerRadius="8" Padding="8,3"
+                IsVisible="{Binding IsPreCaching}">
+          <TextBlock Text="{Binding PreCacheDisplay}" FontSize="12" />
+        </Border>
+        <TextBlock Text="{Binding StatusMessage}" VerticalAlignment="Center"
+                   Opacity="0.7" FontSize="12" Margin="4,0,0,0" />
+      </StackPanel>
       <ProgressBar Grid.Column="1" Width="240" Height="16"
                    Minimum="0" Maximum="100"
                    Value="{Binding ProgressValue}" />

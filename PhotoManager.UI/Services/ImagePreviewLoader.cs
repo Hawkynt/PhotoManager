@@ -2,6 +2,7 @@ using Avalonia.Media.Imaging;
 using PhotoManager.Core.Develop;
 using PhotoManager.Core.Previews;
 using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.Formats.Webp;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
 
@@ -22,6 +23,23 @@ namespace PhotoManager.UI.Services;
 public static class ImagePreviewLoader {
   private const int MaxDimension = 1600;
   private static readonly InMemoryPreviewCache _cache = new();
+
+  /// <summary>Exposes the shared preview cache so the thumbnail
+  /// pre-cache service can populate the same store the on-demand
+  /// loader reads from.</summary>
+  public static InMemoryPreviewCache Cache => _cache;
+
+  /// <summary>Decode + resize a file to JPEG bytes at preview
+  /// resolution. Exposed so the pre-cache service uses the exact
+  /// same pipeline as the on-demand path.</summary>
+  public static async Task<byte[]?> DecodeAsync(FileInfo file, CancellationToken ct = default) {
+    try {
+      using var image = await RawImageLoader.LoadAsync(file);
+      return await ResizeImageAsync(image, ct);
+    } catch {
+      return null;
+    }
+  }
 
   private static readonly HashSet<string> _rawExtensions = new(StringComparer.OrdinalIgnoreCase) {
     ".cr2", ".cr3", ".crw",
@@ -84,13 +102,27 @@ public static class ImagePreviewLoader {
 
   private static async Task<byte[]?> ResizeJpegAsync(byte[] jpegBytes, CancellationToken cancellationToken) {
     try {
+      // If the embedded JPEG already fits within MaxDimension, skip the
+      // decode/resize/encode cycle entirely and cache the raw bytes. Use
+      // Image.Identify to read JPEG headers without fully decoding pixels.
+      using var identifyStream = new MemoryStream(jpegBytes, writable: false);
+      var info = await Image.IdentifyAsync(identifyStream, cancellationToken);
+      if (info != null && Math.Max(info.Width, info.Height) <= MaxDimension)
+        return jpegBytes;
+
       using var ms = new MemoryStream(jpegBytes, writable: false);
       using var image = await Image.LoadAsync<Rgba32>(ms, cancellationToken);
+      // Flatten any alpha onto white — ImageSharp's downstream JPEG /
+      // WebP encoders bake transparent pixels to black, so a transparent
+      // GIF / PNG would render as a mostly-black thumbnail otherwise.
+      PhotoManager.Core.Imaging.AlphaFlattener.FlattenOntoWhite(image);
       return await ResizeImageAsync(image, cancellationToken);
     } catch {
       return null;
     }
   }
+
+  private static readonly WebpEncoder _webpEncoder = new() { Quality = 80 };
 
   private static async Task<byte[]> ResizeImageAsync(Image<Rgba32> image, CancellationToken cancellationToken) {
     var longest = Math.Max(image.Width, image.Height);
@@ -100,7 +132,7 @@ public static class ImagePreviewLoader {
     }
 
     using var ms = new MemoryStream();
-    await image.SaveAsJpegAsync(ms, cancellationToken);
+    await image.SaveAsync(ms, _webpEncoder, cancellationToken);
     return ms.ToArray();
   }
 

@@ -74,7 +74,12 @@ public enum LocalMaskType {
   /// <summary>Centred ellipse gradient (Adobe <c>Mask/CircularGradient</c>).</summary>
   Radial = 1,
   /// <summary>User-painted dab cloud (Adobe <c>Mask/Brush</c>).</summary>
-  Brush = 2
+  Brush = 2,
+  /// <summary>Content-aware fill / object removal. The brush dabs define the
+  /// mask region to remove; at render time the mask is dilated by a small
+  /// feather margin and fed to <see cref="PhotoManager.Core.Segmentation.OnnxInpainter"/>
+  /// which replaces those pixels with surrounding content.</summary>
+  Inpaint = 3
 }
 
 /// <summary>

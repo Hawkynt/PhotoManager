@@ -4,6 +4,7 @@ using System.Runtime.CompilerServices;
 using PhotoManager.Core.Enums;
 using PhotoManager.Core.Library;
 using PhotoManager.Core.Models;
+using PhotoManager.Core.Segmentation;
 
 namespace PhotoManager.UI.Models;
 
@@ -233,6 +234,83 @@ public class MainViewModel : INotifyPropertyChanged {
   }
 
   public bool TimelineExpanded => !this._timelineCollapsed;
+
+  // ---- Status-bar segment properties ----
+  private int _totalPhotoCount;
+  private int _selectedPhotoCount;
+  private string? _activeFilterDescription;
+  private string _acceleratorDevice = OnnxAcceleration.LastSelectedDevice;
+  private long _cacheSizeBytes;
+  private int _preCachePercent = -1;
+
+  public int TotalPhotoCount {
+    get => this._totalPhotoCount;
+    set {
+      this.SetProperty(this.OnPropertyChanged, ref this._totalPhotoCount, value);
+      this.OnPropertyChanged(nameof(this.PhotoCountSegment));
+    }
+  }
+
+  public int SelectedPhotoCount {
+    get => this._selectedPhotoCount;
+    set {
+      this.SetProperty(this.OnPropertyChanged, ref this._selectedPhotoCount, value);
+      this.OnPropertyChanged(nameof(this.PhotoCountSegment));
+    }
+  }
+
+  /// <summary>E.g. "4*+" or "Red" or null when no chip filter is active.</summary>
+  public string? ActiveFilterDescription {
+    get => this._activeFilterDescription;
+    set {
+      this.SetProperty(this.OnPropertyChanged, ref this._activeFilterDescription, value);
+      this.OnPropertyChanged(nameof(this.HasActiveFilter));
+      this.OnPropertyChanged(nameof(this.ActiveFilterSegment));
+    }
+  }
+
+  public bool HasActiveFilter => !string.IsNullOrEmpty(this._activeFilterDescription);
+  public string ActiveFilterSegment => this._activeFilterDescription is { } f ? $"Filter: {f}" : string.Empty;
+
+  public string AcceleratorDevice {
+    get => this._acceleratorDevice;
+    set => this.SetProperty(this.OnPropertyChanged, ref this._acceleratorDevice, value);
+  }
+
+  public long CacheSizeBytes {
+    get => this._cacheSizeBytes;
+    set {
+      this.SetProperty(this.OnPropertyChanged, ref this._cacheSizeBytes, value);
+      this.OnPropertyChanged(nameof(this.CacheSizeDisplay));
+    }
+  }
+
+  public string CacheSizeDisplay => this._cacheSizeBytes switch {
+    >= 1024 * 1024 => $"Cache: {this._cacheSizeBytes / (1024 * 1024)} MB",
+    >= 1024        => $"Cache: {this._cacheSizeBytes / 1024} KB",
+    _              => $"Cache: {this._cacheSizeBytes} B"
+  };
+
+  /// <summary>-1 when not pre-caching, 0..100 when active.</summary>
+  public int PreCachePercent {
+    get => this._preCachePercent;
+    set {
+      this.SetProperty(this.OnPropertyChanged, ref this._preCachePercent, value);
+      this.OnPropertyChanged(nameof(this.IsPreCaching));
+      this.OnPropertyChanged(nameof(this.PreCacheDisplay));
+    }
+  }
+
+  public bool IsPreCaching => this._preCachePercent >= 0 && this._preCachePercent < 100;
+  public string PreCacheDisplay => this._preCachePercent >= 0 ? $"Pre-caching: {this._preCachePercent}%" : string.Empty;
+
+  public string PhotoCountSegment => this._selectedPhotoCount > 0
+    ? $"{this._selectedPhotoCount:N0} of {this._totalPhotoCount:N0} photos"
+    : $"{this._totalPhotoCount:N0} photos";
+
+  /// <summary>Call after changing TotalPhotoCount or SelectedPhotoCount to
+  /// refresh the derived display text.</summary>
+  public void RefreshPhotoCountSegment() => this.OnPropertyChanged(nameof(this.PhotoCountSegment));
 
   public event PropertyChangedEventHandler? PropertyChanged;
 

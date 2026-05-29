@@ -287,7 +287,7 @@ public sealed record DevelopSettings(
     && Math.Abs(this.PerspectiveX)          < 1e-6
     && Math.Abs(this.PerspectiveY)          < 1e-6
     && (this.LocalAdjustments is null || this.LocalAdjustments.Count == 0
-        || this.LocalAdjustments.All(a => a.IsZero))
+        || this.LocalAdjustments.All(a => a.Mask.Type != LocalMaskType.Inpaint && a.IsZero))
     && Math.Abs(this.ColorEnhancement) < 1e-6
     && string.IsNullOrEmpty(this.LookName)
     && string.IsNullOrEmpty(this.WatermarkText)

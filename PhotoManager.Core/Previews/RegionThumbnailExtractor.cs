@@ -59,14 +59,18 @@ public static class RegionThumbnailExtractor {
     if (raw != null) {
       try {
         using var ms = new MemoryStream(raw, writable: false);
-        return await Image.LoadAsync<Rgba32>(ms, cancellationToken);
+        // Flatten alpha onto white — transparent GIF / PNG thumbnails
+        // would otherwise render as black via the JPEG / WebP encoder.
+        return PhotoManager.Core.Imaging.AlphaFlattener.FlattenOntoWhite(
+          await Image.LoadAsync<Rgba32>(ms, cancellationToken));
       } catch {
         // Fall through to the generic decode attempt.
       }
     }
 
     try {
-      return await Image.LoadAsync<Rgba32>(imageFile.FullName, cancellationToken);
+      return PhotoManager.Core.Imaging.AlphaFlattener.FlattenOntoWhite(
+        await Image.LoadAsync<Rgba32>(imageFile.FullName, cancellationToken));
     } catch {
       return null;
     }

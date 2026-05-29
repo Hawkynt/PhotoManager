@@ -183,6 +183,11 @@ public sealed class OnnxInpainter : IDisposable {
                                  int x0, int y0, int w, int h) {
     const int featherPx = 6;
     var pc = TileSize * TileSize;
+    var maskH = maskFlat.Length / maskW;
+
+    // Pre-compute a Chebyshev distance map for the tile region so we
+    // avoid the O(featherPx²) per-pixel scan the old code did.
+    var distMap = BuildChebyshevDistanceMap(maskFlat, maskW, maskH, x0, y0, w, h, featherPx);
 
     output.ProcessPixelRows(accessor => {
       for (var y = 0; y < h; y++) {
@@ -200,9 +205,8 @@ public sealed class OnnxInpainter : IDisposable {
           if (maskAtPixel <= 0)
             continue;  // Only touch masked pixels.
 
-          // Compute per-pixel feather weight: distance to the nearest
-          // unmasked pixel, clamped to featherPx, normalised to [0..1].
-          var weight = ComputeFeatherWeight(maskFlat, maskW, tx, ty, featherPx);
+          // Look up the pre-computed feather weight from the distance map.
+          var weight = Math.Min(1f, (float)distMap[y * w + x] / featherPx);
 
           var off = y * TileSize + x;
           // LaMa's output is BGR in [0..255] (not [0..1]). Channel 0 = B,
@@ -224,11 +228,91 @@ public sealed class OnnxInpainter : IDisposable {
   }
 
   /// <summary>
-  /// Cheap chebyshev-distance feather: 1.0 when the pixel sits at least
-  /// <paramref name="featherPx"/> inside the masked region, ramps to 0
-  /// at the mask edge. Avoids visible seams without a full Gaussian blur.
+  /// Build a Chebyshev distance map for the tile region [x0, y0, w, h].
+  /// Each element holds the distance to the nearest unmasked pixel,
+  /// clamped to <paramref name="maxDist"/>. Two-pass separable approach:
+  /// forward (top-left to bottom-right) then backward (bottom-right to
+  /// top-left). The working area is expanded by <paramref name="maxDist"/>
+  /// in every direction (clamped to mask bounds) so that border pixels
+  /// see the same neighbourhood the old brute-force scan did.
+  /// O(expanded_w * expanded_h) — replaces the old O(masked_pixels *
+  /// maxDist^2) per-pixel scan.
   /// </summary>
-  private static float ComputeFeatherWeight(float[] maskFlat, int maskW, int x, int y, int featherPx) {
+  internal static int[] BuildChebyshevDistanceMap(float[] maskFlat, int maskW, int maskH,
+                                                   int x0, int y0, int w, int h, int maxDist) {
+    // Expand the working area by maxDist so edge pixels see unmasked
+    // neighbours that sit just outside the requested tile region.
+    var ex0 = Math.Max(0, x0 - maxDist);
+    var ey0 = Math.Max(0, y0 - maxDist);
+    var ex1 = Math.Min(maskW, x0 + w + maxDist);
+    var ey1 = Math.Min(maskH, y0 + h + maxDist);
+    var ew = ex1 - ex0;
+    var eh = ey1 - ey0;
+
+    var buf = new int[ew * eh];
+
+    // Initialise: unmasked or out-of-bounds pixels get 0; masked get maxDist.
+    for (var y = 0; y < eh; y++) {
+      var my = ey0 + y;
+      var off = y * ew;
+      for (var x = 0; x < ew; x++) {
+        var mx = ex0 + x;
+        if (mx < 0 || mx >= maskW || my < 0 || my >= maskH || maskFlat[my * maskW + mx] <= 0)
+          buf[off + x] = 0;
+        else
+          buf[off + x] = maxDist;
+      }
+    }
+
+    // Forward pass: top-left to bottom-right.
+    for (var y = 0; y < eh; y++) {
+      var off = y * ew;
+      for (var x = 0; x < ew; x++) {
+        if (buf[off + x] == 0) continue;
+        var best = buf[off + x];
+        if (x > 0)              best = Math.Min(best, buf[off + x - 1] + 1);
+        if (y > 0)              best = Math.Min(best, buf[(y - 1) * ew + x] + 1);
+        if (x > 0 && y > 0)     best = Math.Min(best, buf[(y - 1) * ew + x - 1] + 1);
+        if (x < ew - 1 && y > 0) best = Math.Min(best, buf[(y - 1) * ew + x + 1] + 1);
+        buf[off + x] = Math.Min(best, maxDist);
+      }
+    }
+
+    // Backward pass: bottom-right to top-left.
+    for (var y = eh - 1; y >= 0; y--) {
+      var off = y * ew;
+      for (var x = ew - 1; x >= 0; x--) {
+        if (buf[off + x] == 0) continue;
+        var best = buf[off + x];
+        if (x < ew - 1)                best = Math.Min(best, buf[off + x + 1] + 1);
+        if (y < eh - 1)                best = Math.Min(best, buf[(y + 1) * ew + x] + 1);
+        if (x < ew - 1 && y < eh - 1)   best = Math.Min(best, buf[(y + 1) * ew + x + 1] + 1);
+        if (x > 0 && y < eh - 1)       best = Math.Min(best, buf[(y + 1) * ew + x - 1] + 1);
+        buf[off + x] = Math.Min(best, maxDist);
+      }
+    }
+
+    // Extract the inner tile region from the expanded buffer.
+    var map = new int[w * h];
+    var padX = x0 - ex0;
+    var padY = y0 - ey0;
+    for (var y = 0; y < h; y++) {
+      var srcOff = (padY + y) * ew + padX;
+      var dstOff = y * w;
+      for (var x = 0; x < w; x++)
+        map[dstOff + x] = buf[srcOff + x];
+    }
+
+    return map;
+  }
+
+  /// <summary>
+  /// Original O(featherPx^2) per-pixel Chebyshev distance computation.
+  /// Retained as <c>internal</c> so tests can verify the new distance
+  /// transform produces identical results.
+  /// </summary>
+  [Obsolete("Use BuildChebyshevDistanceMap for production code. Kept for test verification only.")]
+  internal static float ComputeFeatherWeight(float[] maskFlat, int maskW, int x, int y, int featherPx) {
     var maskH = maskFlat.Length / maskW;
     var minDist = featherPx;
     for (var dy = -featherPx; dy <= featherPx; dy++) {

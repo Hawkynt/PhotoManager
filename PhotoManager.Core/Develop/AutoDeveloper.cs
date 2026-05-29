@@ -15,22 +15,21 @@ public static class AutoDeveloper {
   /// percentiles onto Whites/Blacks (clip the rare extremes), then lifts
   /// shadows / pulls highlights based on how compressed each end is.
   /// </summary>
-  public static DevelopSettings AutoTone(DevelopSettings current, ImageHistogram histogram) {
+  public static DevelopSettings AutoTone(DevelopSettings current, ImageHistogram histogram, AutoAdjustOptions? options = null) {
     ArgumentNullException.ThrowIfNull(histogram);
+    var o = options ?? new AutoAdjustOptions();
 
-    var blackPoint = ImageHistogram.Percentile(histogram.Luminance, histogram.TotalPixels, 0.005);
-    var whitePoint = ImageHistogram.Percentile(histogram.Luminance, histogram.TotalPixels, 0.995);
+    var blackPoint = ImageHistogram.Percentile(histogram.Luminance, histogram.TotalPixels, o.ToneBlackClipPct);
+    var whitePoint = ImageHistogram.Percentile(histogram.Luminance, histogram.TotalPixels, 1.0 - o.ToneWhiteClipPct);
 
-    // Whites / Blacks lift extremes — strength is "how far from full
-    // range we currently are" mapped to ±50 of the slider scale.
-    var blacksLift = (-blackPoint / 255.0) * 100;     // negative if underused
-    var whitesLift = ((255 - whitePoint) / 255.0) * 100;  // positive if underused
+    var blacksLift = (-blackPoint / 255.0) * 100;
+    var whitesLift = ((255 - whitePoint) / 255.0) * 100;
 
-    // Shadow recovery: if the 5th percentile is still very dark (<40), lift.
-    var shadowsLift = (40 - Math.Min(40, ImageHistogram.Percentile(histogram.Luminance, histogram.TotalPixels, 0.05))) * 1.5;
+    var shadowThresh = o.ToneShadowRecoveryThreshold;
+    var shadowsLift = (shadowThresh - Math.Min(shadowThresh, ImageHistogram.Percentile(histogram.Luminance, histogram.TotalPixels, 0.05))) * o.ToneRecoveryStrength;
 
-    // Highlight recovery: if the 95th percentile is very bright (>215), pull.
-    var highlightsPull = -(Math.Max(215, ImageHistogram.Percentile(histogram.Luminance, histogram.TotalPixels, 0.95)) - 215) * 1.5;
+    var highlightThresh = o.ToneHighlightRecoveryThreshold;
+    var highlightsPull = -(Math.Max(highlightThresh, ImageHistogram.Percentile(histogram.Luminance, histogram.TotalPixels, 0.95)) - highlightThresh) * o.ToneRecoveryStrength;
 
     return current with {
       WhitesPercent = Clamp(whitesLift, -100, 100),
@@ -72,11 +71,12 @@ public static class AutoDeveloper {
   /// range, which corrects subtle colour casts AND lifts overall contrast
   /// in one move.
   /// </summary>
-  public static DevelopSettings AutoChannelStretch(DevelopSettings current, ImageHistogram histogram) {
+  public static DevelopSettings AutoChannelStretch(DevelopSettings current, ImageHistogram histogram, AutoAdjustOptions? options = null) {
     ArgumentNullException.ThrowIfNull(histogram);
+    var topPct = (options ?? new AutoAdjustOptions()).StretchTopPercentile;
 
-    static double GainFor(int[] channel, int total) {
-      var top = ImageHistogram.Percentile(channel, total, 0.995);
+    static double GainFor(int[] channel, int total, double pct) {
+      var top = ImageHistogram.Percentile(channel, total, pct);
       if (top <= 0) return 0;
       // gain (-100..+100) maps to multiplier 0..2 ; we want top → 255,
       // i.e. multiplier = 255/top → gain = (multiplier - 1) * 100.
@@ -85,9 +85,9 @@ public static class AutoDeveloper {
     }
 
     return current with {
-      RedGain   = GainFor(histogram.Red,   histogram.TotalPixels),
-      GreenGain = GainFor(histogram.Green, histogram.TotalPixels),
-      BlueGain  = GainFor(histogram.Blue,  histogram.TotalPixels)
+      RedGain   = GainFor(histogram.Red,   histogram.TotalPixels, topPct),
+      GreenGain = GainFor(histogram.Green, histogram.TotalPixels, topPct),
+      BlueGain  = GainFor(histogram.Blue,  histogram.TotalPixels, topPct)
     };
   }
 

@@ -1,3 +1,4 @@
+using System.Buffers;
 using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
 using PhotoManager.Core.Imaging;
@@ -160,99 +161,104 @@ public sealed class OnnxUpscaler : IDisposable {
 
     // Snapshot source pixels once — ImageSharp's per-image accessor
     // isn't safe to share across the parallel inference threads.
-    var srcPixels = new Rgba32[srcW * srcH];
-    source.CopyPixelDataTo(srcPixels);
-
-    // Build the tile-coordinate list up front so we know the total
-    // count for progress reporting.
-    var tiles = new List<(int tx, int ty, int w, int h)>();
-    for (var ty = 0; ty < srcH; ty += stride) {
-      if (ty >= srcH) continue;
-      for (var tx = 0; tx < srcW; tx += stride) {
-        if (tx >= srcW) continue;
-        var w = Math.Min(info.TileSize, srcW - tx);
-        var h = Math.Min(info.TileSize, srcH - ty);
-        if (w > 0 && h > 0) tiles.Add((tx, ty, w, h));
-      }
-    }
-    var total = tiles.Count;
-    var done = 0;
-    progress?.Report(new Develop.StageProgress(stageLabel, 0, total));
-
-    var writeLock = new object();
-
-    // Try the multi-EP dispatch path first: one InferenceSession per
-    // physical accelerator (NPU, GPU, CPU). Each consumer holds its
-    // own session and pulls tiles off a shared BlockingCollection —
-    // a fast device naturally takes more tiles than a slow one (work
-    // stealing). When OpenVINO can't bind a separate NPU/GPU session
-    // (single-device hardware, OV not installed), we drop to the
-    // single-session Parallel.ForEach path below.
-    IReadOnlyList<(string Device, InferenceSession Session)>? sessions = null;
+    var srcBufSize = srcW * srcH;
+    var srcPixels = ArrayPool<Rgba32>.Shared.Rent(srcBufSize);
     try {
-      sessions = OnnxAcceleration.CreateMultiDeviceSessions(info.ModelPath);
-    } catch {
-      sessions = null;
-    }
+      source.CopyPixelDataTo(srcPixels.AsSpan(0, srcBufSize));
 
-    void RunTileOnSession(InferenceSession session, (int tx, int ty, int w, int h) tile) {
-      var tilePixels = info.IsFixedInputSize
-        ? RunFixedTileFromArray(info, session, srcPixels, srcW, srcH, tile.tx, tile.ty)
-        : RunDynamicTileFromArray(info, session, srcPixels, srcW, srcH, tile.tx, tile.ty, tile.w, tile.h);
-      if (tilePixels != null) {
-        var tileFedW = info.IsFixedInputSize ? info.TileSize : tile.w;
-        var tileFedH = info.IsFixedInputSize ? info.TileSize : tile.h;
-        var destW = tile.w * nativeFactor;
-        var destH = tile.h * nativeFactor;
-        lock (writeLock) {
-          WriteTile(native, tilePixels, tileFedW * nativeFactor, tileFedH * nativeFactor,
-            tile.tx * nativeFactor, tile.ty * nativeFactor, destW, destH);
+      // Build the tile-coordinate list up front so we know the total
+      // count for progress reporting.
+      var tiles = new List<(int tx, int ty, int w, int h)>();
+      for (var ty = 0; ty < srcH; ty += stride) {
+        if (ty >= srcH) continue;
+        for (var tx = 0; tx < srcW; tx += stride) {
+          if (tx >= srcW) continue;
+          var w = Math.Min(info.TileSize, srcW - tx);
+          var h = Math.Min(info.TileSize, srcH - ty);
+          if (w > 0 && h > 0) tiles.Add((tx, ty, w, h));
         }
       }
-      var d = Interlocked.Increment(ref done);
-      progress?.Report(new Develop.StageProgress(stageLabel, d, total));
-    }
+      var total = tiles.Count;
+      var done = 0;
+      progress?.Report(new Develop.StageProgress(stageLabel, 0, total));
 
-    try {
-      if (sessions != null && sessions.Count >= 2) {
-        // Producer/consumer with one consumer per session. Work
-        // stealing falls out for free: a fast accelerator drains the
-        // queue more aggressively than a slow one.
-        using var queue = new System.Collections.Concurrent.BlockingCollection<(int tx, int ty, int w, int h)>(boundedCapacity: tiles.Count + 1);
-        foreach (var tile in tiles)
-          queue.Add(tile);
-        queue.CompleteAdding();
+      var writeLock = new object();
 
-        var consumerTasks = new Task[sessions.Count];
-        for (var i = 0; i < sessions.Count; i++) {
-          var session = sessions[i].Session;
-          consumerTasks[i] = Task.Run(() => {
-            foreach (var tile in queue.GetConsumingEnumerable(ct)) {
-              RunTileOnSession(session, tile);
-            }
-          }, ct);
-        }
-        Task.WaitAll(consumerTasks, ct);
-      } else {
-        // Single-session fallback (no separate NPU/GPU sessions
-        // available). Same Parallel.ForEach as before, capped
-        // conservatively because all parallel calls hit one session.
-        Parallel.ForEach(
-          tiles,
-          new ParallelOptions {
-            CancellationToken = ct,
-            MaxDegreeOfParallelism = Math.Min(4, Math.Max(2, Environment.ProcessorCount / 2))
-          },
-          tile => RunTileOnSession(info.Session, tile));
+      // Try the multi-EP dispatch path first: one InferenceSession per
+      // physical accelerator (NPU, GPU, CPU). Each consumer holds its
+      // own session and pulls tiles off a shared BlockingCollection —
+      // a fast device naturally takes more tiles than a slow one (work
+      // stealing). When OpenVINO can't bind a separate NPU/GPU session
+      // (single-device hardware, OV not installed), we drop to the
+      // single-session Parallel.ForEach path below.
+      IReadOnlyList<(string Device, InferenceSession Session)>? sessions = null;
+      try {
+        sessions = OnnxAcceleration.CreateMultiDeviceSessions(info.ModelPath);
+      } catch {
+        sessions = null;
       }
-    } catch (OperationCanceledException) {
-      native.Dispose();
-      throw;
-    } catch (AggregateException ae) when (ae.InnerExceptions.OfType<OperationCanceledException>().Any()) {
-      native.Dispose();
-      throw new OperationCanceledException(ct);
+
+      void RunTileOnSession(InferenceSession session, (int tx, int ty, int w, int h) tile) {
+        var tilePixels = info.IsFixedInputSize
+          ? RunFixedTileFromArray(info, session, srcPixels, srcW, srcH, tile.tx, tile.ty)
+          : RunDynamicTileFromArray(info, session, srcPixels, srcW, srcH, tile.tx, tile.ty, tile.w, tile.h);
+        if (tilePixels != null) {
+          var tileFedW = info.IsFixedInputSize ? info.TileSize : tile.w;
+          var tileFedH = info.IsFixedInputSize ? info.TileSize : tile.h;
+          var destW = tile.w * nativeFactor;
+          var destH = tile.h * nativeFactor;
+          lock (writeLock) {
+            WriteTile(native, tilePixels, tileFedW * nativeFactor, tileFedH * nativeFactor,
+              tile.tx * nativeFactor, tile.ty * nativeFactor, destW, destH);
+          }
+        }
+        var d = Interlocked.Increment(ref done);
+        progress?.Report(new Develop.StageProgress(stageLabel, d, total));
+      }
+
+      try {
+        if (sessions != null && sessions.Count >= 2) {
+          // Producer/consumer with one consumer per session. Work
+          // stealing falls out for free: a fast accelerator drains the
+          // queue more aggressively than a slow one.
+          using var queue = new System.Collections.Concurrent.BlockingCollection<(int tx, int ty, int w, int h)>(boundedCapacity: tiles.Count + 1);
+          foreach (var tile in tiles)
+            queue.Add(tile);
+          queue.CompleteAdding();
+
+          var consumerTasks = new Task[sessions.Count];
+          for (var i = 0; i < sessions.Count; i++) {
+            var session = sessions[i].Session;
+            consumerTasks[i] = Task.Run(() => {
+              foreach (var tile in queue.GetConsumingEnumerable(ct)) {
+                RunTileOnSession(session, tile);
+              }
+            }, ct);
+          }
+          Task.WaitAll(consumerTasks, ct);
+        } else {
+          // Single-session fallback (no separate NPU/GPU sessions
+          // available). Same Parallel.ForEach as before, capped
+          // conservatively because all parallel calls hit one session.
+          Parallel.ForEach(
+            tiles,
+            new ParallelOptions {
+              CancellationToken = ct,
+              MaxDegreeOfParallelism = Math.Min(4, Math.Max(2, Environment.ProcessorCount / 2))
+            },
+            tile => RunTileOnSession(info.Session, tile));
+        }
+      } catch (OperationCanceledException) {
+        native.Dispose();
+        throw;
+      } catch (AggregateException ae) when (ae.InnerExceptions.OfType<OperationCanceledException>().Any()) {
+        native.Dispose();
+        throw new OperationCanceledException(ct);
+      }
+      return native;
+    } finally {
+      ArrayPool<Rgba32>.Shared.Return(srcPixels);
     }
-    return native;
   }
 
   /// <summary>Array-fed counterpart to <see cref="RunDynamicTile"/>; safe
@@ -266,18 +272,23 @@ public sealed class OnnxUpscaler : IDisposable {
   /// session and pass it here.</summary>
   private static float[]? RunDynamicTileFromArray(SessionInfo info, InferenceSession session, Rgba32[] src, int srcW, int srcH, int tx, int ty, int w, int h) {
     var pixelCount = h * w;
-    var inputTensor = new float[1 * 3 * pixelCount];
-    for (var y = 0; y < h; y++) {
-      var srcRowOffset = (ty + y) * srcW;
-      for (var x = 0; x < w; x++) {
-        var px = src[srcRowOffset + tx + x];
-        var offset = y * w + x;
-        inputTensor[0 * pixelCount + offset] = px.R / 255f;
-        inputTensor[1 * pixelCount + offset] = px.G / 255f;
-        inputTensor[2 * pixelCount + offset] = px.B / 255f;
+    var tensorSize = 1 * 3 * pixelCount;
+    var inputTensor = ArrayPool<float>.Shared.Rent(tensorSize);
+    try {
+      for (var y = 0; y < h; y++) {
+        var srcRowOffset = (ty + y) * srcW;
+        for (var x = 0; x < w; x++) {
+          var px = src[srcRowOffset + tx + x];
+          var offset = y * w + x;
+          inputTensor[0 * pixelCount + offset] = px.R / 255f;
+          inputTensor[1 * pixelCount + offset] = px.G / 255f;
+          inputTensor[2 * pixelCount + offset] = px.B / 255f;
+        }
       }
+      return RunSession(info, session, inputTensor, tensorSize, h, w);
+    } finally {
+      ArrayPool<float>.Shared.Return(inputTensor);
     }
-    return RunSession(info, session, inputTensor, h, w);
   }
 
   /// <summary>Array-fed counterpart to <see cref="RunFixedTile"/>;
@@ -288,38 +299,48 @@ public sealed class OnnxUpscaler : IDisposable {
   private static float[]? RunFixedTileFromArray(SessionInfo info, InferenceSession session, Rgba32[] src, int srcW, int srcH, int tx, int ty) {
     var size = info.TileSize;
     var pixelCount = size * size;
-    var inputTensor = new float[1 * 3 * pixelCount];
-    for (var y = 0; y < size; y++) {
-      var sourceY = Math.Min(ty + y, srcH - 1);
-      var rowOffset = sourceY * srcW;
-      for (var x = 0; x < size; x++) {
-        var sourceX = Math.Min(tx + x, srcW - 1);
-        var px = src[rowOffset + sourceX];
-        var offset = y * size + x;
-        inputTensor[0 * pixelCount + offset] = px.R / 255f;
-        inputTensor[1 * pixelCount + offset] = px.G / 255f;
-        inputTensor[2 * pixelCount + offset] = px.B / 255f;
-      }
-    }
-    return RunSession(info, session, inputTensor, size, size);
-  }
-
-  private static float[]? RunDynamicTile(SessionInfo info, Image<Rgba32> source, int tx, int ty, int w, int h) {
-    var pixelCount = h * w;
-    var inputTensor = new float[1 * 3 * pixelCount];
-    source.ProcessPixelRows(accessor => {
-      for (var y = 0; y < h; y++) {
-        var row = accessor.GetRowSpan(ty + y);
-        for (var x = 0; x < w; x++) {
-          var px = row[tx + x];
-          var offset = y * w + x;
+    var tensorSize = 1 * 3 * pixelCount;
+    var inputTensor = ArrayPool<float>.Shared.Rent(tensorSize);
+    try {
+      for (var y = 0; y < size; y++) {
+        var sourceY = Math.Min(ty + y, srcH - 1);
+        var rowOffset = sourceY * srcW;
+        for (var x = 0; x < size; x++) {
+          var sourceX = Math.Min(tx + x, srcW - 1);
+          var px = src[rowOffset + sourceX];
+          var offset = y * size + x;
           inputTensor[0 * pixelCount + offset] = px.R / 255f;
           inputTensor[1 * pixelCount + offset] = px.G / 255f;
           inputTensor[2 * pixelCount + offset] = px.B / 255f;
         }
       }
-    });
-    return RunSession(info, inputTensor, h, w);
+      return RunSession(info, session, inputTensor, tensorSize, size, size);
+    } finally {
+      ArrayPool<float>.Shared.Return(inputTensor);
+    }
+  }
+
+  private static float[]? RunDynamicTile(SessionInfo info, Image<Rgba32> source, int tx, int ty, int w, int h) {
+    var pixelCount = h * w;
+    var tensorSize = 1 * 3 * pixelCount;
+    var inputTensor = ArrayPool<float>.Shared.Rent(tensorSize);
+    try {
+      source.ProcessPixelRows(accessor => {
+        for (var y = 0; y < h; y++) {
+          var row = accessor.GetRowSpan(ty + y);
+          for (var x = 0; x < w; x++) {
+            var px = row[tx + x];
+            var offset = y * w + x;
+            inputTensor[0 * pixelCount + offset] = px.R / 255f;
+            inputTensor[1 * pixelCount + offset] = px.G / 255f;
+            inputTensor[2 * pixelCount + offset] = px.B / 255f;
+          }
+        }
+      });
+      return RunSession(info, inputTensor, tensorSize, h, w);
+    } finally {
+      ArrayPool<float>.Shared.Return(inputTensor);
+    }
   }
 
   /// <summary>
@@ -331,34 +352,45 @@ public sealed class OnnxUpscaler : IDisposable {
   private static float[]? RunFixedTile(SessionInfo info, Image<Rgba32> source, int tx, int ty) {
     var size = info.TileSize;
     var pixelCount = size * size;
-    var inputTensor = new float[1 * 3 * pixelCount];
-    source.ProcessPixelRows(accessor => {
-      for (var y = 0; y < size; y++) {
-        var sourceY = Math.Min(ty + y, source.Height - 1);
-        var row = accessor.GetRowSpan(sourceY);
-        for (var x = 0; x < size; x++) {
-          var sourceX = Math.Min(tx + x, source.Width - 1);
-          var px = row[sourceX];
-          var offset = y * size + x;
-          inputTensor[0 * pixelCount + offset] = px.R / 255f;
-          inputTensor[1 * pixelCount + offset] = px.G / 255f;
-          inputTensor[2 * pixelCount + offset] = px.B / 255f;
+    var tensorSize = 1 * 3 * pixelCount;
+    var inputTensor = ArrayPool<float>.Shared.Rent(tensorSize);
+    try {
+      source.ProcessPixelRows(accessor => {
+        for (var y = 0; y < size; y++) {
+          var sourceY = Math.Min(ty + y, source.Height - 1);
+          var row = accessor.GetRowSpan(sourceY);
+          for (var x = 0; x < size; x++) {
+            var sourceX = Math.Min(tx + x, source.Width - 1);
+            var px = row[sourceX];
+            var offset = y * size + x;
+            inputTensor[0 * pixelCount + offset] = px.R / 255f;
+            inputTensor[1 * pixelCount + offset] = px.G / 255f;
+            inputTensor[2 * pixelCount + offset] = px.B / 255f;
+          }
         }
-      }
-    });
-    return RunSession(info, inputTensor, size, size);
+      });
+      return RunSession(info, inputTensor, tensorSize, size, size);
+    } finally {
+      ArrayPool<float>.Shared.Return(inputTensor);
+    }
   }
 
   private static float[]? RunSession(SessionInfo info, float[] inputTensor, int h, int w)
-    => RunSession(info, info.Session, inputTensor, h, w);
+    => RunSession(info, info.Session, inputTensor, 1 * 3 * h * w, h, w);
+
+  private static float[]? RunSession(SessionInfo info, float[] inputTensor, int tensorSize, int h, int w)
+    => RunSession(info, info.Session, inputTensor, tensorSize, h, w);
 
   /// <summary>Inference with an EXPLICIT session — used by the multi-EP
   /// dispatch path where each consumer thread holds its own session
   /// pinned to a specific accelerator (NPU vs GPU vs CPU). Same input
   /// shape and output handling as the single-session overload.</summary>
-  private static float[]? RunSession(SessionInfo info, InferenceSession session, float[] inputTensor, int h, int w) {
+  private static float[]? RunSession(SessionInfo info, InferenceSession session, float[] inputTensor, int h, int w)
+    => RunSession(info, session, inputTensor, 1 * 3 * h * w, h, w);
+
+  private static float[]? RunSession(SessionInfo info, InferenceSession session, float[] inputTensor, int tensorSize, int h, int w) {
     try {
-      var input = new DenseTensor<float>(inputTensor, new[] { 1, 3, h, w });
+      var input = new DenseTensor<float>(inputTensor.AsMemory(0, tensorSize), new[] { 1, 3, h, w });
       using var results = session.Run(new[] { NamedOnnxValue.CreateFromTensor(info.InputName, input) });
       return results.First().AsTensor<float>().ToArray();
     } catch {

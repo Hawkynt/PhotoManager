@@ -294,9 +294,9 @@ public static class RestorationPipeline {
     // 4) Face restore — per-face ticks.
     if (settings.FaceRestoreStrength > 1e-6 && faces.Count > 0) {
       ct.ThrowIfCancellationRequested();
-      if (!TryCacheHit("faces", $"{settings.FaceRestoreStrength:F4}|{faces.Count}")) {
+      if (!TryCacheHit("faces", $"{settings.FaceRestoreStrength:F4}|{faces.Count}|{settings.FaceRestoreModel ?? "default"}")) {
         Report(new StageProgress("faces", 0, faces.Count, plan[planIndex].seconds));
-        ApplyFaceRestoration(output, faces, settings.FaceRestoreStrength, ct, stageProgress);
+        ApplyFaceRestoration(output, faces, settings.FaceRestoreStrength, settings.FaceRestoreModel, ct, stageProgress);
         StoreCache("faces");
       }
       planIndex++;
@@ -352,20 +352,25 @@ public static class RestorationPipeline {
   }
 
   /// <summary>
-  /// Crop each detected face out of <paramref name="image"/>, run GFPGAN,
-  /// resize the restored 512×512 back to the box's pixel size, and
-  /// alpha-blend it in with a soft elliptical mask so the rectangle's
-  /// edge doesn't show. <paramref name="strength"/> linearly mixes the
-  /// restored crop with the original.
+  /// Crop each detected face out of <paramref name="image"/>, run the
+  /// picked face restorer (GFPGAN by default; CodeFormer if its file
+  /// name is supplied), resize the restored 512×512 back to the box's
+  /// pixel size, and alpha-blend it in with a soft elliptical mask so
+  /// the rectangle's edge doesn't show. <paramref name="strength"/>
+  /// linearly mixes the restored crop with the original.
   /// </summary>
   private static void ApplyFaceRestoration(
     Image<Rgba32> image,
     IReadOnlyList<NormalizedBoundingBox> faces,
     double strength,
+    string? modelFileName,
     CancellationToken ct,
     IProgress<StageProgress>? progress = null
   ) {
-    using var restorer = new OnnxFaceRestorer();
+    var modelFile = !string.IsNullOrWhiteSpace(modelFileName)
+      ? AppDataPaths.ModelFile(modelFileName!)
+      : null;
+    using var restorer = new OnnxFaceRestorer(modelFile);
     if (!restorer.IsAvailable)
       return;
 
@@ -536,22 +541,17 @@ public static class RestorationPipeline {
 
   /// <summary>
   /// Copy pixels from <paramref name="src"/> over <paramref name="dst"/>
-  /// in place. Both images must share dimensions. Used to swap stage
-  /// outputs back into the long-lived <c>output</c> reference without
-  /// losing the caller's pointer.
+  /// in place. Both images must share dimensions. Uses the two-image
+  /// <see cref="Image{TPixel}.ProcessPixelRows{TPixel2}"/> overload with
+  /// row-wise <see cref="Span{T}.CopyTo"/> for bulk memory copy instead
+  /// of per-pixel struct assignment.
   /// </summary>
   private static void ReplaceContents(Image<Rgba32> dst, Image<Rgba32> src) {
     if (dst.Width != src.Width || dst.Height != src.Height)
       return;
-    var pixels = new Rgba32[src.Width * src.Height];
-    src.CopyPixelDataTo(pixels);
-    dst.ProcessPixelRows(accessor => {
-      for (var y = 0; y < accessor.Height; y++) {
-        var row = accessor.GetRowSpan(y);
-        var srcOff = y * dst.Width;
-        for (var x = 0; x < row.Length; x++)
-          row[x] = pixels[srcOff + x];
-      }
+    dst.ProcessPixelRows(src, (dstAcc, srcAcc) => {
+      for (var y = 0; y < dstAcc.Height; y++)
+        srcAcc.GetRowSpan(y).CopyTo(dstAcc.GetRowSpan(y));
     });
   }
 }

@@ -14,6 +14,7 @@ using Mapsui.Styles;
 using Mapsui.Tiling;
 using Mapsui.UI.Avalonia;
 using NetTopologySuite.Geometries;
+using PhotoManager.Core.Geo;
 using PhotoManager.Core.Geocoding;
 using PhotoManager.Core.Gpx;
 using PhotoManager.Core.Metadata;
@@ -52,6 +53,18 @@ public partial class WorldMapWindow : Window {
   // the closest entry within a small pixel radius (Mapsui's Info event
   // gives us the world-space click location).
   private readonly List<(MPoint Point, GpsCoordinate Gps, FileInfo File)> _pinIndex = new();
+
+  // Raw GPS data preserved for re-clustering on zoom changes.
+  private IReadOnlyList<(double lat, double lon, FileInfo file)> _rawPins = Array.Empty<(double, double, FileInfo)>();
+  // Current cluster results for click-to-zoom-in behavior.
+  private IReadOnlyList<GeoClusterResult> _currentClusters = Array.Empty<GeoClusterResult>();
+  // Mercator center + cluster mapping for hit testing cluster pins.
+  private readonly List<(MPoint Center, GeoClusterResult Cluster)> _clusterIndex = new();
+  // Tracks the last resolution at which we clustered, so we skip redundant
+  // re-clustering when the viewport hasn't meaningfully changed.
+  private double _lastClusterResolution = -1;
+  // Debounce timer for viewport-change re-clustering.
+  private System.Threading.Timer? _reclusterTimer;
 
   // Nearby state.
   private bool _nearbyMode;
@@ -111,6 +124,9 @@ public partial class WorldMapWindow : Window {
       mc.Map.Home = n => n.CenterOnAndZoomTo(new MPoint(mx, my), 30000);
 
       mc.PointerPressed += this.OnMapPointerPressed;
+      // Re-cluster on zoom (scroll-wheel) and after pan (pointer release).
+      mc.PointerWheelChanged += (_, _) => this.OnViewportChanged();
+      mc.PointerReleased += (_, _) => this.OnViewportChanged();
     }
 
     this.UpdateRadiusText();
@@ -161,23 +177,141 @@ public partial class WorldMapWindow : Window {
   }
 
   private void RenderPins(IReadOnlyList<(GpsCoordinate Gps, FileInfo File)> pins) {
+    // Preserve raw data for re-clustering on zoom changes.
+    this._rawPins = pins.Select(p => (p.Gps.Latitude, p.Gps.Longitude, p.File)).ToList();
+
+    // Also keep the full pin index for Nearby mode (which still needs per-pin
+    // GPS coordinates for haversine radius checks).
     this._pinIndex.Clear();
-    var features = new List<IFeature>(pins.Count);
     foreach (var (gps, file) in pins) {
       var (mx, my) = SphericalMercator.FromLonLat(gps.Longitude, gps.Latitude);
-      var point = new MPoint(mx, my);
-      this._pinIndex.Add((point, gps, file));
-      features.Add(new GeometryFeature {
-        Geometry = new NetTopologySuite.Geometries.Point(mx, my)
-      });
+      this._pinIndex.Add((new MPoint(mx, my), gps, file));
     }
-    this._pinsLayer.Features = features;
-    this.RefreshHighlightLayer();
+
+    // Render clusters at the current zoom level.
+    this._lastClusterResolution = -1; // force initial clustering
+    this.ReclusterAndRender();
 
     if (this.FindControl<MapControl>("MapControl") is { } mc) {
       this.AutoFit(mc, pins);
       mc.RefreshGraphics();
     }
+  }
+
+  /// <summary>
+  /// (Re-)clusters the raw pin data at the current viewport resolution and
+  /// replaces the pin layer's features with cluster-aware pins. Single-member
+  /// clusters render as normal pins; multi-member clusters render as larger
+  /// circles with a count label overlay.
+  /// </summary>
+  private void ReclusterAndRender() {
+    if (this._rawPins.Count == 0)
+      return;
+
+    // Determine the threshold in degrees from the current viewport resolution.
+    // Resolution is meters-per-pixel in Mercator space. We want clusters to
+    // merge when they're closer than ~40 px on screen. Converting Mercator
+    // resolution to approximate degree threshold (at the equator,
+    // 1 degree ~ 111 km = 111_320 m; Mercator exaggerates toward poles but
+    // for display clustering this approximation works well).
+    var resolution = 0.0;
+    if (this.FindControl<MapControl>("MapControl") is { } mc)
+      resolution = mc.Map.Navigator.Viewport.Resolution;
+
+    if (resolution <= 0)
+      resolution = 1000; // fallback
+
+    // Skip if the resolution hasn't changed meaningfully since the last cluster pass.
+    if (Math.Abs(resolution - this._lastClusterResolution) / Math.Max(resolution, 1e-10) < 0.05)
+      return;
+
+    this._lastClusterResolution = resolution;
+
+    // 40 pixels of clustering radius, converted from Mercator meters to degrees.
+    // At equator: 1 degree longitude ~ 111,320 m in real space, but in
+    // Spherical Mercator the relationship is: mercator_meters ≈ real_meters
+    // only near the equator. The full Mercator extent is ~40,075,016 m across
+    // 360 degrees, so 1 degree ≈ 111,319.5 Mercator meters at the equator.
+    const double mercatorMetersPerDegree = 40_075_016.0 / 360.0;
+    const double clusterRadiusPx = 40.0;
+    var thresholdMercatorMeters = clusterRadiusPx * resolution;
+    var thresholdDegrees = thresholdMercatorMeters / mercatorMetersPerDegree;
+
+    var clusters = GeoCluster.ClusterByDistance(this._rawPins, thresholdDegrees);
+    this._currentClusters = clusters;
+
+    // Build features and the cluster index for hit testing.
+    this._clusterIndex.Clear();
+    var features = new List<IFeature>(clusters.Count);
+
+    foreach (var cluster in clusters) {
+      var (mx, my) = SphericalMercator.FromLonLat(cluster.CenterLon, cluster.CenterLat);
+      var center = new MPoint(mx, my);
+      this._clusterIndex.Add((center, cluster));
+
+      if (cluster.IsSinglePin) {
+        // Normal single-photo pin — same style as before.
+        features.Add(new GeometryFeature {
+          Geometry = new NetTopologySuite.Geometries.Point(mx, my)
+        });
+      } else {
+        // Cluster pin: larger circle + count label. Per-feature styles
+        // override the layer-level style.
+        var scale = ScaleForClusterSize(cluster.Members.Count);
+        features.Add(new GeometryFeature {
+          Geometry = new NetTopologySuite.Geometries.Point(mx, my),
+          Styles = new IStyle[] {
+            new SymbolStyle {
+              SymbolScale = scale,
+              Fill = new Mapsui.Styles.Brush(Mapsui.Styles.Color.FromArgb(220, 30, 100, 190)),
+              Outline = new Mapsui.Styles.Pen(Mapsui.Styles.Color.White, 2)
+            },
+            new LabelStyle {
+              Text = cluster.Members.Count.ToString(),
+              ForeColor = Mapsui.Styles.Color.White,
+              BackColor = null,
+              Font = new Mapsui.Styles.Font { Size = 12, Bold = true },
+              HorizontalAlignment = LabelStyle.HorizontalAlignmentEnum.Center,
+              VerticalAlignment = LabelStyle.VerticalAlignmentEnum.Center
+            }
+          }
+        });
+      }
+    }
+
+    this._pinsLayer.Features = features;
+    this.RefreshHighlightLayer();
+  }
+
+  /// <summary>
+  /// Returns a symbol scale that grows logarithmically with cluster size so
+  /// a 2-photo cluster is slightly larger than a pin and a 1000-photo cluster
+  /// is noticeably larger but still bounded.
+  /// </summary>
+  private static double ScaleForClusterSize(int count) {
+    // Range: 0.8 (2 members) .. ~1.6 (1000+ members).
+    var t = Math.Log(Math.Max(count, 2)) / Math.Log(1000);
+    return 0.8 + 0.8 * Math.Min(t, 1.0);
+  }
+
+  /// <summary>
+  /// Called when the map viewport (pan/zoom) changes. Debounces to avoid
+  /// re-clustering on every pixel of a scroll gesture.
+  /// </summary>
+  private void OnViewportChanged() {
+    // Only re-cluster when we actually have pins and are not in nearby mode
+    // (nearby mode manages the highlight layer independently).
+    if (this._rawPins.Count == 0)
+      return;
+
+    this._reclusterTimer?.Dispose();
+    this._reclusterTimer = new System.Threading.Timer(_ => {
+      Dispatcher.UIThread.Post(() => {
+        this.ReclusterAndRender();
+        if (this.FindControl<MapControl>("MapControl") is { } mc)
+          mc.RefreshGraphics();
+      });
+    }, null, 150, Timeout.Infinite);
   }
 
   /// <summary>
@@ -213,6 +347,49 @@ public partial class WorldMapWindow : Window {
     mc.Map.Navigator.CenterOnAndZoomTo(center, Math.Max(resolution, 2));
   }
 
+  /// <summary>
+  /// Zooms the map to the bounding box of a cluster's members so they spread
+  /// apart into individual pins or sub-clusters at the new zoom level.
+  /// </summary>
+  private void ZoomToCluster(MapControl mc, GeoClusterResult cluster) {
+    // Look up the lat/lon of every member file from the raw data.
+    var memberSet = new HashSet<string>(cluster.Members.Select(f => f.FullName));
+    var memberCoords = this._rawPins
+      .Where(p => memberSet.Contains(p.file.FullName))
+      .ToList();
+
+    if (memberCoords.Count == 0)
+      return;
+
+    if (memberCoords.Count == 1) {
+      var (mx, my) = SphericalMercator.FromLonLat(memberCoords[0].lon, memberCoords[0].lat);
+      mc.Map.Navigator.CenterOnAndZoomTo(new MPoint(mx, my), 5);
+      return;
+    }
+
+    double minMx = double.MaxValue, minMy = double.MaxValue, maxMx = double.MinValue, maxMy = double.MinValue;
+    foreach (var (lat, lon, _) in memberCoords) {
+      var (mx, my) = SphericalMercator.FromLonLat(lon, lat);
+      if (mx < minMx) minMx = mx;
+      if (my < minMy) minMy = my;
+      if (mx > maxMx) maxMx = mx;
+      if (my > maxMy) maxMy = my;
+    }
+
+    var center = new MPoint((minMx + maxMx) / 2, (minMy + maxMy) / 2);
+    var width = Math.Max(1, maxMx - minMx);
+    var height = Math.Max(1, maxMy - minMy);
+    var viewportW = mc.Bounds.Width > 0 ? mc.Bounds.Width : 1000;
+    var viewportH = mc.Bounds.Height > 0 ? mc.Bounds.Height : 600;
+    var newResolution = Math.Max(width / viewportW, height / viewportH) * 1.25;
+    mc.Map.Navigator.CenterOnAndZoomTo(center, Math.Max(newResolution, 2));
+
+    // Re-cluster at the new zoom level (programmatic zoom won't fire pointer events).
+    this._lastClusterResolution = -1;
+    this.ReclusterAndRender();
+    mc.RefreshGraphics();
+  }
+
   private void OnMapPointerPressed(object? sender, PointerPressedEventArgs e) {
     if (sender is not MapControl mc)
       return;
@@ -235,37 +412,45 @@ public partial class WorldMapWindow : Window {
       return;
     }
 
-    if (this._pinIndex.Count == 0)
+    if (this._clusterIndex.Count == 0)
       return;
 
-    // Hit test in pixel space: convert each pin to screen, pick the
-    // closest within ~14 px.
+    // Hit test against cluster centers (which include both single pins and
+    // multi-member clusters).
     var resolution = mc.Map.Navigator.Viewport.Resolution;
     if (resolution <= 0)
       return;
 
-    const double pickRadiusPx = 14;
+    const double pickRadiusPx = 20;
     var pickRadiusWorld = pickRadiusPx * resolution;
 
-    FileInfo? closest = null;
+    GeoClusterResult? hitCluster = null;
     var bestDist = double.MaxValue;
-    foreach (var (point, _, file) in this._pinIndex) {
-      var dx = point.X - worldX;
-      var dy = point.Y - worldY;
+    foreach (var (center, cluster) in this._clusterIndex) {
+      var dx = center.X - worldX;
+      var dy = center.Y - worldY;
       var dist = Math.Sqrt(dx * dx + dy * dy);
       if (dist < pickRadiusWorld && dist < bestDist) {
         bestDist = dist;
-        closest = file;
+        hitCluster = cluster;
       }
     }
 
-    if (closest is null)
+    if (hitCluster is null)
       return;
 
-    this._pickedFile = closest;
-    this.SetStatus($"📷 {closest.Name} — {closest.DirectoryName}");
-    if (this.FindControl<Button>("OpenButton") is { } btn)
-      btn.IsEnabled = true;
+    if (hitCluster.IsSinglePin) {
+      // Single pin — select the file.
+      var file = hitCluster.Members[0];
+      this._pickedFile = file;
+      this.SetStatus($"📷 {file.Name} — {file.DirectoryName}");
+      if (this.FindControl<Button>("OpenButton") is { } btn)
+        btn.IsEnabled = true;
+    } else {
+      // Multi-member cluster — zoom to its bounding box so members spread.
+      this.ZoomToCluster(mc, hitCluster);
+      this.SetStatus($"Zooming into cluster of {hitCluster.Members.Count} photos...");
+    }
     e.Handled = true;
   }
 
