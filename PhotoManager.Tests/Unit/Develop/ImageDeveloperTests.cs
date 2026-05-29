@@ -48,10 +48,12 @@ public class ImageDeveloperTests {
   public void Apply_ExposurePositive_BrightenPixels() {
     using var src = SolidColor(5, 5, new Rgba32(50, 50, 50, 255));
     using var out_ = ImageDeveloper.Apply(src, new DevelopSettings(ExposureStops: 1.0));
-    // +1 stop → roughly doubles brightness → about 100.
+    // +1 stop doubles the value in linear light. sRGB(50)→linear ≈ 0.032,
+    // ×2 → 0.064, linear→sRGB ≈ 71. Lower than the old gamma-space ~100
+    // because the sRGB transfer function is steep in the darks.
     out_.ProcessPixelRows(a => {
       var px = a.GetRowSpan(0)[0];
-      Assert.That((int)px.R, Is.InRange(98, 102));
+      Assert.That((int)px.R, Is.InRange(69, 73));
     });
   }
 
