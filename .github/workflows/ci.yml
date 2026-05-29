@@ -43,10 +43,10 @@ jobs:
         run: perl .github/workflows/scripts/version.pl --stamp
 
       - name: Restore
-        run: dotnet restore PhotoManager.sln
+        run: dotnet restore PhotoManager.slnx
 
       - name: Build
-        run: dotnet build PhotoManager.sln --configuration Release --no-restore
+        run: dotnet build PhotoManager.slnx --configuration Release --no-restore
 
       - name: Test
         run: dotnet test PhotoManager.Tests/PhotoManager.Tests.csproj --configuration Release --no-build --logger "trx;LogFileName=tests.trx"
