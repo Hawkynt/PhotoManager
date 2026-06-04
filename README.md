@@ -1,13 +1,22 @@
 # PhotoManager
 
+[![License](https://img.shields.io/github/license/Hawkynt/PhotoManager)](https://github.com/Hawkynt/PhotoManager/blob/main/LICENSE)
+[![Language](https://img.shields.io/github/languages/top/Hawkynt/PhotoManager?color=8957D5)](https://github.com/Hawkynt/PhotoManager)
+
 [![CI](https://github.com/Hawkynt/PhotoManager/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Hawkynt/PhotoManager/actions/workflows/ci.yml)
-[![Release](https://github.com/Hawkynt/PhotoManager/actions/workflows/release.yml/badge.svg)](https://github.com/Hawkynt/PhotoManager/actions/workflows/release.yml)
-[![Latest release](https://img.shields.io/github/v/release/Hawkynt/PhotoManager?label=release&sort=semver)](https://github.com/Hawkynt/PhotoManager/releases/latest)
-[![Latest nightly](https://img.shields.io/github/v/release/Hawkynt/PhotoManager?include_prereleases&label=nightly&sort=date)](https://github.com/Hawkynt/PhotoManager/releases?q=prerelease%3Atrue)
-![License](https://img.shields.io/github/license/Hawkynt/PhotoManager)
-![Language](https://img.shields.io/github/languages/top/Hawkynt/PhotoManager?color=purple)
-[![Last Commit](https://img.shields.io/github/last-commit/Hawkynt/PhotoManager?branch=main)![Activity](https://img.shields.io/github/commit-activity/y/Hawkynt/PhotoManager?branch=main)](https://github.com/Hawkynt/PhotoManager/commits/main)
+![Last Commit](https://img.shields.io/github/last-commit/Hawkynt/PhotoManager?branch=main)
+![Activity](https://img.shields.io/github/commit-activity/m/Hawkynt/PhotoManager)
+
+[![Stars](https://img.shields.io/github/stars/Hawkynt/PhotoManager?color=FFD700)](https://github.com/Hawkynt/PhotoManager/stargazers)
+[![Forks](https://img.shields.io/github/forks/Hawkynt/PhotoManager?color=008080)](https://github.com/Hawkynt/PhotoManager/network/members)
+[![Issues](https://img.shields.io/github/issues/Hawkynt/PhotoManager)](https://github.com/Hawkynt/PhotoManager/issues)
+![Code Size](https://img.shields.io/github/languages/code-size/Hawkynt/PhotoManager?color=4CAF50)
+![Repo Size](https://img.shields.io/github/repo-size/Hawkynt/PhotoManager?color=FF9800)
+
+[![Release](https://img.shields.io/github/v/release/Hawkynt/PhotoManager?sort=semver)](https://github.com/Hawkynt/PhotoManager/releases/latest)
+[![Nightly](https://img.shields.io/github/v/release/Hawkynt/PhotoManager?include_prereleases=true&sort=date&label=nightly&color=FF9800)](https://github.com/Hawkynt/PhotoManager/releases)
 [![Downloads](https://img.shields.io/github/downloads/Hawkynt/PhotoManager/total)](https://github.com/Hawkynt/PhotoManager/releases)
+[![NuGet Core](https://img.shields.io/nuget/v/PhotoManager.Core?label=Core)](https://www.nuget.org/packages/PhotoManager.Core/)
 
 > A cross-platform photo manager and lightweight DAM that organises your collection by metadata, develops RAWs/JPEGs non-destructively, and stays out of the way — no local database, no cloud sync, your folders + sidecar XMP are the source of truth.
 
@@ -119,7 +128,7 @@ PhotoManager helps photographers and photo enthusiasts:
 - ✅ Multiple date source detection (EXIF SubIFD, IFD0, GPS, filename, file system) with reliability scoring
 - ✅ Folder structure organisation (`yyyy/yyyyMMdd/HHmmss`); duplicate handling with sequential numbering
 - ✅ Command-line interface for automation (preview/dry-run, recursive)
-- ✅ MVC pattern (UI), atomic metadata writes (preserved mtime), comprehensive unit + integration tests (826 passing)
+- ✅ MVC pattern (UI), atomic metadata writes (preserved mtime), comprehensive unit + integration tests
 
 ### Planned Features
 - [ ] AI sky mask using a dedicated ONNX model (heuristic version is shipped)
@@ -232,7 +241,7 @@ The application follows a clean architecture pattern with separation of concerns
 - **Core**: Contains business logic, models, and interfaces. No UI dependencies.
 - **UI**: Avalonia 11 desktop application using MVC pattern; runs on Windows, macOS, and Linux from one codebase.
 - **CLI**: Command-line interface for automation.
-- **Tests**: Comprehensive test coverage using NUnit (currently 573 tests passing).
+- **Tests**: Comprehensive test coverage using NUnit.
 
 ### No-database principle
 
