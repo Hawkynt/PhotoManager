@@ -39,9 +39,13 @@ jobs:
         shell: bash
         run: git clone --depth=1 https://github.com/Hawkynt/CompressionWorkbench.git "$GITHUB_WORKSPACE/../CompressionWorkbench"
 
-      - name: Clone sibling PNGCrushCS (RAW readers)
-        shell: bash
-        run: git clone --depth=1 https://github.com/Hawkynt/PNGCrushCS.git "$GITHUB_WORKSPACE/../PNGCrushCS"
+      # PNGCrushCS no longer needs to be cloned at runtime — every adapter
+      # ships in the bundled `Hawkynt.FileFormats.Images` package, which we
+      # source from .local-nuget/ while the published copy works through
+      # NuGet's >24 h validation queue. The CompressionWorkbench sibling
+      # above stays for now (its JpegArchive lib still ships as a project
+      # reference). Drop .local-nuget/ and the NuGet.Config local source
+      # once `Hawkynt.FileFormats.Images` lands on nuget.org.
 
       - name: Stamp versions into csprojs
         shell: bash
@@ -76,9 +80,8 @@ jobs:
         shell: bash
         run: git clone --depth=1 https://github.com/Hawkynt/CompressionWorkbench.git "$GITHUB_WORKSPACE/../CompressionWorkbench"
 
-      - name: Clone sibling PNGCrushCS (RAW readers)
-        shell: bash
-        run: git clone --depth=1 https://github.com/Hawkynt/PNGCrushCS.git "$GITHUB_WORKSPACE/../PNGCrushCS"
+      # PNGCrushCS is consumed via the bundled `Hawkynt.FileFormats.Images`
+      # package (sourced from .local-nuget/ until the public feed catches up).
 
       - name: Stamp versions
         run: perl .github/workflows/scripts/version.pl --stamp

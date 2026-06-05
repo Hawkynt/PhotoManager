@@ -88,21 +88,28 @@
        and DNG) that feed the develop pipeline, plus modern container
        formats ImageSharp can't decode natively (HEIC, AVIF, JPEG2000,
        HDR/EXR, PSD/PSB, APNG, DDS) and previously-broken ones we already
-       advertised in SupportedFormatsService (PCX, ICO). -->
+       advertised in SupportedFormatsService (PCX, ICO).
+
+       PNGCrushCS DOES ship an aggregate `Hawkynt.FileFormats.Images`
+       project but its ProjectReferences carry `PrivateAssets="all"`, so
+       depending on it via ProjectReference hides the FileFormat.<Name>
+       types from the consumer at compile time. When PNGCrushCS publishes
+       `Hawkynt.FileFormats.Images` as a NuGet package, the bundled DLLs
+       in lib/ will expose those types and we can collapse all twelve
+       refs below into a single PackageReference (and drop the sibling
+       clone step from CI).
+       Per-adapter ProjectReferences also let us update individual
+       adapters in lockstep when PNGCrushCS reorganises its layout. -->
   <ItemGroup>
     <ProjectReference Include="..\..\CompressionWorkbench\FileFormats\FileFormat.JpegArchive\FileFormat.JpegArchive.csproj" />
-    <ProjectReference Include="..\..\PNGCrushCS\FileFormat.CameraRaw\FileFormat.CameraRaw.csproj" />
-    <ProjectReference Include="..\..\PNGCrushCS\FileFormat.Dng\FileFormat.Dng.csproj" />
-    <ProjectReference Include="..\..\PNGCrushCS\FileFormat.Heif\FileFormat.Heif.csproj" />
-    <ProjectReference Include="..\..\PNGCrushCS\FileFormat.Avif\FileFormat.Avif.csproj" />
-    <ProjectReference Include="..\..\PNGCrushCS\FileFormat.Psd\FileFormat.Psd.csproj" />
-    <ProjectReference Include="..\..\PNGCrushCS\FileFormat.Jpeg2000\FileFormat.Jpeg2000.csproj" />
-    <ProjectReference Include="..\..\PNGCrushCS\FileFormat.Hdr\FileFormat.Hdr.csproj" />
-    <ProjectReference Include="..\..\PNGCrushCS\FileFormat.Exr\FileFormat.Exr.csproj" />
-    <ProjectReference Include="..\..\PNGCrushCS\FileFormat.Apng\FileFormat.Apng.csproj" />
-    <ProjectReference Include="..\..\PNGCrushCS\FileFormat.Dds\FileFormat.Dds.csproj" />
-    <ProjectReference Include="..\..\PNGCrushCS\FileFormat.Pcx\FileFormat.Pcx.csproj" />
-    <ProjectReference Include="..\..\PNGCrushCS\FileFormat.Ico\FileFormat.Ico.csproj" />
+    <!-- Bundled aggregate package: 553 FileFormat.<Name> adapter DLLs in
+         lib/ — exposes every type the develop pipeline needs (Apng, Avif,
+         CameraRaw, Dds, Dng, Exr, Hdr, Heif, Ico, Jpeg2000, Pcx, Psd, …).
+         Sourced from .local-nuget/ via the project-scoped NuGet.Config
+         while the published copy is stuck in NuGet's validation queue.
+         Once the live feed catches up, this resolves transparently from
+         nuget.org and the local fallback can be deleted. -->
+    <PackageReference Include="Hawkynt.FileFormats.Images" Version="1.0.0" />
   </ItemGroup>
 
   <ItemGroup>
