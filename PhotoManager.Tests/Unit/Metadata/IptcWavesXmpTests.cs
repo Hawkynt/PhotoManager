@@ -1,6 +1,6 @@
-using PhotoManager.Core.Metadata;
+using Hawkynt.PhotoManager.Core.Metadata;
 
-namespace PhotoManager.Tests.Unit.Metadata;
+namespace Hawkynt.PhotoManager.Tests.Unit.Metadata;
 
 [TestFixture]
 public class IptcWavesXmpTests {

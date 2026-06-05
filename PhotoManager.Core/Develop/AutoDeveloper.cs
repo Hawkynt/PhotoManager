@@ -1,7 +1,7 @@
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 
-namespace PhotoManager.Core.Develop;
+namespace Hawkynt.PhotoManager.Core.Develop;
 
 /// <summary>
 /// One-click derivations of <see cref="DevelopSettings"/> from image

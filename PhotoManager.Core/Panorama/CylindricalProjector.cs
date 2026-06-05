@@ -1,7 +1,7 @@
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 
-namespace PhotoManager.Core.Panorama;
+namespace Hawkynt.PhotoManager.Core.Panorama;
 
 /// <summary>
 /// Re-projects a flat (rectilinear) source image onto the surface of a

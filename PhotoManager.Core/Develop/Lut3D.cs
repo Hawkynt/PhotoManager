@@ -1,7 +1,7 @@
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 
-namespace PhotoManager.Core.Develop;
+namespace Hawkynt.PhotoManager.Core.Develop;
 
 /// <summary>
 /// Immutable 3D lookup table — a creative "look" baked as an N×N×N cube of

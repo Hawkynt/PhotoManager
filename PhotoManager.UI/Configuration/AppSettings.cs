@@ -1,4 +1,4 @@
-namespace PhotoManager.UI.Configuration;
+namespace Hawkynt.PhotoManager.UI.Configuration;
 
 public class AppSettings {
   public string DefaultDatePattern { get; set; } = "yyyy/yyyyMMdd/HHmmss";

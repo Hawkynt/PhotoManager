@@ -1,4 +1,4 @@
-namespace PhotoManager.Core.Models;
+namespace Hawkynt.PhotoManager.Core.Models;
 
 /// <summary>
 /// Catalog of downloadable detection models. URLs point at stable, public

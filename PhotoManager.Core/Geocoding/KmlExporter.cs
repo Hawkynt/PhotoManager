@@ -1,9 +1,9 @@
 using System.Globalization;
 using System.Text;
 using System.Xml.Linq;
-using PhotoManager.Core.Metadata;
+using Hawkynt.PhotoManager.Core.Metadata;
 
-namespace PhotoManager.Core.Geocoding;
+namespace Hawkynt.PhotoManager.Core.Geocoding;
 
 /// <summary>
 /// User-tunable knobs for KML output. Defaults match the most common Google

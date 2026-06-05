@@ -1,4 +1,4 @@
-namespace PhotoManager.UI.Views;
+namespace Hawkynt.PhotoManager.UI.Views;
 
 /// <summary>One row in the batch-date-shift preview grid.</summary>
 public sealed class DateShiftRow {

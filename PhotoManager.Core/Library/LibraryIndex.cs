@@ -1,9 +1,9 @@
-using PhotoManager.Core.Interfaces;
-using PhotoManager.Core.Metadata;
-using PhotoManager.Core.Regions;
-using PhotoManager.Core.Services;
+using Hawkynt.PhotoManager.Core.Interfaces;
+using Hawkynt.PhotoManager.Core.Metadata;
+using Hawkynt.PhotoManager.Core.Regions;
+using Hawkynt.PhotoManager.Core.Services;
 
-namespace PhotoManager.Core.Library;
+namespace Hawkynt.PhotoManager.Core.Library;
 
 /// <summary>
 /// What the user is searching for. Each field that's non-null contributes

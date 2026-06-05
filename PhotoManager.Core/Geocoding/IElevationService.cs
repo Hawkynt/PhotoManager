@@ -1,6 +1,6 @@
-using PhotoManager.Core.Metadata;
+using Hawkynt.PhotoManager.Core.Metadata;
 
-namespace PhotoManager.Core.Geocoding;
+namespace Hawkynt.PhotoManager.Core.Geocoding;
 
 /// <summary>
 /// Resolves an elevation (meters above sea level) for a given GPS coordinate.

@@ -1,6 +1,6 @@
-using PhotoManager.Core.Metadata;
+using Hawkynt.PhotoManager.Core.Metadata;
 
-namespace PhotoManager.Core.Geocoding;
+namespace Hawkynt.PhotoManager.Core.Geocoding;
 
 /// <summary>
 /// Walks a list of files, looks up each photo's GPS, and applies the first

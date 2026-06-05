@@ -3,7 +3,7 @@ using OpenCvSharp;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 
-namespace PhotoManager.Core.Panorama;
+namespace Hawkynt.PhotoManager.Core.Panorama;
 
 /// <summary>
 /// Tunables for <see cref="OpenCvPanoramaStitcher"/>. <see cref="AutoCropToContent"/>

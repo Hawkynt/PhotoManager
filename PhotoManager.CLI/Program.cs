@@ -1,9 +1,9 @@
 using System.CommandLine;
-using PhotoManager.CLI;
-using PhotoManager.Core.Enums;
-using PhotoManager.Core.Interfaces;
-using PhotoManager.Core.Models;
-using PhotoManager.Core.Services;
+using Hawkynt.PhotoManager.CLI;
+using Hawkynt.PhotoManager.Core.Enums;
+using Hawkynt.PhotoManager.Core.Interfaces;
+using Hawkynt.PhotoManager.Core.Models;
+using Hawkynt.PhotoManager.Core.Services;
 
 var rootCommand = new RootCommand("PhotoManager CLI - Organize your photo collection");
 

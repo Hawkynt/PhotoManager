@@ -1,11 +1,11 @@
 using System;
 using System.Diagnostics;
 using NUnit.Framework;
-using PhotoManager.Core.Imaging;
+using Hawkynt.PhotoManager.Core.Imaging;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 
-namespace PhotoManager.Tests.Unit.Imaging;
+namespace Hawkynt.PhotoManager.Tests.Unit.Imaging;
 
 [TestFixture]
 [Category("Unit")]

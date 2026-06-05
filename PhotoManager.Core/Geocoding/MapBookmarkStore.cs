@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace PhotoManager.Core.Geocoding;
+namespace Hawkynt.PhotoManager.Core.Geocoding;
 
 /// <summary>
 /// JSON-backed store for <see cref="MapBookmark"/>s. Single file, one array,

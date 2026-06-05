@@ -1,8 +1,8 @@
 using System.CommandLine;
-using PhotoManager.Core;
-using PhotoManager.Core.Models;
+using Hawkynt.PhotoManager.Core;
+using Hawkynt.PhotoManager.Core.Models;
 
-namespace PhotoManager.CLI;
+namespace Hawkynt.PhotoManager.CLI;
 
 /// <summary>
 /// Builds the <c>models</c> sub-command tree: list the installable models,

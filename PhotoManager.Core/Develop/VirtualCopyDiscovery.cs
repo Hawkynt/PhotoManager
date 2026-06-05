@@ -1,7 +1,7 @@
 using System.Globalization;
 using System.Text.RegularExpressions;
 
-namespace PhotoManager.Core.Develop;
+namespace Hawkynt.PhotoManager.Core.Develop;
 
 /// <summary>
 /// Resolves the on-disk locations of "virtual copy" XMP sidecars next to a

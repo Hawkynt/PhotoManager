@@ -4,14 +4,14 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
-using PhotoManager.Core.Faces;
-using PhotoManager.Core.Metadata;
-using PhotoManager.Core.Previews;
-using PhotoManager.Core.Regions;
-using PhotoManager.Core.Services;
-using PhotoManager.UI.Models;
+using Hawkynt.PhotoManager.Core.Faces;
+using Hawkynt.PhotoManager.Core.Metadata;
+using Hawkynt.PhotoManager.Core.Previews;
+using Hawkynt.PhotoManager.Core.Regions;
+using Hawkynt.PhotoManager.Core.Services;
+using Hawkynt.PhotoManager.UI.Models;
 
-namespace PhotoManager.UI.Views;
+namespace Hawkynt.PhotoManager.UI.Views;
 
 /// <summary>
 /// Picasa-style gallery window. Consumes the main window's scanned file

@@ -1,10 +1,10 @@
-using PhotoManager.Core.Detection;
-using PhotoManager.Core.Segmentation;
+using Hawkynt.PhotoManager.Core.Detection;
+using Hawkynt.PhotoManager.Core.Segmentation;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
 
-namespace PhotoManager.Core.Develop;
+namespace Hawkynt.PhotoManager.Core.Develop;
 
 /// <summary>
 /// Orchestrates the multi-stage restoration of an old / damaged photo.

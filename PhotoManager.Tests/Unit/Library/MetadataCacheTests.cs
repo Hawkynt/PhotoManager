@@ -1,7 +1,7 @@
-using PhotoManager.Core.Library;
-using PhotoManager.Core.Metadata;
+using Hawkynt.PhotoManager.Core.Library;
+using Hawkynt.PhotoManager.Core.Metadata;
 
-namespace PhotoManager.Tests.Unit.Library;
+namespace Hawkynt.PhotoManager.Tests.Unit.Library;
 
 [TestFixture]
 public class MetadataCacheTests {

@@ -1,6 +1,6 @@
 using System.Net.Http;
 
-namespace PhotoManager.Core.Models;
+namespace Hawkynt.PhotoManager.Core.Models;
 
 /// <summary>
 /// Downloads an ONNX model to the app-data models directory. Writes to a

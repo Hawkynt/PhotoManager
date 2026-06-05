@@ -1,6 +1,6 @@
 using System.Globalization;
 
-namespace PhotoManager.Core.Models;
+namespace Hawkynt.PhotoManager.Core.Models;
 
 public class FileToImport(FileInfo source) {
   private IReadOnlyList<Directory>? _metadata;

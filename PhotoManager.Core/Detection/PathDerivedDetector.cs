@@ -1,6 +1,6 @@
 using System.Text.RegularExpressions;
 
-namespace PhotoManager.Core.Detection;
+namespace Hawkynt.PhotoManager.Core.Detection;
 
 /// <summary>
 /// A heuristic detector that extracts keyword-like tokens from the file's

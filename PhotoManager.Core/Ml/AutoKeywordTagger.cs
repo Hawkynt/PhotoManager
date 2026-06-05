@@ -1,4 +1,4 @@
-namespace PhotoManager.Core.Ml;
+namespace Hawkynt.PhotoManager.Core.Ml;
 
 /// <summary>
 /// Pure-logic cosine-similarity ranker. Given an image embedding and a set of

@@ -1,7 +1,7 @@
 using System.Globalization;
-using PhotoManager.Core.Develop;
+using Hawkynt.PhotoManager.Core.Develop;
 
-namespace PhotoManager.Tests.Unit.Develop;
+namespace Hawkynt.PhotoManager.Tests.Unit.Develop;
 
 [TestFixture]
 public class LutLoaderTests {

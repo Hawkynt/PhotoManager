@@ -1,7 +1,7 @@
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 
-namespace PhotoManager.Core.Stitching;
+namespace Hawkynt.PhotoManager.Core.Stitching;
 
 /// <summary>
 /// Reassembles detected pieces into a coherent canvas.

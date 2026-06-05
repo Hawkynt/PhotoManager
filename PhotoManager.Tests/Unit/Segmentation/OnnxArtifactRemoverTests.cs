@@ -1,8 +1,8 @@
-using PhotoManager.Core.Segmentation;
+using Hawkynt.PhotoManager.Core.Segmentation;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 
-namespace PhotoManager.Tests.Unit.Segmentation;
+namespace Hawkynt.PhotoManager.Tests.Unit.Segmentation;
 
 [TestFixture]
 public class OnnxArtifactRemoverTests {

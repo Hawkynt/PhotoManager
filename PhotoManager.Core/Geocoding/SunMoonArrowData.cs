@@ -1,4 +1,4 @@
-namespace PhotoManager.Core.Geocoding;
+namespace Hawkynt.PhotoManager.Core.Geocoding;
 
 /// <summary>
 /// Pure-data result describing a sun or moon direction arrow to be drawn

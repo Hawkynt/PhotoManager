@@ -1,9 +1,9 @@
-using PhotoManager.Core.Previews;
+using Hawkynt.PhotoManager.Core.Previews;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
 
-namespace PhotoManager.Core.Library;
+namespace Hawkynt.PhotoManager.Core.Library;
 
 /// <summary>
 /// Aggregated quality result for a single image. Each boolean is what the UI

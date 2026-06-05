@@ -5,12 +5,12 @@ using Avalonia.Interactivity;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
-using PhotoManager.Core.Hdr;
-using PhotoManager.UI.Models;
+using Hawkynt.PhotoManager.Core.Hdr;
+using Hawkynt.PhotoManager.UI.Models;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 
-namespace PhotoManager.UI.Views;
+namespace Hawkynt.PhotoManager.UI.Views;
 
 /// <summary>
 /// Bracket-merge dialog: pick three or more frames of the same scene,

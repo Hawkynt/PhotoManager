@@ -1,7 +1,7 @@
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 
-namespace PhotoManager.Core.Stitching;
+namespace Hawkynt.PhotoManager.Core.Stitching;
 
 /// <summary>
 /// Result of a torn-paper reassembly run. <see cref="Canvas"/> is the

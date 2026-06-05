@@ -1,4 +1,4 @@
-namespace PhotoManager.Core.Metadata;
+namespace Hawkynt.PhotoManager.Core.Metadata;
 
 public interface IMetadataWriter {
   /// <summary>

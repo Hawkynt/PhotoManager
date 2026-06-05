@@ -1,7 +1,7 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 
-namespace PhotoManager.UI.Models;
+namespace Hawkynt.PhotoManager.UI.Models;
 
 public class FileItemModel : INotifyPropertyChanged {
   private string _fileName = string.Empty;
@@ -66,7 +66,7 @@ public class FileItemModel : INotifyPropertyChanged {
   public DateTime? CapturedDate { get; set; }
 
   /// Cached metadata snapshot from the post-scan pass; feeds Memories' "on this trip" lookup.
-  public PhotoManager.Core.Metadata.FullMetadata? CachedMetadata { get; set; }
+  public Hawkynt.PhotoManager.Core.Metadata.FullMetadata? CachedMetadata { get; set; }
 
   private bool _isInQuickCollection;
   /// True when this row is in the Quick Collection bucket.

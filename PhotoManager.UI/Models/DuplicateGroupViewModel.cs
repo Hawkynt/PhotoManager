@@ -1,7 +1,7 @@
 using System.Collections.ObjectModel;
-using PhotoManager.Core.Library;
+using Hawkynt.PhotoManager.Core.Library;
 
-namespace PhotoManager.UI.Models;
+namespace Hawkynt.PhotoManager.UI.Models;
 
 /// <summary>
 /// One cluster of near-duplicate files in the duplicates window. Holds the

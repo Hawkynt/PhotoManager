@@ -1,7 +1,7 @@
-using PhotoManager.Core.Detection;
-using PhotoManager.Core.Metadata;
+using Hawkynt.PhotoManager.Core.Detection;
+using Hawkynt.PhotoManager.Core.Metadata;
 
-namespace PhotoManager.Tests.Unit.Detection;
+namespace Hawkynt.PhotoManager.Tests.Unit.Detection;
 
 [TestFixture]
 public class DetectionServiceTests {

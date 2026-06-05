@@ -1,6 +1,6 @@
-using PhotoManager.Core.Detection;
+using Hawkynt.PhotoManager.Core.Detection;
 
-namespace PhotoManager.Tests.Unit.Detection;
+namespace Hawkynt.PhotoManager.Tests.Unit.Detection;
 
 [TestFixture]
 public class PathDerivedDetectorTests {

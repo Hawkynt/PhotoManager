@@ -1,6 +1,6 @@
 using Microsoft.ML.OnnxRuntime;
 
-namespace PhotoManager.Core.Segmentation;
+namespace Hawkynt.PhotoManager.Core.Segmentation;
 
 /// <summary>
 /// Builds <see cref="SessionOptions"/> with the best execution provider

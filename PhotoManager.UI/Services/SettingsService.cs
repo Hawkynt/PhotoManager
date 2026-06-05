@@ -1,7 +1,7 @@
 using System.Text.Json;
-using PhotoManager.UI.Models;
+using Hawkynt.PhotoManager.UI.Models;
 
-namespace PhotoManager.UI.Services;
+namespace Hawkynt.PhotoManager.UI.Services;
 
 public class SettingsService : ISettingsService {
   private readonly string _settingsPath;

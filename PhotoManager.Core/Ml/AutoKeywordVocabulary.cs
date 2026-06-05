@@ -1,6 +1,6 @@
 using System.Reflection;
 
-namespace PhotoManager.Core.Ml;
+namespace Hawkynt.PhotoManager.Core.Ml;
 
 /// <summary>
 /// Default vocabulary loaded from the embedded <c>AutoKeywordVocabulary.txt</c>
@@ -14,7 +14,7 @@ namespace PhotoManager.Core.Ml;
 /// first run and stable for cache invalidation.
 /// </summary>
 public static class AutoKeywordVocabulary {
-  private const string ResourceName = "PhotoManager.Core.Ml.AutoKeywordVocabulary.txt";
+  private const string ResourceName = "Hawkynt.PhotoManager.Core.Ml.AutoKeywordVocabulary.txt";
 
   private static readonly Lazy<IReadOnlyList<string>> _default = new(LoadEmbedded);
 

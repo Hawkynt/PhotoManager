@@ -1,4 +1,4 @@
-namespace PhotoManager.Core.Metadata;
+namespace Hawkynt.PhotoManager.Core.Metadata;
 
 /// <summary>
 /// Detect a file's actual format from its leading bytes (magic number)

@@ -1,7 +1,7 @@
-using PhotoManager.Core.Models;
-using PhotoManager.Core.Services;
+using Hawkynt.PhotoManager.Core.Models;
+using Hawkynt.PhotoManager.Core.Services;
 
-namespace PhotoManager.Tests.Unit;
+namespace Hawkynt.PhotoManager.Tests.Unit;
 
 [TestFixture]
 public class DateTimeParserTests {

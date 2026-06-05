@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 
-namespace PhotoManager.Core.Video;
+namespace Hawkynt.PhotoManager.Core.Video;
 
 /// <summary>
 /// Cross-platform discovery of an installed ffmpeg binary. Tries the

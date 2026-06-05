@@ -1,11 +1,11 @@
 using Microsoft.ML.OnnxRuntime;
-using PhotoManager.Core.Segmentation;
+using Hawkynt.PhotoManager.Core.Segmentation;
 using Microsoft.ML.OnnxRuntime.Tensors;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
 
-namespace PhotoManager.Core.Ml;
+namespace Hawkynt.PhotoManager.Core.Ml;
 
 /// <summary>
 /// CLIP / SigLIP vision encoder. Loads the ONNX model from

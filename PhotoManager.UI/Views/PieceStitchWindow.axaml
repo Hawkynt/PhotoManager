@@ -3,7 +3,7 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d" d:DesignWidth="1080" d:DesignHeight="720"
-        x:Class="PhotoManager.UI.Views.PieceStitchWindow"
+        x:Class="Hawkynt.PhotoManager.UI.Views.PieceStitchWindow"
         Width="1080" Height="720"
         MinWidth="820" MinHeight="540"
         WindowStartupLocation="CenterOwner"

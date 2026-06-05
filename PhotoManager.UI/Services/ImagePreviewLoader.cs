@@ -1,12 +1,12 @@
 using Avalonia.Media.Imaging;
-using PhotoManager.Core.Develop;
-using PhotoManager.Core.Previews;
+using Hawkynt.PhotoManager.Core.Develop;
+using Hawkynt.PhotoManager.Core.Previews;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Formats.Webp;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
 
-namespace PhotoManager.UI.Services;
+namespace Hawkynt.PhotoManager.UI.Services;
 
 /// <summary>
 /// Loads a file into an Avalonia Bitmap. Flow:
@@ -115,7 +115,7 @@ public static class ImagePreviewLoader {
       // Flatten any alpha onto white — ImageSharp's downstream JPEG /
       // WebP encoders bake transparent pixels to black, so a transparent
       // GIF / PNG would render as a mostly-black thumbnail otherwise.
-      PhotoManager.Core.Imaging.AlphaFlattener.FlattenOntoWhite(image);
+      Hawkynt.PhotoManager.Core.Imaging.AlphaFlattener.FlattenOntoWhite(image);
       return await ResizeImageAsync(image, cancellationToken);
     } catch {
       return null;

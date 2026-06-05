@@ -1,9 +1,9 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using Avalonia.Media;
-using PhotoManager.Core.Regions;
+using Hawkynt.PhotoManager.Core.Regions;
 
-namespace PhotoManager.UI.Models;
+namespace Hawkynt.PhotoManager.UI.Models;
 
 /// <summary>
 /// One row in the region review panel. Wraps a <see cref="TaggedRegion"/>

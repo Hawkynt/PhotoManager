@@ -1,8 +1,8 @@
-using PhotoManager.Core.Models;
+using Hawkynt.PhotoManager.Core.Models;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 
-namespace PhotoManager.Core.Segmentation;
+namespace Hawkynt.PhotoManager.Core.Segmentation;
 
 /// <summary>
 /// Picks the right colorize engine for a given model filename. The two

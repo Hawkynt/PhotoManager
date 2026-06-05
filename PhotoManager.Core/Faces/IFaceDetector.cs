@@ -1,6 +1,6 @@
-using PhotoManager.Core.Metadata;
+using Hawkynt.PhotoManager.Core.Metadata;
 
-namespace PhotoManager.Core.Faces;
+namespace Hawkynt.PhotoManager.Core.Faces;
 
 /// <summary>
 /// Detects faces in an image. Implementations may return naked regions

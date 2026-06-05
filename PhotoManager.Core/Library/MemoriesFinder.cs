@@ -1,6 +1,6 @@
 using System.Globalization;
 
-namespace PhotoManager.Core.Library;
+namespace Hawkynt.PhotoManager.Core.Library;
 
 /// <summary>Time window granularity for a memory group.</summary>
 public enum TimeWindow {

@@ -1,13 +1,13 @@
 using Avalonia;
 using Avalonia.Headless;
-using PhotoManager.UI;
+using Hawkynt.PhotoManager.UI;
 
 // Tells the Avalonia.Headless.NUnit test runner how to spin up an
 // Application instance for any test that needs UI services. Lives at the
 // assembly level so a single configuration applies to every test fixture.
-[assembly: AvaloniaTestApplication(typeof(PhotoManager.Tests.Helpers.HeadlessAppBuilderFactory))]
+[assembly: AvaloniaTestApplication(typeof(Hawkynt.PhotoManager.Tests.Helpers.HeadlessAppBuilderFactory))]
 
-namespace PhotoManager.Tests.Helpers;
+namespace Hawkynt.PhotoManager.Tests.Helpers;
 
 /// <summary>
 /// Builds a headless Avalonia App for the test runner — same configuration

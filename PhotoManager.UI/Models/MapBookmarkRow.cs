@@ -1,8 +1,8 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
-using PhotoManager.Core.Geocoding;
+using Hawkynt.PhotoManager.Core.Geocoding;
 
-namespace PhotoManager.UI.Models;
+namespace Hawkynt.PhotoManager.UI.Models;
 
 /// <summary>
 /// Editable row view-model for the map bookmarks dialog. Wraps a

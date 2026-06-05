@@ -1,4 +1,4 @@
-namespace PhotoManager.Core.Detection;
+namespace Hawkynt.PhotoManager.Core.Detection;
 
 /// <summary>
 /// Runs a primary detector and, if it returns no labels, tries a fallback.

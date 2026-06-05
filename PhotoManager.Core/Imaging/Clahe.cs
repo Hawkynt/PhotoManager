@@ -1,7 +1,7 @@
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 
-namespace PhotoManager.Core.Imaging;
+namespace Hawkynt.PhotoManager.Core.Imaging;
 
 /// <summary>
 /// Contrast Limited Adaptive Histogram Equalization on the luminance

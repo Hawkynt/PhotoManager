@@ -1,8 +1,8 @@
-using PhotoManager.Core.Metadata;
+using Hawkynt.PhotoManager.Core.Metadata;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 
-namespace PhotoManager.Core.Panorama;
+namespace Hawkynt.PhotoManager.Core.Panorama;
 
 /// <summary>
 /// Lightweight heuristic for "this looks like a 360° equirectangular pano".

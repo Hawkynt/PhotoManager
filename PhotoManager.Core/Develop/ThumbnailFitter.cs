@@ -3,7 +3,7 @@ using SixLabors.ImageSharp.Formats.Jpeg;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
 
-namespace PhotoManager.Core.Develop;
+namespace Hawkynt.PhotoManager.Core.Develop;
 
 /// <summary>
 /// Picks the best (width, height, quality) tuple for an embedded JPEG

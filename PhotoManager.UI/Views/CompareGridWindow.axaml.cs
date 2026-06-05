@@ -5,9 +5,9 @@ using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.VisualTree;
-using PhotoManager.Core.Metadata;
+using Hawkynt.PhotoManager.Core.Metadata;
 
-namespace PhotoManager.UI.Views;
+namespace Hawkynt.PhotoManager.UI.Views;
 
 /// <summary>
 /// Compare Grid N-pane view: displays 2-9 photos simultaneously in a

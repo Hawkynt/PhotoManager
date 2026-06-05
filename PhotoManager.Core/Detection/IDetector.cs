@@ -1,4 +1,4 @@
-namespace PhotoManager.Core.Detection;
+namespace Hawkynt.PhotoManager.Core.Detection;
 
 /// <summary>
 /// Pluggable entry point for any detector — ONNX models, cloud services, or

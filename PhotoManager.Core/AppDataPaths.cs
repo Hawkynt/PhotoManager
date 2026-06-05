@@ -1,4 +1,4 @@
-namespace PhotoManager.Core;
+namespace Hawkynt.PhotoManager.Core;
 
 /// <summary>
 /// Cross-platform resolution for the app's data directory — a settings/cache

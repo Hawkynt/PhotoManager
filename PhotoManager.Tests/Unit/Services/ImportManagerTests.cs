@@ -1,10 +1,10 @@
-using PhotoManager.Core.Enums;
-using PhotoManager.Core.Models;
-using PhotoManager.Core.Services;
+using Hawkynt.PhotoManager.Core.Enums;
+using Hawkynt.PhotoManager.Core.Models;
+using Hawkynt.PhotoManager.Core.Services;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 
-namespace PhotoManager.Tests.Unit.Services;
+namespace Hawkynt.PhotoManager.Tests.Unit.Services;
 
 [TestFixture]
 public class ImportManagerTests {

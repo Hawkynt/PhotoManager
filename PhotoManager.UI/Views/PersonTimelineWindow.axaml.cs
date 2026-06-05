@@ -4,11 +4,11 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
-using PhotoManager.Core.Faces;
-using PhotoManager.Core.Metadata;
-using PhotoManager.Core.Services;
+using Hawkynt.PhotoManager.Core.Faces;
+using Hawkynt.PhotoManager.Core.Metadata;
+using Hawkynt.PhotoManager.Core.Services;
 
-namespace PhotoManager.UI.Views;
+namespace Hawkynt.PhotoManager.UI.Views;
 
 /// <summary>
 /// Displays a per-year photo-count timeline for each detected person (face

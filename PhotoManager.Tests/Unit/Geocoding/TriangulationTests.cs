@@ -1,8 +1,8 @@
-using PhotoManager.Core.Geocoding;
-using PhotoManager.Core.Metadata;
-using static PhotoManager.Core.Geocoding.Triangulation;
+using Hawkynt.PhotoManager.Core.Geocoding;
+using Hawkynt.PhotoManager.Core.Metadata;
+using static Hawkynt.PhotoManager.Core.Geocoding.Triangulation;
 
-namespace PhotoManager.Tests.Unit.Geocoding;
+namespace Hawkynt.PhotoManager.Tests.Unit.Geocoding;
 
 [TestFixture]
 public class TriangulationTests {

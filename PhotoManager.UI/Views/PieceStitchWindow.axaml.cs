@@ -4,14 +4,14 @@ using Avalonia.Interactivity;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
-using PhotoManager.Core.Develop;
-using PhotoManager.Core.Stitching;
+using Hawkynt.PhotoManager.Core.Develop;
+using Hawkynt.PhotoManager.Core.Stitching;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Drawing.Processing;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
 
-namespace PhotoManager.UI.Views;
+namespace Hawkynt.PhotoManager.UI.Views;
 
 public partial class PieceStitchWindow : Window {
   private FileInfo? _sourceFile;

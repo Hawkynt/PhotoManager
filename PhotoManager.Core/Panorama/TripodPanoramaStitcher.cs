@@ -1,7 +1,7 @@
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 
-namespace PhotoManager.Core.Panorama;
+namespace Hawkynt.PhotoManager.Core.Panorama;
 
 /// <summary>
 /// Naive panorama assembler for cylindrically-warped frames captured on a

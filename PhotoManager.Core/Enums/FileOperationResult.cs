@@ -1,4 +1,4 @@
-namespace PhotoManager.Core.Enums;
+namespace Hawkynt.PhotoManager.Core.Enums;
 
 public enum FileOperationResult : byte {
   /// <summary>

@@ -1,7 +1,7 @@
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 
-namespace PhotoManager.Core.Stitching;
+namespace Hawkynt.PhotoManager.Core.Stitching;
 
 /// <summary>
 /// One torn / cut piece pulled out of the source scan by the segmenter.

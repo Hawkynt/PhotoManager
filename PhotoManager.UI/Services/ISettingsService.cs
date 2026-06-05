@@ -1,6 +1,6 @@
-using PhotoManager.UI.Models;
+using Hawkynt.PhotoManager.UI.Models;
 
-namespace PhotoManager.UI.Services;
+namespace Hawkynt.PhotoManager.UI.Services;
 
 public interface ISettingsService {
   Task<UserSettingsData> LoadAsync();

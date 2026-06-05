@@ -1,6 +1,6 @@
-using PhotoManager.Core.Ml;
+using Hawkynt.PhotoManager.Core.Ml;
 
-namespace PhotoManager.Tests.Unit.Ml;
+namespace Hawkynt.PhotoManager.Tests.Unit.Ml;
 
 [TestFixture]
 public class AutoKeywordTaggerTests {

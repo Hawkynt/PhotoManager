@@ -1,6 +1,6 @@
-using PhotoManager.Core.Geo;
+using Hawkynt.PhotoManager.Core.Geo;
 
-namespace PhotoManager.Tests.Unit.Geo;
+namespace Hawkynt.PhotoManager.Tests.Unit.Geo;
 
 [TestFixture]
 public class GeoClusterTests {

@@ -1,6 +1,6 @@
-using PhotoManager.Core.Detection;
+using Hawkynt.PhotoManager.Core.Detection;
 
-namespace PhotoManager.Core.Regions;
+namespace Hawkynt.PhotoManager.Core.Regions;
 
 /// <summary>
 /// A labeled rectangular area in an image — generalized from the

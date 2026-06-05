@@ -1,4 +1,4 @@
-namespace PhotoManager.Core.Stitching;
+namespace Hawkynt.PhotoManager.Core.Stitching;
 
 /// <summary>
 /// One candidate alignment between two pieces. The transform takes a point

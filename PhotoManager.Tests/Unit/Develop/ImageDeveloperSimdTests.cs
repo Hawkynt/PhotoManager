@@ -1,9 +1,9 @@
 using NUnit.Framework;
-using PhotoManager.Core.Develop;
+using Hawkynt.PhotoManager.Core.Develop;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 
-namespace PhotoManager.Tests.Unit.Develop;
+namespace Hawkynt.PhotoManager.Tests.Unit.Develop;
 
 /// <summary>
 /// Bit-equivalence tests for the four ApplyPixelAdjustments code paths:

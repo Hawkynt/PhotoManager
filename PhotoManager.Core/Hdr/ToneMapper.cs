@@ -1,7 +1,7 @@
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 
-namespace PhotoManager.Core.Hdr;
+namespace Hawkynt.PhotoManager.Core.Hdr;
 
 public enum ToneMapOperator {
   Reinhard,

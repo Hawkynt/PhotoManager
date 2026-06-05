@@ -1,4 +1,4 @@
-namespace PhotoManager.Core.Develop;
+namespace Hawkynt.PhotoManager.Core.Develop;
 
 /// <summary>
 /// One entry on the develop edit-history stack. Each Save snapshots the

@@ -1,4 +1,4 @@
-namespace PhotoManager.Core.Library;
+namespace Hawkynt.PhotoManager.Core.Library;
 
 /// <summary>
 /// One node in the user's hierarchical keyword tree. Children is mutable so

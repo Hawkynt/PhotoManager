@@ -1,7 +1,7 @@
 using System.Collections.Concurrent;
-using PhotoManager.Core.Metadata;
+using Hawkynt.PhotoManager.Core.Metadata;
 
-namespace PhotoManager.Core.Library;
+namespace Hawkynt.PhotoManager.Core.Library;
 
 /// <summary>
 /// In-memory cache of <see cref="FullMetadata"/> keyed by absolute file path.

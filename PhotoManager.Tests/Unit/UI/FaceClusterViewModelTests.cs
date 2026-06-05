@@ -1,9 +1,9 @@
-using PhotoManager.Core.Detection;
-using PhotoManager.Core.Faces;
-using PhotoManager.Core.Regions;
-using PhotoManager.UI.Models;
+using Hawkynt.PhotoManager.Core.Detection;
+using Hawkynt.PhotoManager.Core.Faces;
+using Hawkynt.PhotoManager.Core.Regions;
+using Hawkynt.PhotoManager.UI.Models;
 
-namespace PhotoManager.Tests.Unit.UI;
+namespace Hawkynt.PhotoManager.Tests.Unit.UI;
 
 [TestFixture]
 public class FaceClusterViewModelTests {

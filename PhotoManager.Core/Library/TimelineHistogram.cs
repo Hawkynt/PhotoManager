@@ -1,4 +1,4 @@
-namespace PhotoManager.Core.Library;
+namespace Hawkynt.PhotoManager.Core.Library;
 
 /// <summary>
 /// Granularity of a timeline histogram bucket. Auto-picked from the span

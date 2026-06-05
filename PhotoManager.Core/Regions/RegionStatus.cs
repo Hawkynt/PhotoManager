@@ -1,4 +1,4 @@
-namespace PhotoManager.Core.Regions;
+namespace Hawkynt.PhotoManager.Core.Regions;
 
 /// <summary>
 /// Lifecycle state of a tagged region.

@@ -1,4 +1,4 @@
-namespace PhotoManager.Core.Faces;
+namespace Hawkynt.PhotoManager.Core.Faces;
 
 /// <summary>
 /// No-op detector — always returns an empty list. The default wiring when

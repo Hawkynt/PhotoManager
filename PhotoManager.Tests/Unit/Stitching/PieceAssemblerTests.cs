@@ -1,8 +1,8 @@
-using PhotoManager.Core.Stitching;
+using Hawkynt.PhotoManager.Core.Stitching;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 
-namespace PhotoManager.Tests.Unit.Stitching;
+namespace Hawkynt.PhotoManager.Tests.Unit.Stitching;
 
 [TestFixture]
 public class PieceAssemblerTests {

@@ -1,8 +1,8 @@
-using PhotoManager.Core.Detection;
-using PhotoManager.Core.Metadata;
-using PhotoManager.Core.Regions;
+using Hawkynt.PhotoManager.Core.Detection;
+using Hawkynt.PhotoManager.Core.Metadata;
+using Hawkynt.PhotoManager.Core.Regions;
 
-namespace PhotoManager.Tests.Unit.Metadata;
+namespace Hawkynt.PhotoManager.Tests.Unit.Metadata;
 
 [TestFixture]
 public class FaceRegionXmpTests {

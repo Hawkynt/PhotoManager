@@ -1,9 +1,9 @@
 using System.Collections.ObjectModel;
 
-namespace PhotoManager.UI.Models;
+namespace Hawkynt.PhotoManager.UI.Models;
 
 /// <summary>
-/// UI wrapper around <see cref="PhotoManager.Core.Library.QuickCollection"/>
+/// UI wrapper around <see cref="Hawkynt.PhotoManager.Core.Library.QuickCollection"/>
 /// that adds an <see cref="ObservableCollection{FileInfo}"/> for data-binding
 /// (e.g. the Develop apply-to-selection workflow feeds from <see cref="Items"/>).
 /// The core hash-set lives in the delegate; the observable list is kept in sync

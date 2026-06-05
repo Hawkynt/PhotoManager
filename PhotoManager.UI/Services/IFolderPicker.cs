@@ -1,4 +1,4 @@
-namespace PhotoManager.UI.Services;
+namespace Hawkynt.PhotoManager.UI.Services;
 
 /// <summary>
 /// UI-framework-agnostic folder picker. Implemented by each front-end

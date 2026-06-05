@@ -1,9 +1,9 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using Avalonia.Media.Imaging;
-using PhotoManager.Core.Library;
+using Hawkynt.PhotoManager.Core.Library;
 
-namespace PhotoManager.UI.Models;
+namespace Hawkynt.PhotoManager.UI.Models;
 
 /// <summary>
 /// One file inside a <see cref="DuplicateGroupViewModel"/>: name, full path,

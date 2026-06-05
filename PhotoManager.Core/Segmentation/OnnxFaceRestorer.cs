@@ -4,7 +4,7 @@ using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
 
-namespace PhotoManager.Core.Segmentation;
+namespace Hawkynt.PhotoManager.Core.Segmentation;
 
 /// <summary>
 /// ONNX-backed face restorer — handles GFPGAN (1 input) and CodeFormer

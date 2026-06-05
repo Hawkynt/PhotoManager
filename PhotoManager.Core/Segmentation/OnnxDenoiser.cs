@@ -3,10 +3,10 @@ using Microsoft.ML.OnnxRuntime.Tensors;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 
-namespace PhotoManager.Core.Segmentation;
+namespace Hawkynt.PhotoManager.Core.Segmentation;
 
 /// <summary>
-/// ONNX-backed AI denoiser. Mirrors <see cref="PhotoManager.Core.Faces.OnnxFaceDetector"/>'s
+/// ONNX-backed AI denoiser. Mirrors <see cref="Hawkynt.PhotoManager.Core.Faces.OnnxFaceDetector"/>'s
 /// degrade-gracefully pattern: <see cref="IsAvailable"/> is false when the
 /// model file is missing and <see cref="Denoise"/> returns null in that case
 /// so callers can no-op without exceptions.

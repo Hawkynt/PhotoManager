@@ -4,7 +4,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:mapsui="using:Mapsui.UI.Avalonia"
         mc:Ignorable="d" d:DesignWidth="1100" d:DesignHeight="700"
-        x:Class="PhotoManager.UI.Views.WorldMapWindow"
+        x:Class="Hawkynt.PhotoManager.UI.Views.WorldMapWindow"
         Width="1100" Height="700"
         MinWidth="700" MinHeight="500"
         WindowStartupLocation="CenterOwner"

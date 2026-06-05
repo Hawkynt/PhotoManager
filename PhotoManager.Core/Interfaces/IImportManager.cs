@@ -1,7 +1,7 @@
-using PhotoManager.Core.Enums;
-using PhotoManager.Core.Models;
+using Hawkynt.PhotoManager.Core.Enums;
+using Hawkynt.PhotoManager.Core.Models;
 
-namespace PhotoManager.Core.Interfaces;
+namespace Hawkynt.PhotoManager.Core.Interfaces;
 
 public interface IImportManager {
   IAsyncEnumerable<FileToImport> EnumerateDirectory(DirectoryInfo root, bool recursive);

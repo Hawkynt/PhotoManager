@@ -1,9 +1,9 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using Avalonia.Media;
-using PhotoManager.Core.Models;
+using Hawkynt.PhotoManager.Core.Models;
 
-namespace PhotoManager.UI.Models;
+namespace Hawkynt.PhotoManager.UI.Models;
 
 /// <summary>
 /// One row in the Models dialog. Tracks install state and an optional

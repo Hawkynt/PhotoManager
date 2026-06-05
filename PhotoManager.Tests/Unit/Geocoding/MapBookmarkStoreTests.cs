@@ -1,6 +1,6 @@
-using PhotoManager.Core.Geocoding;
+using Hawkynt.PhotoManager.Core.Geocoding;
 
-namespace PhotoManager.Tests.Unit.Geocoding;
+namespace Hawkynt.PhotoManager.Tests.Unit.Geocoding;
 
 [TestFixture]
 public sealed class MapBookmarkStoreTests {
@@ -126,6 +126,6 @@ public sealed class MapBookmarkStoreTests {
   public void DefaultFile_LivesUnderAppDataPaths() {
     var defaultFile = MapBookmarkStore.DefaultFile();
     Assert.That(defaultFile.Name, Is.EqualTo("map-bookmarks.json"));
-    Assert.That(defaultFile.Directory!.FullName, Is.EqualTo(PhotoManager.Core.AppDataPaths.Root().FullName));
+    Assert.That(defaultFile.Directory!.FullName, Is.EqualTo(Hawkynt.PhotoManager.Core.AppDataPaths.Root().FullName));
   }
 }

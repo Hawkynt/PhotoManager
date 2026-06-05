@@ -1,4 +1,4 @@
-namespace PhotoManager.Core.Segmentation;
+namespace Hawkynt.PhotoManager.Core.Segmentation;
 
 /// <summary>
 /// Subset of ADE20K's 150 semantic classes exposed in the UI for mask

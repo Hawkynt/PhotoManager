@@ -1,4 +1,4 @@
-namespace PhotoManager.Core.Develop;
+namespace Hawkynt.PhotoManager.Core.Develop;
 
 /// <summary>
 /// Mask geometry for a local adjustment. A flat record (rather than a
@@ -77,7 +77,7 @@ public enum LocalMaskType {
   Brush = 2,
   /// <summary>Content-aware fill / object removal. The brush dabs define the
   /// mask region to remove; at render time the mask is dilated by a small
-  /// feather margin and fed to <see cref="PhotoManager.Core.Segmentation.OnnxInpainter"/>
+  /// feather margin and fed to <see cref="Hawkynt.PhotoManager.Core.Segmentation.OnnxInpainter"/>
   /// which replaces those pixels with surrounding content.</summary>
   Inpaint = 3
 }

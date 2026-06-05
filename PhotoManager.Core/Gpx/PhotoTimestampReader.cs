@@ -1,6 +1,6 @@
 using MetadataExtractor.Formats.Exif;
 
-namespace PhotoManager.Core.Gpx;
+namespace Hawkynt.PhotoManager.Core.Gpx;
 
 /// <summary>
 /// Reads the capture timestamp from a photo's EXIF data. Preference order:

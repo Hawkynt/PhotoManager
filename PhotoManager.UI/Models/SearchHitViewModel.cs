@@ -1,9 +1,9 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using Avalonia.Media.Imaging;
-using PhotoManager.Core.Library;
+using Hawkynt.PhotoManager.Core.Library;
 
-namespace PhotoManager.UI.Models;
+namespace Hawkynt.PhotoManager.UI.Models;
 
 /// <summary>
 /// One result tile in the library-search window. Async-loads the thumbnail

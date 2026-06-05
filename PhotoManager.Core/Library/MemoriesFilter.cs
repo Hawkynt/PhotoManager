@@ -1,7 +1,7 @@
-using PhotoManager.Core.Geocoding;
-using PhotoManager.Core.Metadata;
+using Hawkynt.PhotoManager.Core.Geocoding;
+using Hawkynt.PhotoManager.Core.Metadata;
 
-namespace PhotoManager.Core.Library;
+namespace Hawkynt.PhotoManager.Core.Library;
 
 /// <summary>
 /// Pure-logic predicates powering the Memories window: photos taken on the

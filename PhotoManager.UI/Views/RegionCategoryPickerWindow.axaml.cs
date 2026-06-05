@@ -1,8 +1,8 @@
 using Avalonia.Controls;
 using Avalonia.Interactivity;
-using PhotoManager.Core.Regions;
+using Hawkynt.PhotoManager.Core.Regions;
 
-namespace PhotoManager.UI.Views;
+namespace Hawkynt.PhotoManager.UI.Views;
 
 /// <summary>
 /// Dialog shown right after the user draws a manual box on the preview.

@@ -1,4 +1,4 @@
-namespace PhotoManager.Core.Models;
+namespace Hawkynt.PhotoManager.Core.Models;
 
 /// <summary>
 /// Incremental progress reported during a model download.

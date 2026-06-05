@@ -2,9 +2,9 @@ using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
-using PhotoManager.Core.Faces;
+using Hawkynt.PhotoManager.Core.Faces;
 
-namespace PhotoManager.UI.Views;
+namespace Hawkynt.PhotoManager.UI.Views;
 
 /// <summary>
 /// Result returned when the user picks a named cluster to merge into.

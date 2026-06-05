@@ -1,7 +1,7 @@
 using System.Text.Json;
-using PhotoManager.UI.Models;
+using Hawkynt.PhotoManager.UI.Models;
 
-namespace PhotoManager.Tests.Unit.Models;
+namespace Hawkynt.PhotoManager.Tests.Unit.Models;
 
 [TestFixture]
 public class UserSettingsDataThemeTests {

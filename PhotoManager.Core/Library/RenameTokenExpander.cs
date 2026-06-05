@@ -1,8 +1,8 @@
 using System.Globalization;
 using System.Text;
-using PhotoManager.Core.Metadata;
+using Hawkynt.PhotoManager.Core.Metadata;
 
-namespace PhotoManager.Core.Library;
+namespace Hawkynt.PhotoManager.Core.Library;
 
 /// <summary>
 /// Renders a metadata-aware filename template (no path component — output

@@ -1,6 +1,6 @@
-using PhotoManager.Core;
+using Hawkynt.PhotoManager.Core;
 
-namespace PhotoManager.Tests.Unit;
+namespace Hawkynt.PhotoManager.Tests.Unit;
 
 [TestFixture]
 public class AppDataPathsTests {

@@ -1,8 +1,8 @@
 using Avalonia.Controls;
 using Avalonia.Headless.NUnit;
-using PhotoManager.UI.Views;
+using Hawkynt.PhotoManager.UI.Views;
 
-namespace PhotoManager.Tests.Unit.UI;
+namespace Hawkynt.PhotoManager.Tests.Unit.UI;
 
 [TestFixture]
 public class HeadlessSmokeTests {

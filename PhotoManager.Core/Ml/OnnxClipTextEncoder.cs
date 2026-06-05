@@ -1,8 +1,8 @@
 using Microsoft.ML.OnnxRuntime;
-using PhotoManager.Core.Segmentation;
+using Hawkynt.PhotoManager.Core.Segmentation;
 using Microsoft.ML.OnnxRuntime.Tensors;
 
-namespace PhotoManager.Core.Ml;
+namespace Hawkynt.PhotoManager.Core.Ml;
 
 /// <summary>
 /// CLIP / SigLIP text encoder. Encodes vocabulary words once and caches the

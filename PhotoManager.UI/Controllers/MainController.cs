@@ -1,16 +1,16 @@
 using System.Collections.ObjectModel;
-using PhotoManager.Core;
-using PhotoManager.Core.Develop;
-using PhotoManager.Core.Enums;
-using PhotoManager.Core.Geocoding;
-using PhotoManager.Core.Interfaces;
-using PhotoManager.Core.Metadata;
-using PhotoManager.Core.Models;
-using PhotoManager.Core.Services;
-using PhotoManager.UI.Models;
-using PhotoManager.UI.Services;
+using Hawkynt.PhotoManager.Core;
+using Hawkynt.PhotoManager.Core.Develop;
+using Hawkynt.PhotoManager.Core.Enums;
+using Hawkynt.PhotoManager.Core.Geocoding;
+using Hawkynt.PhotoManager.Core.Interfaces;
+using Hawkynt.PhotoManager.Core.Metadata;
+using Hawkynt.PhotoManager.Core.Models;
+using Hawkynt.PhotoManager.Core.Services;
+using Hawkynt.PhotoManager.UI.Models;
+using Hawkynt.PhotoManager.UI.Services;
 
-namespace PhotoManager.UI.Controllers;
+namespace Hawkynt.PhotoManager.UI.Controllers;
 
 public class MainController(
   IImportManager importManager,

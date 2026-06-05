@@ -1,6 +1,9 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+
+    <AssemblyName>Hawkynt.PhotoManager.CLI</AssemblyName>
+    <RootNamespace>Hawkynt.PhotoManager.CLI</RootNamespace>
     <OutputType>Exe</OutputType>
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>

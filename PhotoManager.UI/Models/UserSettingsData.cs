@@ -1,7 +1,7 @@
-using PhotoManager.Core.Enums;
-using PhotoManager.Core.Library;
+using Hawkynt.PhotoManager.Core.Enums;
+using Hawkynt.PhotoManager.Core.Library;
 
-namespace PhotoManager.UI.Models;
+namespace Hawkynt.PhotoManager.UI.Models;
 
 public record TreeViewPathData {
   public string Path { get; init; } = string.Empty;

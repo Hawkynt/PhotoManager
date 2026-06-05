@@ -1,9 +1,9 @@
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
-using PhotoManager.Core.Detection;
+using Hawkynt.PhotoManager.Core.Detection;
 
-namespace PhotoManager.Core.Previews;
+namespace Hawkynt.PhotoManager.Core.Previews;
 
 /// <summary>
 /// Cuts a <see cref="NormalizedBoundingBox"/> out of an image and encodes it
@@ -61,7 +61,7 @@ public static class RegionThumbnailExtractor {
         using var ms = new MemoryStream(raw, writable: false);
         // Flatten alpha onto white — transparent GIF / PNG thumbnails
         // would otherwise render as black via the JPEG / WebP encoder.
-        return PhotoManager.Core.Imaging.AlphaFlattener.FlattenOntoWhite(
+        return Hawkynt.PhotoManager.Core.Imaging.AlphaFlattener.FlattenOntoWhite(
           await Image.LoadAsync<Rgba32>(ms, cancellationToken));
       } catch {
         // Fall through to the generic decode attempt.
@@ -69,7 +69,7 @@ public static class RegionThumbnailExtractor {
     }
 
     try {
-      return PhotoManager.Core.Imaging.AlphaFlattener.FlattenOntoWhite(
+      return Hawkynt.PhotoManager.Core.Imaging.AlphaFlattener.FlattenOntoWhite(
         await Image.LoadAsync<Rgba32>(imageFile.FullName, cancellationToken));
     } catch {
       return null;

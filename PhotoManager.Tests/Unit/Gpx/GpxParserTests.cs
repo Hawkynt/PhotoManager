@@ -1,6 +1,6 @@
-using PhotoManager.Core.Gpx;
+using Hawkynt.PhotoManager.Core.Gpx;
 
-namespace PhotoManager.Tests.Unit.Gpx;
+namespace Hawkynt.PhotoManager.Tests.Unit.Gpx;
 
 [TestFixture]
 public class GpxParserTests {

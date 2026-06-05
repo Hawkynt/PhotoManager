@@ -1,12 +1,12 @@
 using System.Buffers;
 using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
-using PhotoManager.Core.Imaging;
+using Hawkynt.PhotoManager.Core.Imaging;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
 
-namespace PhotoManager.Core.Segmentation;
+namespace Hawkynt.PhotoManager.Core.Segmentation;
 
 /// <summary>
 /// ONNX-backed AI upscaler. Same lazy-session + degrade-gracefully pattern as

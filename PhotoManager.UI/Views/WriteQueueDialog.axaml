@@ -3,7 +3,7 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d" d:DesignWidth="560" d:DesignHeight="420"
-        x:Class="PhotoManager.UI.Views.WriteQueueDialog"
+        x:Class="Hawkynt.PhotoManager.UI.Views.WriteQueueDialog"
         Width="560" Height="420"
         WindowStartupLocation="CenterOwner"
         Title="Metadata Write Queue">

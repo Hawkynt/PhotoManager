@@ -3,12 +3,12 @@ using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using Microsoft.Extensions.DependencyInjection;
-using PhotoManager.UI.Models;
-using PhotoManager.UI.Views;
-using PhotoManager.UI.Controllers;
-using PhotoManager.UI.Services;
+using Hawkynt.PhotoManager.UI.Models;
+using Hawkynt.PhotoManager.UI.Views;
+using Hawkynt.PhotoManager.UI.Controllers;
+using Hawkynt.PhotoManager.UI.Services;
 
-namespace PhotoManager.UI;
+namespace Hawkynt.PhotoManager.UI;
 
 public partial class App : Application {
   public override void Initialize() => AvaloniaXamlLoader.Load(this);

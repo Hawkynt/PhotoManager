@@ -1,14 +1,14 @@
 using System;
 using System.Collections.Generic;
 using NUnit.Framework;
-using PhotoManager.Core.Detection;
-using PhotoManager.Core.Develop;
-using PhotoManager.Core.Models;
-using PhotoManager.Core.Segmentation;
+using Hawkynt.PhotoManager.Core.Detection;
+using Hawkynt.PhotoManager.Core.Develop;
+using Hawkynt.PhotoManager.Core.Models;
+using Hawkynt.PhotoManager.Core.Segmentation;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 
-namespace PhotoManager.Tests.Unit.Develop;
+namespace Hawkynt.PhotoManager.Tests.Unit.Develop;
 
 [TestFixture]
 [Category("Unit")]

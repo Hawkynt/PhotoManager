@@ -1,9 +1,9 @@
-using PhotoManager.Core.Segmentation;
+using Hawkynt.PhotoManager.Core.Segmentation;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
 
-namespace PhotoManager.Core.Enhance;
+namespace Hawkynt.PhotoManager.Core.Enhance;
 
 /// <summary>
 /// Smart crop suggestions ranked by NIMA aesthetic score. Generates a

@@ -1,10 +1,10 @@
-using PhotoManager.Core.Models;
-using PhotoManager.Core.Segmentation;
+using Hawkynt.PhotoManager.Core.Models;
+using Hawkynt.PhotoManager.Core.Segmentation;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
 
-namespace PhotoManager.Core.Develop;
+namespace Hawkynt.PhotoManager.Core.Develop;
 
 /// <summary>
 /// Pure auto-scratch removal pipeline: repeatedly run BOPB scratch

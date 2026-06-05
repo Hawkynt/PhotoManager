@@ -1,6 +1,6 @@
-using PhotoManager.Core.Faces;
+using Hawkynt.PhotoManager.Core.Faces;
 
-namespace PhotoManager.Tests.Unit.Faces;
+namespace Hawkynt.PhotoManager.Tests.Unit.Faces;
 
 [TestFixture]
 public class OnnxFaceEmbedderTests {
@@ -44,7 +44,7 @@ public class OnnxFaceEmbedderTests {
     using var embedder = new OnnxFaceEmbedder(new FileInfo(Path.Combine(Path.GetTempPath(), "nonexistent-face-model-" + Guid.NewGuid().ToString("N") + ".onnx")));
 
     var fakeImage = new FileInfo(Path.Combine(Path.GetTempPath(), "nonexistent-" + Guid.NewGuid().ToString("N") + ".jpg"));
-    var result = await embedder.EmbedFaceAsync(fakeImage, new PhotoManager.Core.Detection.NormalizedBoundingBox(0, 0, 1, 1));
+    var result = await embedder.EmbedFaceAsync(fakeImage, new Hawkynt.PhotoManager.Core.Detection.NormalizedBoundingBox(0, 0, 1, 1));
 
     Assert.That(result, Is.Null);
   }

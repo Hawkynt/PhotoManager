@@ -1,4 +1,4 @@
-namespace PhotoManager.Core.Develop;
+namespace Hawkynt.PhotoManager.Core.Develop;
 
 /// <summary>
 /// Counts how many develop knobs are away from their default values for a

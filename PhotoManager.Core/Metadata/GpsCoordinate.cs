@@ -1,6 +1,6 @@
 using System.Globalization;
 
-namespace PhotoManager.Core.Metadata;
+namespace Hawkynt.PhotoManager.Core.Metadata;
 
 /// <summary>
 /// A geographic point in decimal degrees. Latitude is positive north of the

@@ -1,10 +1,10 @@
 using System.CommandLine;
-using PhotoManager.Core;
-using PhotoManager.Core.Detection;
-using PhotoManager.Core.Geocoding;
-using PhotoManager.Core.Metadata;
+using Hawkynt.PhotoManager.Core;
+using Hawkynt.PhotoManager.Core.Detection;
+using Hawkynt.PhotoManager.Core.Geocoding;
+using Hawkynt.PhotoManager.Core.Metadata;
 
-namespace PhotoManager.CLI;
+namespace Hawkynt.PhotoManager.CLI;
 
 /// <summary>
 /// Builds the <c>metadata</c> sub-command tree: show, set-gps, set-rating,

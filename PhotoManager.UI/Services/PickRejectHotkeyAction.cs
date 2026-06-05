@@ -1,6 +1,6 @@
-using PhotoManager.Core.Metadata;
+using Hawkynt.PhotoManager.Core.Metadata;
 
-namespace PhotoManager.UI.Services;
+namespace Hawkynt.PhotoManager.UI.Services;
 
 /// <summary>
 /// What the P/X/U hotkeys do when bound to the file grid. Lifted out of the

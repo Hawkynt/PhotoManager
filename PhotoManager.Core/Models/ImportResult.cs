@@ -1,4 +1,4 @@
-namespace PhotoManager.Core.Models;
+namespace Hawkynt.PhotoManager.Core.Models;
 
 public record ImportResult {
   public int TotalFiles { get; init; }

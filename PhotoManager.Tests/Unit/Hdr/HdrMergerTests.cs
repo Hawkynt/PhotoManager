@@ -1,8 +1,8 @@
-using PhotoManager.Core.Hdr;
+using Hawkynt.PhotoManager.Core.Hdr;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 
-namespace PhotoManager.Tests.Unit.Hdr;
+namespace Hawkynt.PhotoManager.Tests.Unit.Hdr;
 
 [TestFixture]
 public class HdrMergerTests {

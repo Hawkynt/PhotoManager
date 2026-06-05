@@ -1,8 +1,8 @@
-using PhotoManager.Core.Develop;
+using Hawkynt.PhotoManager.Core.Develop;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 
-namespace PhotoManager.Core.Segmentation;
+namespace Hawkynt.PhotoManager.Core.Segmentation;
 
 /// <summary>
 /// Cheap heuristic sky detector. No ML model required — classifies pixels by

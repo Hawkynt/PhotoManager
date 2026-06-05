@@ -1,11 +1,11 @@
-using PhotoManager.Core.Detection;
-using PhotoManager.Core.Faces;
-using PhotoManager.Core.Interfaces;
-using PhotoManager.Core.Metadata;
-using PhotoManager.Core.Regions;
-using PhotoManager.Core.Services;
+using Hawkynt.PhotoManager.Core.Detection;
+using Hawkynt.PhotoManager.Core.Faces;
+using Hawkynt.PhotoManager.Core.Interfaces;
+using Hawkynt.PhotoManager.Core.Metadata;
+using Hawkynt.PhotoManager.Core.Regions;
+using Hawkynt.PhotoManager.Core.Services;
 
-namespace PhotoManager.Tests.Unit.Faces;
+namespace Hawkynt.PhotoManager.Tests.Unit.Faces;
 
 [TestFixture]
 public class LibraryFaceScannerTests {

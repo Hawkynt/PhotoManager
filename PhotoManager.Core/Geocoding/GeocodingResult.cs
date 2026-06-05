@@ -1,4 +1,4 @@
-namespace PhotoManager.Core.Geocoding;
+namespace Hawkynt.PhotoManager.Core.Geocoding;
 
 /// <summary>
 /// A reverse-geocoded place for a GPS coordinate. Fields map roughly to the

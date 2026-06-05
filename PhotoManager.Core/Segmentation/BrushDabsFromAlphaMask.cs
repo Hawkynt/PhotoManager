@@ -1,8 +1,8 @@
-using PhotoManager.Core.Develop;
+using Hawkynt.PhotoManager.Core.Develop;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 
-namespace PhotoManager.Core.Segmentation;
+namespace Hawkynt.PhotoManager.Core.Segmentation;
 
 /// <summary>
 /// Converts an alpha-matte segmentation result into a regular grid of

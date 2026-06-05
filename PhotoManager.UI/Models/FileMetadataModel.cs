@@ -1,6 +1,6 @@
 using System.ComponentModel;
 
-namespace PhotoManager.UI.Models;
+namespace Hawkynt.PhotoManager.UI.Models;
 
 public class FileMetadataModel {
   [DisplayName("File Name")]

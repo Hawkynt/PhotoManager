@@ -1,10 +1,10 @@
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Jobs;
-using PhotoManager.Core.Develop;
+using Hawkynt.PhotoManager.Core.Develop;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 
-namespace PhotoManager.Benchmarks;
+namespace Hawkynt.PhotoManager.Benchmarks;
 
 /// <summary>
 /// Measures the separable dilation vs the naive multi-pass dilation.

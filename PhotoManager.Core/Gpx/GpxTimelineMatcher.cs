@@ -1,6 +1,6 @@
-using PhotoManager.Core.Metadata;
+using Hawkynt.PhotoManager.Core.Metadata;
 
-namespace PhotoManager.Core.Gpx;
+namespace Hawkynt.PhotoManager.Core.Gpx;
 
 /// <summary>
 /// Given a photo's capture time, find the best-fitting GPS position in a

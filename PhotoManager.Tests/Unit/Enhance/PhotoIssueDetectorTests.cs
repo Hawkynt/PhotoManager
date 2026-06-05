@@ -1,9 +1,9 @@
 using NUnit.Framework;
-using PhotoManager.Core.Enhance;
+using Hawkynt.PhotoManager.Core.Enhance;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 
-namespace PhotoManager.Tests.Unit.Enhance;
+namespace Hawkynt.PhotoManager.Tests.Unit.Enhance;
 
 [TestFixture]
 [Category("Unit")]

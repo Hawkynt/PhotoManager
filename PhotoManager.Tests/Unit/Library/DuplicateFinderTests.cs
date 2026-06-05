@@ -1,9 +1,9 @@
-using PhotoManager.Core.Library;
-using PhotoManager.Core.Services;
+using Hawkynt.PhotoManager.Core.Library;
+using Hawkynt.PhotoManager.Core.Services;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 
-namespace PhotoManager.Tests.Unit.Library;
+namespace Hawkynt.PhotoManager.Tests.Unit.Library;
 
 [TestFixture]
 public class DuplicateFinderTests {

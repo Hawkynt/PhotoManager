@@ -5,7 +5,7 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         d:DesignWidth="1280" d:DesignHeight="780"
-        x:Class="PhotoManager.UI.Views.TriangulateFromPhotoWindow"
+        x:Class="Hawkynt.PhotoManager.UI.Views.TriangulateFromPhotoWindow"
         Width="1280" Height="780"
         MinWidth="900" MinHeight="520"
         WindowStartupLocation="CenterOwner"

@@ -1,8 +1,8 @@
 using FileFormat.JpegArchive;
-using PhotoManager.Core.Gpx;
-using PhotoManager.Core.Metadata.Containers;
+using Hawkynt.PhotoManager.Core.Gpx;
+using Hawkynt.PhotoManager.Core.Metadata.Containers;
 
-namespace PhotoManager.Core.Library;
+namespace Hawkynt.PhotoManager.Core.Library;
 
 /// <summary>
 /// Shifts EXIF capture timestamps by a fixed offset — the workflow you

@@ -1,4 +1,4 @@
-namespace PhotoManager.Core.Develop;
+namespace Hawkynt.PhotoManager.Core.Develop;
 
 /// <summary>
 /// User-facing knobs for the restoration window. Each value is 0..1

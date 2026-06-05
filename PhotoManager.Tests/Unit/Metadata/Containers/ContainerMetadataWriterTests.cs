@@ -1,10 +1,10 @@
 using System.Text;
-using PhotoManager.Core.Metadata.Containers;
-using PhotoManager.Tests.Helpers;
+using Hawkynt.PhotoManager.Core.Metadata.Containers;
+using Hawkynt.PhotoManager.Tests.Helpers;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 
-namespace PhotoManager.Tests.Unit.Metadata.Containers;
+namespace Hawkynt.PhotoManager.Tests.Unit.Metadata.Containers;
 
 [TestFixture]
 public class ContainerMetadataWriterTests {

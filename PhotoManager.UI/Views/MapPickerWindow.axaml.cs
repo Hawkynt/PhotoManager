@@ -12,10 +12,10 @@ using Mapsui.Tiling;
 using Mapsui.UI;
 using Mapsui.UI.Avalonia;
 using NetTopologySuite.Geometries;
-using PhotoManager.Core.Geocoding;
-using PhotoManager.Core.Metadata;
+using Hawkynt.PhotoManager.Core.Geocoding;
+using Hawkynt.PhotoManager.Core.Metadata;
 
-namespace PhotoManager.UI.Views;
+namespace Hawkynt.PhotoManager.UI.Views;
 
 /// <summary>
 /// Map picker with two pins — a camera position and a target (subject) —

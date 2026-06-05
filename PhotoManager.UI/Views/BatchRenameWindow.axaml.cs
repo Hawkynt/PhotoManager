@@ -2,12 +2,12 @@ using System.Collections.ObjectModel;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
-using PhotoManager.Core.Gpx;
-using PhotoManager.Core.Interfaces;
-using PhotoManager.Core.Library;
-using PhotoManager.Core.Metadata;
+using Hawkynt.PhotoManager.Core.Gpx;
+using Hawkynt.PhotoManager.Core.Interfaces;
+using Hawkynt.PhotoManager.Core.Library;
+using Hawkynt.PhotoManager.Core.Metadata;
 
-namespace PhotoManager.UI.Views;
+namespace Hawkynt.PhotoManager.UI.Views;
 
 /// <summary>
 /// Apply <see cref="RenameTokenExpander"/> to a selection of files. Per-file

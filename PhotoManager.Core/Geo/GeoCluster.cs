@@ -1,4 +1,4 @@
-namespace PhotoManager.Core.Geo;
+namespace Hawkynt.PhotoManager.Core.Geo;
 
 /// <summary>
 /// Result of geographic clustering: a center point with all member files.

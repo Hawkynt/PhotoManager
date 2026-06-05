@@ -1,8 +1,8 @@
 using NUnit.Framework;
-using PhotoManager.Core.Models;
-using PhotoManager.Core.Segmentation;
+using Hawkynt.PhotoManager.Core.Models;
+using Hawkynt.PhotoManager.Core.Segmentation;
 
-namespace PhotoManager.Tests.Unit.Segmentation;
+namespace Hawkynt.PhotoManager.Tests.Unit.Segmentation;
 
 [TestFixture]
 [Category("Unit")]
@@ -20,7 +20,7 @@ public sealed class OnnxAccelerationMultiDeviceTests {
     if (available is null)
       Assert.Inconclusive("No small ONNX model installed locally — can't test session creation.");
 
-    var modelPath = PhotoManager.Core.AppDataPaths.ModelFile(available.FileName).FullName;
+    var modelPath = Hawkynt.PhotoManager.Core.AppDataPaths.ModelFile(available.FileName).FullName;
     var sessions = OnnxAcceleration.CreateMultiDeviceSessions(modelPath);
 
     Assert.That(sessions, Is.Not.Empty,
@@ -41,7 +41,7 @@ public sealed class OnnxAccelerationMultiDeviceTests {
     if (available is null)
       Assert.Inconclusive("No model installed.");
 
-    var modelPath = PhotoManager.Core.AppDataPaths.ModelFile(available.FileName).FullName;
+    var modelPath = Hawkynt.PhotoManager.Core.AppDataPaths.ModelFile(available.FileName).FullName;
     var first = OnnxAcceleration.CreateMultiDeviceSessions(modelPath);
     var second = OnnxAcceleration.CreateMultiDeviceSessions(modelPath);
 

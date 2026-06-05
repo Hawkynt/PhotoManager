@@ -1,11 +1,11 @@
 using System.CommandLine;
 using System.Globalization;
-using PhotoManager.Core;
-using PhotoManager.Core.Detection;
-using PhotoManager.Core.Metadata;
-using PhotoManager.Core.Regions;
+using Hawkynt.PhotoManager.Core;
+using Hawkynt.PhotoManager.Core.Detection;
+using Hawkynt.PhotoManager.Core.Metadata;
+using Hawkynt.PhotoManager.Core.Regions;
 
-namespace PhotoManager.CLI;
+namespace Hawkynt.PhotoManager.CLI;
 
 /// <summary>
 /// Builds the <c>regions</c> sub-command tree: list, propose, accept,

@@ -3,12 +3,12 @@ using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
-using PhotoManager.Core.Gpx;
-using PhotoManager.Core.Metadata;
-using PhotoManager.Core.Services;
-using PhotoManager.UI.Services;
+using Hawkynt.PhotoManager.Core.Gpx;
+using Hawkynt.PhotoManager.Core.Metadata;
+using Hawkynt.PhotoManager.Core.Services;
+using Hawkynt.PhotoManager.UI.Services;
 
-namespace PhotoManager.UI.Views;
+namespace Hawkynt.PhotoManager.UI.Views;
 
 /// <summary>
 /// Dialog for applying a GPX track's positions to a folder of photos by

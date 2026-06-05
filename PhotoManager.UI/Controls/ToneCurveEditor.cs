@@ -2,9 +2,9 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
-using PhotoManager.Core.Develop;
+using Hawkynt.PhotoManager.Core.Develop;
 
-namespace PhotoManager.UI.Controls;
+namespace Hawkynt.PhotoManager.UI.Controls;
 
 /// <summary>
 /// Lightweight tone-curve editor — a square Canvas-style control that

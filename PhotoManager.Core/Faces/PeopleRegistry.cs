@@ -1,7 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace PhotoManager.Core.Faces;
+namespace Hawkynt.PhotoManager.Core.Faces;
 
 /// <summary>
 /// Persistent mapping from person name → one or more reference embedding

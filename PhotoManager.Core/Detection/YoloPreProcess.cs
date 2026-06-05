@@ -2,7 +2,7 @@ using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
 
-namespace PhotoManager.Core.Detection;
+namespace Hawkynt.PhotoManager.Core.Detection;
 
 /// <summary>
 /// Builds the 1×3×640×640 float32 NCHW tensor YOLO v8 expects. Images are

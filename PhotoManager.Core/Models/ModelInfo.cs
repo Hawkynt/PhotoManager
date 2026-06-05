@@ -1,4 +1,4 @@
-namespace PhotoManager.Core.Models;
+namespace Hawkynt.PhotoManager.Core.Models;
 
 /// <summary>
 /// A downloadable ONNX model plus where it lives on disk after download.

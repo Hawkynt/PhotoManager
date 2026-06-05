@@ -2,7 +2,7 @@ using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
 
-namespace PhotoManager.Core.Enhance;
+namespace Hawkynt.PhotoManager.Core.Enhance;
 
 /// <summary>
 /// Heuristic detectors for the common "smartphone shot" problems Magic

@@ -1,4 +1,4 @@
-namespace PhotoManager.UI.Views;
+namespace Hawkynt.PhotoManager.UI.Views;
 
 /// <summary>
 /// Pure layout helper for the Compare Grid N-pane view. Given a photo count

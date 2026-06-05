@@ -3,7 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
 
-namespace PhotoManager.UI.Controls;
+namespace Hawkynt.PhotoManager.UI.Controls;
 
 /// <summary>
 /// Lightroom-style crop overlay drawn on top of the develop preview.

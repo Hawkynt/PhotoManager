@@ -1,6 +1,6 @@
-using PhotoManager.Core.Enums;
+using Hawkynt.PhotoManager.Core.Enums;
 
-namespace PhotoManager.Core.Models;
+namespace Hawkynt.PhotoManager.Core.Models;
 
 public record ImportSettings {
   public DirectoryInfo SourceDirectory { get; init; } = null!;

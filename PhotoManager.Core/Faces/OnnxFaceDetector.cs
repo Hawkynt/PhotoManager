@@ -1,11 +1,11 @@
 using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
-using PhotoManager.Core.Segmentation;
+using Hawkynt.PhotoManager.Core.Segmentation;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
 
-namespace PhotoManager.Core.Faces;
+namespace Hawkynt.PhotoManager.Core.Faces;
 
 /// <summary>
 /// ONNX-backed face detector. Expects an UltraFace-style model that takes a
@@ -14,7 +14,7 @@ namespace PhotoManager.Core.Faces;
 /// <c>version-RFB-320.onnx</c> and <c>version-slim-320.onnx</c> variants.
 ///
 /// Returns an empty list when the model file is missing, following the same
-/// degrade-gracefully pattern as <see cref="PhotoManager.Core.Detection.YoloObjectDetector"/>.
+/// degrade-gracefully pattern as <see cref="Hawkynt.PhotoManager.Core.Detection.YoloObjectDetector"/>.
 /// Drop the model at <see cref="AppDataPaths.ModelFile"/>("face-detector.onnx")
 /// to turn detection on.
 /// </summary>

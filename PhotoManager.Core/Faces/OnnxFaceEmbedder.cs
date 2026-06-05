@@ -1,12 +1,12 @@
 using Microsoft.ML.OnnxRuntime;
-using PhotoManager.Core.Segmentation;
+using Hawkynt.PhotoManager.Core.Segmentation;
 using Microsoft.ML.OnnxRuntime.Tensors;
-using PhotoManager.Core.Detection;
+using Hawkynt.PhotoManager.Core.Detection;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
 
-namespace PhotoManager.Core.Faces;
+namespace Hawkynt.PhotoManager.Core.Faces;
 
 /// <summary>
 /// Produces a fixed-length embedding vector for a face crop using an ONNX

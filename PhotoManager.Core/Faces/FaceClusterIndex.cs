@@ -1,4 +1,4 @@
-namespace PhotoManager.Core.Faces;
+namespace Hawkynt.PhotoManager.Core.Faces;
 
 /// <summary>
 /// A group of faces that appear to belong to the same person, derived by

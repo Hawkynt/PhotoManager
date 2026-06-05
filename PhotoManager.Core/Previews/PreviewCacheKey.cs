@@ -1,4 +1,4 @@
-namespace PhotoManager.Core.Previews;
+namespace Hawkynt.PhotoManager.Core.Previews;
 
 /// <summary>
 /// A cache key that changes whenever the file changes on disk. Combines the

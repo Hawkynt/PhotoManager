@@ -1,8 +1,8 @@
 using Avalonia;
 using Avalonia.Styling;
-using PhotoManager.UI.Models;
+using Hawkynt.PhotoManager.UI.Models;
 
-namespace PhotoManager.UI.Services;
+namespace Hawkynt.PhotoManager.UI.Services;
 
 public static class ThemeApplier {
   public static ThemeVariant ToAvalonia(ThemeVariantPreference preference) => preference switch {

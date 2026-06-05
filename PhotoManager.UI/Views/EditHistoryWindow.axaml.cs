@@ -2,13 +2,13 @@ using System.Collections.ObjectModel;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Media.Imaging;
-using PhotoManager.Core.Develop;
-using PhotoManager.UI.Models;
+using Hawkynt.PhotoManager.Core.Develop;
+using Hawkynt.PhotoManager.UI.Models;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
 
-namespace PhotoManager.UI.Views;
+namespace Hawkynt.PhotoManager.UI.Views;
 
 /// <summary>
 /// Read-only viewer for the develop history stack. Each row is one prior

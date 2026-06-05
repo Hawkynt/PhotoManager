@@ -1,6 +1,6 @@
-using PhotoManager.Core.Library;
+using Hawkynt.PhotoManager.Core.Library;
 
-namespace PhotoManager.Tests.Unit.Library;
+namespace Hawkynt.PhotoManager.Tests.Unit.Library;
 
 [TestFixture]
 public class MemoriesFinderTests {

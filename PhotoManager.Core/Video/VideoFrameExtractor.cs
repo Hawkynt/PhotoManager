@@ -2,7 +2,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Text.RegularExpressions;
 
-namespace PhotoManager.Core.Video;
+namespace Hawkynt.PhotoManager.Core.Video;
 
 /// <summary>
 /// Drives ffmpeg as a subprocess to crack a video into a sequence of

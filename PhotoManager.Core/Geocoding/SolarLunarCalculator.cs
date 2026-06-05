@@ -1,4 +1,4 @@
-namespace PhotoManager.Core.Geocoding;
+namespace Hawkynt.PhotoManager.Core.Geocoding;
 
 /// <summary>
 /// Sun &amp; moon sky positions for a UTC instant + ground location.

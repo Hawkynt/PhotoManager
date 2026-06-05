@@ -2,10 +2,10 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
-using PhotoManager.Core.Models;
-using PhotoManager.UI.Views;
+using Hawkynt.PhotoManager.Core.Models;
+using Hawkynt.PhotoManager.UI.Views;
 
-namespace PhotoManager.UI.Services;
+namespace Hawkynt.PhotoManager.UI.Services;
 
 /// <summary>
 /// Centralised "is the ONNX model installed? — if not, ask the user to

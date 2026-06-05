@@ -4,11 +4,11 @@ using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
 
-namespace PhotoManager.Core.Segmentation;
+namespace Hawkynt.PhotoManager.Core.Segmentation;
 
 /// <summary>
 /// ONNX-backed subject / portrait segmentation detector. Mirrors the
-/// <see cref="PhotoManager.Core.Faces.OnnxFaceDetector"/> structure so the
+/// <see cref="Hawkynt.PhotoManager.Core.Faces.OnnxFaceDetector"/> structure so the
 /// lifecycle (lazy session, IsAvailable, async-over-Task.Run, IDisposable)
 /// is consistent across model wrappers.
 ///

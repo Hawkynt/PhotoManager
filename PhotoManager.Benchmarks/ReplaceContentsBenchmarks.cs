@@ -3,7 +3,7 @@ using BenchmarkDotNet.Jobs;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 
-namespace PhotoManager.Benchmarks;
+namespace Hawkynt.PhotoManager.Benchmarks;
 
 /// <summary>
 /// Measures the bulk Span.CopyTo-based ReplaceContents.

@@ -1,11 +1,11 @@
 using System.Security.Cryptography;
-using PhotoManager.Core.Enums;
-using PhotoManager.Core.Interfaces;
-using PhotoManager.Core.Models;
-using PhotoManager.Core.Utilities;
+using Hawkynt.PhotoManager.Core.Enums;
+using Hawkynt.PhotoManager.Core.Interfaces;
+using Hawkynt.PhotoManager.Core.Models;
+using Hawkynt.PhotoManager.Core.Utilities;
 using SystemIO = System.IO;
 
-namespace PhotoManager.Core.Services;
+namespace Hawkynt.PhotoManager.Core.Services;
 
 public class FileOrganizer : IFileOrganizer {
   public async Task<FileInfo> GenerateTargetPath(FileToImport file, DateTime dateTime, ImportSettings settings) {

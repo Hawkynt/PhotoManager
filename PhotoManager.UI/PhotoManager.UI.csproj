@@ -1,6 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+
+    <AssemblyName>Hawkynt.PhotoManager.UI</AssemblyName>
+    <RootNamespace>Hawkynt.PhotoManager.UI</RootNamespace>
     <!-- WinExe on Windows → no console window spawns alongside the GUI.
          Avalonia handles this cross-platform correctly: on Linux/macOS WinExe
          is treated as a plain executable with no console. -->
@@ -93,7 +96,7 @@
   </Target>
 
   <ItemGroup>
-    <InternalsVisibleTo Include="PhotoManager.Tests" />
+    <InternalsVisibleTo Include="Hawkynt.PhotoManager.Tests" />
   </ItemGroup>
 
 </Project>

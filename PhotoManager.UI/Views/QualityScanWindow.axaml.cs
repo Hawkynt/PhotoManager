@@ -3,13 +3,13 @@ using System.Globalization;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
-using PhotoManager.Core.Library;
-using PhotoManager.Core.Metadata;
-using PhotoManager.Core.Services;
-using PhotoManager.UI.Models;
-using PhotoManager.UI.Services;
+using Hawkynt.PhotoManager.Core.Library;
+using Hawkynt.PhotoManager.Core.Metadata;
+using Hawkynt.PhotoManager.Core.Services;
+using Hawkynt.PhotoManager.UI.Models;
+using Hawkynt.PhotoManager.UI.Services;
 
-namespace PhotoManager.UI.Views;
+namespace Hawkynt.PhotoManager.UI.Views;
 
 /// <summary>
 /// Tools-menu window that runs <see cref="QualityFlagger"/> over a chosen

@@ -5,7 +5,7 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         d:DesignWidth="860" d:DesignHeight="640"
-        x:Class="PhotoManager.UI.Views.MapPickerWindow"
+        x:Class="Hawkynt.PhotoManager.UI.Views.MapPickerWindow"
         Width="860" Height="680"
         WindowStartupLocation="CenterOwner"
         Title="Pick location on map">

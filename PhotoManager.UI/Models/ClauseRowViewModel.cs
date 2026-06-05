@@ -2,14 +2,14 @@ using System.ComponentModel;
 using System.Globalization;
 using System.Runtime.CompilerServices;
 using Avalonia.Controls;
-using PhotoManager.Core.Library;
-// SmartAlbumPickMode exists in both PhotoManager.UI.Models (cull-filter chip)
-// and PhotoManager.Core.Library (smart-album rule clause). Alias the Core one
+using Hawkynt.PhotoManager.Core.Library;
+// SmartAlbumPickMode exists in both Hawkynt.PhotoManager.UI.Models (cull-filter chip)
+// and Hawkynt.PhotoManager.Core.Library (smart-album rule clause). Alias the Core one
 // here so the existing UI alias still wins for unqualified references and we
 // don't have to fully-qualify every call site.
-using SmartAlbumPickMode = PhotoManager.Core.Library.PickRejectFilterMode;
+using SmartAlbumPickMode = Hawkynt.PhotoManager.Core.Library.PickRejectFilterMode;
 
-namespace PhotoManager.UI.Models;
+namespace Hawkynt.PhotoManager.UI.Models;
 
 /// <summary>
 /// One editable row inside <c>SmartAlbumBuilderWindow</c>. Wraps a clause type

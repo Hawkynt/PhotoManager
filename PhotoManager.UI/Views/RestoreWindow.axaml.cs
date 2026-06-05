@@ -8,19 +8,19 @@ using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
 using Avalonia.VisualTree;
-using PhotoManager.Core;
-using PhotoManager.Core.Detection;
-using PhotoManager.Core.Develop;
-using PhotoManager.Core.Faces;
-using PhotoManager.Core.Models;
-using PhotoManager.Core.Segmentation;
-using PhotoManager.UI.Services;
+using Hawkynt.PhotoManager.Core;
+using Hawkynt.PhotoManager.Core.Detection;
+using Hawkynt.PhotoManager.Core.Develop;
+using Hawkynt.PhotoManager.Core.Faces;
+using Hawkynt.PhotoManager.Core.Models;
+using Hawkynt.PhotoManager.Core.Segmentation;
+using Hawkynt.PhotoManager.UI.Services;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Drawing.Processing;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
 
-namespace PhotoManager.UI.Views;
+namespace Hawkynt.PhotoManager.UI.Views;
 
 /// <summary>
 /// Single-image restoration workshop. Open with a file, twiddle four
@@ -408,7 +408,7 @@ public partial class RestoreWindow : Window {
     var captured = settings;
     var capturedFaces = this._faces;
 
-    var stageProgress = new Progress<PhotoManager.Core.Develop.StageProgress>(
+    var stageProgress = new Progress<Hawkynt.PhotoManager.Core.Develop.StageProgress>(
       p => this.OnStageProgress(p));
     Exception? capturedError = null;
     // Bind the cache to the live _previewSource (NOT the clone — we
@@ -451,12 +451,12 @@ public partial class RestoreWindow : Window {
         // narrows down which leg is dropping the color.
         var diag = string.Empty;
         if (settings.AutoScratchRemoval) {
-          diag += $"  [auto-scratch: {PhotoManager.Core.Develop.AutoScratchPipeline.LastDiagnostic}]";
+          diag += $"  [auto-scratch: {Hawkynt.PhotoManager.Core.Develop.AutoScratchPipeline.LastDiagnostic}]";
         }
         if (settings.RecolourStrength > 0) {
           var grayPct = ComputeGrayPercent(result);
-          var meanAb = PhotoManager.Core.Segmentation.OnnxColorizerDDColor.LastInferenceMeanAbsAb;
-          var inputStats = PhotoManager.Core.Segmentation.OnnxColorizerDDColor.LastInputStats;
+          var meanAb = Hawkynt.PhotoManager.Core.Segmentation.OnnxColorizerDDColor.LastInferenceMeanAbsAb;
+          var inputStats = Hawkynt.PhotoManager.Core.Segmentation.OnnxColorizerDDColor.LastInputStats;
           diag += $"  [recolor: chroma={meanAb:F2}, gray={grayPct}%, src={inputStats}]";
         }
         result.Dispose();
@@ -581,7 +581,7 @@ public partial class RestoreWindow : Window {
   /// Stays on the UI thread because the IProgress is wrapped with
   /// Avalonia's SynchronizationContext at creation.
   /// </summary>
-  private void OnStageProgress(PhotoManager.Core.Develop.StageProgress p) {
+  private void OnStageProgress(Hawkynt.PhotoManager.Core.Develop.StageProgress p) {
     var t = this.FindControl<TextBlock>("ProgressTimingText");
     if (t is null) return;
     var pt = this.FindControl<TextBlock>("ProgressText");
@@ -721,7 +721,7 @@ public partial class RestoreWindow : Window {
           fullSrc.Width, fullSrc.Height,
           SixLabors.ImageSharp.Processing.KnownResamplers.NearestNeighbor))
       : null;
-    var saveProgress = new Progress<PhotoManager.Core.Develop.StageProgress>(
+    var saveProgress = new Progress<Hawkynt.PhotoManager.Core.Develop.StageProgress>(
       p => this.OnStageProgress(p));
     this._saveCache.BindToSource(this._fullResolutionSource);
     var saveCache = this._saveCache;

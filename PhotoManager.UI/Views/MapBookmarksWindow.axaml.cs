@@ -1,11 +1,11 @@
 using System.Collections.ObjectModel;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
-using PhotoManager.Core.Geocoding;
-using PhotoManager.Core.Metadata;
-using PhotoManager.UI.Models;
+using Hawkynt.PhotoManager.Core.Geocoding;
+using Hawkynt.PhotoManager.Core.Metadata;
+using Hawkynt.PhotoManager.UI.Models;
 
-namespace PhotoManager.UI.Views;
+namespace Hawkynt.PhotoManager.UI.Views;
 
 /// <summary>
 /// CRUD UI for <see cref="MapBookmark"/>s. Loads on open, mutates an

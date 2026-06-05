@@ -1,8 +1,8 @@
 using System.Globalization;
 using System.Xml.Linq;
-using PhotoManager.Core.Metadata;
+using Hawkynt.PhotoManager.Core.Metadata;
 
-namespace PhotoManager.Core.Gpx;
+namespace Hawkynt.PhotoManager.Core.Gpx;
 
 /// <summary>
 /// Parses GPX 1.0 and 1.1 into a flat, time-ordered list of trackpoints.

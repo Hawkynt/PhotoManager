@@ -1,4 +1,4 @@
-namespace PhotoManager.Core.Faces;
+namespace Hawkynt.PhotoManager.Core.Faces;
 
 /// <summary>
 /// A single year bucket in a person's timeline, recording how many photos

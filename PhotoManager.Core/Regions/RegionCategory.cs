@@ -1,4 +1,4 @@
-namespace PhotoManager.Core.Regions;
+namespace Hawkynt.PhotoManager.Core.Regions;
 
 /// <summary>
 /// Broad categories of tagged regions. Drives UI color coding (one color

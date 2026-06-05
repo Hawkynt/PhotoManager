@@ -1,4 +1,4 @@
-namespace PhotoManager.Core.Metadata.Containers;
+namespace Hawkynt.PhotoManager.Core.Metadata.Containers;
 
 /// <summary>
 /// Strategy for writing metadata directly inside an image file (as opposed

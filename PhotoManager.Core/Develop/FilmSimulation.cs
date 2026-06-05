@@ -1,4 +1,4 @@
-namespace PhotoManager.Core.Develop;
+namespace Hawkynt.PhotoManager.Core.Develop;
 
 /// <summary>
 /// A named film-simulation preset that maps to a pre-configured

@@ -2,9 +2,9 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Platform.Storage;
-using PhotoManager.UI.Services;
+using Hawkynt.PhotoManager.UI.Services;
 
-namespace PhotoManager.UI.Services;
+namespace Hawkynt.PhotoManager.UI.Services;
 
 public sealed class AvaloniaFolderPicker : IFolderPicker {
   public async Task<string?> PickFolderAsync(string title, string? initialPath = null) {

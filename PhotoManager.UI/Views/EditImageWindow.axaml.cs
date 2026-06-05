@@ -5,18 +5,18 @@ using Avalonia.Interactivity;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
-using PhotoManager.Core.Develop;
-using PhotoManager.Core.Enhance;
-using PhotoManager.Core.Models;
-using PhotoManager.Core.Segmentation;
-using PhotoManager.UI.Controls;
-using PhotoManager.UI.Models;
-using PhotoManager.UI.Services;
+using Hawkynt.PhotoManager.Core.Develop;
+using Hawkynt.PhotoManager.Core.Enhance;
+using Hawkynt.PhotoManager.Core.Models;
+using Hawkynt.PhotoManager.Core.Segmentation;
+using Hawkynt.PhotoManager.UI.Controls;
+using Hawkynt.PhotoManager.UI.Models;
+using Hawkynt.PhotoManager.UI.Services;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
 
-namespace PhotoManager.UI.Views;
+namespace Hawkynt.PhotoManager.UI.Views;
 
 /// <summary>
 /// Lightroom-lite developer. Live-preview sliders for tone (exposure /
@@ -3326,7 +3326,7 @@ public partial class EditImageWindow : Window {
   private void RefreshLookList() {
     if (this.FindControl<ComboBox>("LookCombo") is not { } combo)
       return;
-    var dir = PhotoManager.Core.AppDataPaths.SubDirectory("luts");
+    var dir = Hawkynt.PhotoManager.Core.AppDataPaths.SubDirectory("luts");
     var entries = new List<string> { "(no look)" };
     try {
       foreach (var ext in new[] { "*.cube", "*.3dl" })

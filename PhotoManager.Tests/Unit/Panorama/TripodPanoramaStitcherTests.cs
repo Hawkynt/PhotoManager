@@ -1,8 +1,8 @@
-using PhotoManager.Core.Panorama;
+using Hawkynt.PhotoManager.Core.Panorama;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 
-namespace PhotoManager.Tests.Unit.Panorama;
+namespace Hawkynt.PhotoManager.Tests.Unit.Panorama;
 
 [TestFixture]
 public class TripodPanoramaStitcherTests {

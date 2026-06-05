@@ -1,4 +1,4 @@
-namespace PhotoManager.UI.Models;
+namespace Hawkynt.PhotoManager.UI.Models;
 
 public class AboutViewModel {
   public string Title { get; set; } = string.Empty;

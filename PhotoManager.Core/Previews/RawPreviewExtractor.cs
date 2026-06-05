@@ -1,4 +1,4 @@
-namespace PhotoManager.Core.Previews;
+namespace Hawkynt.PhotoManager.Core.Previews;
 
 /// <summary>
 /// Extracts the largest embedded JPEG preview from a RAW file. Every modern

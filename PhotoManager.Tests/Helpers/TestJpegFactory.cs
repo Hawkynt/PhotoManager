@@ -3,7 +3,7 @@ using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Metadata.Profiles.Exif;
 using SixLabors.ImageSharp.PixelFormats;
 
-namespace PhotoManager.Tests.Helpers;
+namespace Hawkynt.PhotoManager.Tests.Helpers;
 
 /// <summary>
 /// Generates 1x1 JPEGs with caller-supplied EXIF / GPS metadata so unit

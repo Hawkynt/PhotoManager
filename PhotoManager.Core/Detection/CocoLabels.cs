@@ -1,4 +1,4 @@
-namespace PhotoManager.Core.Detection;
+namespace Hawkynt.PhotoManager.Core.Detection;
 
 /// <summary>
 /// The 80 MS COCO object classes in the standard YOLO ordering. Class IDs

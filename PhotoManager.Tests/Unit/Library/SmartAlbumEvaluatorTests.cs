@@ -1,15 +1,15 @@
 using System.Text.Json;
-using PhotoManager.Core.Detection;
-using PhotoManager.Core.Library;
-using PhotoManager.Core.Metadata;
-using PhotoManager.Core.Regions;
-using PhotoManager.UI.Models;
+using Hawkynt.PhotoManager.Core.Detection;
+using Hawkynt.PhotoManager.Core.Library;
+using Hawkynt.PhotoManager.Core.Metadata;
+using Hawkynt.PhotoManager.Core.Regions;
+using Hawkynt.PhotoManager.UI.Models;
 // Disambiguate: Core.Library defines a PickRejectFilterMode for smart-album
 // rule clauses (Any/Picked/Rejected/Unflagged); UI.Models defines its own
 // for the cull-filter chip (ShowAll/HideRejects/PicksOnly/RejectsOnly).
-using PickRejectFilterMode = PhotoManager.Core.Library.PickRejectFilterMode;
+using PickRejectFilterMode = Hawkynt.PhotoManager.Core.Library.PickRejectFilterMode;
 
-namespace PhotoManager.Tests.Unit.Library;
+namespace Hawkynt.PhotoManager.Tests.Unit.Library;
 
 [TestFixture]
 public class SmartAlbumEvaluatorTests {

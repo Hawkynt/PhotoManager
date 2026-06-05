@@ -1,4 +1,4 @@
-namespace PhotoManager.Core.Metadata;
+namespace Hawkynt.PhotoManager.Core.Metadata;
 
 /// <summary>
 /// Direction the camera was pointing when the photo was taken.

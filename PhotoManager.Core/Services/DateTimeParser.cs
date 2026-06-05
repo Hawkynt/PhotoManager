@@ -1,7 +1,7 @@
-using PhotoManager.Core.Interfaces;
-using PhotoManager.Core.Models;
+using Hawkynt.PhotoManager.Core.Interfaces;
+using Hawkynt.PhotoManager.Core.Models;
 
-namespace PhotoManager.Core.Services;
+namespace Hawkynt.PhotoManager.Core.Services;
 
 public class DateTimeParser : IDateTimeParser {
   private readonly string[] _dateTimeFormats = [

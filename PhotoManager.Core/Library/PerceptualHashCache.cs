@@ -1,6 +1,6 @@
 using System.Collections.Concurrent;
 
-namespace PhotoManager.Core.Library;
+namespace Hawkynt.PhotoManager.Core.Library;
 
 /// <summary>
 /// In-memory cache of 64-bit perceptual hashes keyed by absolute file path.

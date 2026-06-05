@@ -1,7 +1,7 @@
-using PhotoManager.Core.Detection;
-using PhotoManager.Core.Metadata;
+using Hawkynt.PhotoManager.Core.Detection;
+using Hawkynt.PhotoManager.Core.Metadata;
 
-namespace PhotoManager.Core.Regions;
+namespace Hawkynt.PhotoManager.Core.Regions;
 
 /// <summary>
 /// High-level operations on tagged regions. Wraps the sidecar read/write

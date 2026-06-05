@@ -1,6 +1,6 @@
-using PhotoManager.Core.Detection;
+using Hawkynt.PhotoManager.Core.Detection;
 
-namespace PhotoManager.Core.Metadata;
+namespace Hawkynt.PhotoManager.Core.Metadata;
 
 /// <summary>
 /// A face detected or tagged in an image, stored in the sidecar via the MWG-RS

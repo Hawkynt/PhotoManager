@@ -1,6 +1,6 @@
-using PhotoManager.Core.Detection;
+using Hawkynt.PhotoManager.Core.Detection;
 
-namespace PhotoManager.Core.Regions;
+namespace Hawkynt.PhotoManager.Core.Regions;
 
 /// <summary>
 /// Adapter that converts detection results (object labels + bounding boxes)

@@ -1,4 +1,4 @@
-namespace PhotoManager.Core.Metadata;
+namespace Hawkynt.PhotoManager.Core.Metadata;
 
 /// <summary>
 /// Resolves the sidecar file location for a given image. We use the

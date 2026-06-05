@@ -1,8 +1,8 @@
 using Avalonia.Controls;
 using Avalonia.Interactivity;
-using PhotoManager.UI.Controllers;
+using Hawkynt.PhotoManager.UI.Controllers;
 
-namespace PhotoManager.UI.Views;
+namespace Hawkynt.PhotoManager.UI.Views;
 
 public partial class AboutWindow : Window {
   public AboutWindow() : this(new AboutController()) { }

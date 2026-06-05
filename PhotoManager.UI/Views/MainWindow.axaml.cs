@@ -9,23 +9,23 @@ using Avalonia.Platform.Storage;
 using Avalonia.Media;
 using Avalonia.LogicalTree;
 using Avalonia.VisualTree;
-using PhotoManager.Core;
-using PhotoManager.Core.Detection;
-using PhotoManager.Core.Develop;
-using PhotoManager.Core.Enums;
-using PhotoManager.Core.Faces;
-using PhotoManager.Core.Geocoding;
-using PhotoManager.Core.Metadata;
-using PhotoManager.Core.Models;
-using PhotoManager.Core.Previews;
-using PhotoManager.Core.Regions;
-using PhotoManager.Core.Services;
-using PhotoManager.UI.Controllers;
-using PhotoManager.UI.Models;
-using PhotoManager.UI.Resources;
-using PhotoManager.UI.Services;
+using Hawkynt.PhotoManager.Core;
+using Hawkynt.PhotoManager.Core.Detection;
+using Hawkynt.PhotoManager.Core.Develop;
+using Hawkynt.PhotoManager.Core.Enums;
+using Hawkynt.PhotoManager.Core.Faces;
+using Hawkynt.PhotoManager.Core.Geocoding;
+using Hawkynt.PhotoManager.Core.Metadata;
+using Hawkynt.PhotoManager.Core.Models;
+using Hawkynt.PhotoManager.Core.Previews;
+using Hawkynt.PhotoManager.Core.Regions;
+using Hawkynt.PhotoManager.Core.Services;
+using Hawkynt.PhotoManager.UI.Controllers;
+using Hawkynt.PhotoManager.UI.Models;
+using Hawkynt.PhotoManager.UI.Resources;
+using Hawkynt.PhotoManager.UI.Services;
 
-namespace PhotoManager.UI.Views;
+namespace Hawkynt.PhotoManager.UI.Views;
 
 public partial class MainWindow : Window {
   private const string UiDateFormat = "dd.MM.yyyy HH:mm:ss";
@@ -154,15 +154,15 @@ public partial class MainWindow : Window {
 
     this.Opened += this.OnWindowOpened;
 
-    if (this.FindControl<PhotoManager.UI.Controls.TimelineScrubber>("TimelineStrip") is { } strip)
+    if (this.FindControl<Hawkynt.PhotoManager.UI.Controls.TimelineScrubber>("TimelineStrip") is { } strip)
       strip.BucketClicked += this.OnTimelineBucketClicked;
 
     // B hotkey toggles the focused-row file in / out of the quick collection.
     this.KeyDown += this.OnMainKeyDown;
   }
 
-  private void OnTimelineBucketClicked(object? sender, PhotoManager.Core.Library.TimelineBar bar) {
-    var (from, to) = PhotoManager.UI.Controls.TimelineScrubber.BucketRange(bar);
+  private void OnTimelineBucketClicked(object? sender, Hawkynt.PhotoManager.Core.Library.TimelineBar bar) {
+    var (from, to) = Hawkynt.PhotoManager.UI.Controls.TimelineScrubber.BucketRange(bar);
     this._timelineDayFilter = (from, to);
     this.ApplySearchFilter();
     this._controller.ViewModel.StatusMessage =
@@ -500,20 +500,20 @@ public partial class MainWindow : Window {
     GpsCoordinate endpoint;
 
     if (target is { IsValid: true } tgt) {
-      bearing = PhotoManager.Core.Geocoding.GreatCircle.BearingDegrees(cam, tgt);
-      range = PhotoManager.Core.Geocoding.GreatCircle.DistanceMeters(cam, tgt);
+      bearing = Hawkynt.PhotoManager.Core.Geocoding.GreatCircle.BearingDegrees(cam, tgt);
+      range = Hawkynt.PhotoManager.Core.Geocoding.GreatCircle.DistanceMeters(cam, tgt);
       endpoint = tgt;
     } else if (directionDegrees is { } dd) {
       bearing = dd;
       range = 500;
-      endpoint = PhotoManager.Core.Geocoding.GreatCircle.Destination(cam, bearing, range);
+      endpoint = Hawkynt.PhotoManager.Core.Geocoding.GreatCircle.Destination(cam, bearing, range);
     } else {
       return Array.Empty<Mapsui.IFeature>();
     }
 
     const double coneHalfAngleDeg = 22.5;
-    var leftEdge = PhotoManager.Core.Geocoding.GreatCircle.Destination(cam, bearing - coneHalfAngleDeg, range);
-    var rightEdge = PhotoManager.Core.Geocoding.GreatCircle.Destination(cam, bearing + coneHalfAngleDeg, range);
+    var leftEdge = Hawkynt.PhotoManager.Core.Geocoding.GreatCircle.Destination(cam, bearing - coneHalfAngleDeg, range);
+    var rightEdge = Hawkynt.PhotoManager.Core.Geocoding.GreatCircle.Destination(cam, bearing + coneHalfAngleDeg, range);
 
     var camPt = ToMercatorCoord(cam);
     var endPt = ToMercatorCoord(endpoint);
@@ -666,7 +666,7 @@ public partial class MainWindow : Window {
             $"Pre-caching thumbnails… ({processed}/{total})";
           this._controller.ViewModel.PreCachePercent = pct;
           this._controller.ViewModel.CacheSizeBytes = ImagePreviewLoader.Cache.CurrentBytes;
-          this._controller.ViewModel.AcceleratorDevice = PhotoManager.Core.Segmentation.OnnxAcceleration.LastSelectedDevice;
+          this._controller.ViewModel.AcceleratorDevice = Hawkynt.PhotoManager.Core.Segmentation.OnnxAcceleration.LastSelectedDevice;
         }
       });
       await Task.Delay(500);
@@ -684,7 +684,7 @@ public partial class MainWindow : Window {
   }
 
   private void RefreshTimelineStrip() {
-    if (this.FindControl<PhotoManager.UI.Controls.TimelineScrubber>("TimelineStrip") is not { } strip)
+    if (this.FindControl<Hawkynt.PhotoManager.UI.Controls.TimelineScrubber>("TimelineStrip") is not { } strip)
       return;
     if (this._currentFileItems is null) {
       strip.SetPhotos(Array.Empty<(DateTime, FileInfo)>());
@@ -2595,7 +2595,7 @@ public partial class MainWindow : Window {
     if (this.FindControl<TextBox>("DirectionBox") is { } dirBox)
       dirBox.Text = md.ImageDirection?.Degrees.ToString("0.##", inv) ?? string.Empty;
     if (this.FindControl<Avalonia.Controls.Primitives.ToggleButton>("DirectionMagneticCheck") is { } magCheck)
-      magCheck.IsChecked = md.ImageDirection?.Reference == PhotoManager.Core.Metadata.DirectionReference.Magnetic;
+      magCheck.IsChecked = md.ImageDirection?.Reference == Hawkynt.PhotoManager.Core.Metadata.DirectionReference.Magnetic;
 
     if (this.FindControl<TextBox>("TargetLatBox") is { } tgtLat)
       tgtLat.Text = md.TargetGps?.Latitude.ToString("0.######", inv) ?? string.Empty;

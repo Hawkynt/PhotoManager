@@ -1,7 +1,7 @@
-using PhotoManager.Core.Metadata;
-using PhotoManager.Core.Regions;
+using Hawkynt.PhotoManager.Core.Metadata;
+using Hawkynt.PhotoManager.Core.Regions;
 
-namespace PhotoManager.Core.Library;
+namespace Hawkynt.PhotoManager.Core.Library;
 
 /// <summary>
 /// Pure-logic engine for smart-album rules. No IO; every input arrives via

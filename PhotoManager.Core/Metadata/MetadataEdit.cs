@@ -1,4 +1,4 @@
-namespace PhotoManager.Core.Metadata;
+namespace Hawkynt.PhotoManager.Core.Metadata;
 
 /// <summary>
 /// An immutable patch to apply to a file's sidecar metadata. Each field has
@@ -107,7 +107,7 @@ public sealed record MetadataEdit {
   public Optional<string?> ProductGtin { get; init; }
   public Optional<string?> ProductDescription { get; init; }
 
-  public Optional<IReadOnlyList<PhotoManager.Core.Regions.TaggedRegion>> Regions { get; init; }
+  public Optional<IReadOnlyList<Hawkynt.PhotoManager.Core.Regions.TaggedRegion>> Regions { get; init; }
 }
 
 /// <summary>

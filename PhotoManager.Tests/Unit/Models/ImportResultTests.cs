@@ -1,6 +1,6 @@
-using PhotoManager.Core.Models;
+using Hawkynt.PhotoManager.Core.Models;
 
-namespace PhotoManager.Tests.Unit.Models;
+namespace Hawkynt.PhotoManager.Tests.Unit.Models;
 
 [TestFixture]
 public class ImportResultTests {

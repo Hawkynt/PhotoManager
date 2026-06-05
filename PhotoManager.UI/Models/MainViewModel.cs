@@ -1,12 +1,12 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
-using PhotoManager.Core.Enums;
-using PhotoManager.Core.Library;
-using PhotoManager.Core.Models;
-using PhotoManager.Core.Segmentation;
+using Hawkynt.PhotoManager.Core.Enums;
+using Hawkynt.PhotoManager.Core.Library;
+using Hawkynt.PhotoManager.Core.Models;
+using Hawkynt.PhotoManager.Core.Segmentation;
 
-namespace PhotoManager.UI.Models;
+namespace Hawkynt.PhotoManager.UI.Models;
 
 public class MainViewModel : INotifyPropertyChanged {
   private string _sourceDirectory = string.Empty;

@@ -2,9 +2,9 @@ using System.Collections.ObjectModel;
 using System.Globalization;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
-using PhotoManager.Core.Library;
+using Hawkynt.PhotoManager.Core.Library;
 
-namespace PhotoManager.UI.Views;
+namespace Hawkynt.PhotoManager.UI.Views;
 
 /// <summary>
 /// Apply a uniform <see cref="TimeSpan"/> offset to a selection of files'

@@ -1,13 +1,13 @@
 using Avalonia;
 using Avalonia.ReactiveUI;
 using Microsoft.Extensions.DependencyInjection;
-using PhotoManager.Core.Interfaces;
-using PhotoManager.Core.Services;
-using PhotoManager.UI.Controllers;
-using PhotoManager.UI.Models;
-using PhotoManager.UI.Services;
+using Hawkynt.PhotoManager.Core.Interfaces;
+using Hawkynt.PhotoManager.Core.Services;
+using Hawkynt.PhotoManager.UI.Controllers;
+using Hawkynt.PhotoManager.UI.Models;
+using Hawkynt.PhotoManager.UI.Services;
 
-namespace PhotoManager.UI;
+namespace Hawkynt.PhotoManager.UI;
 
 internal static class Program {
   public static IServiceProvider Services { get; private set; } = null!;

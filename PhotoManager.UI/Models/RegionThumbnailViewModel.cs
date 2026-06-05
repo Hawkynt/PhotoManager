@@ -1,9 +1,9 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using Avalonia.Media.Imaging;
-using PhotoManager.Core.Regions;
+using Hawkynt.PhotoManager.Core.Regions;
 
-namespace PhotoManager.UI.Models;
+namespace Hawkynt.PhotoManager.UI.Models;
 
 /// <summary>
 /// One tile in the region thumbnail strip. Pairs a <see cref="RegionRowViewModel"/>

@@ -1,11 +1,11 @@
 using Avalonia.Controls;
 using Avalonia.Interactivity;
-using PhotoManager.Core;
-using PhotoManager.UI.Controllers;
-using PhotoManager.UI.Models;
-using PhotoManager.UI.Services;
+using Hawkynt.PhotoManager.Core;
+using Hawkynt.PhotoManager.UI.Controllers;
+using Hawkynt.PhotoManager.UI.Models;
+using Hawkynt.PhotoManager.UI.Services;
 
-namespace PhotoManager.UI.Views;
+namespace Hawkynt.PhotoManager.UI.Views;
 
 /// <summary>
 /// Single-window preferences dialog. Bound directly to <see cref="MainViewModel"/>;

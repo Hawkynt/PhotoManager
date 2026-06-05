@@ -1,6 +1,6 @@
-using PhotoManager.Core.Previews;
+using Hawkynt.PhotoManager.Core.Previews;
 
-namespace PhotoManager.Tests.Unit.Previews;
+namespace Hawkynt.PhotoManager.Tests.Unit.Previews;
 
 [TestFixture]
 public class PreviewCacheKeyTests {

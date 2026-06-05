@@ -4,9 +4,9 @@ using Avalonia.Controls.Shapes;
 using Avalonia.Input;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
-using PhotoManager.Core.Library;
+using Hawkynt.PhotoManager.Core.Library;
 
-namespace PhotoManager.UI.Controls;
+namespace Hawkynt.PhotoManager.UI.Controls;
 
 /// <summary>
 /// Horizontal scrubber strip showing a histogram of how many photos sit in

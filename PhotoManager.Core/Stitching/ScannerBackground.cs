@@ -1,4 +1,4 @@
-namespace PhotoManager.Core.Stitching;
+namespace Hawkynt.PhotoManager.Core.Stitching;
 
 /// <summary>
 /// Hint for the segmenter about what colour the gaps between pieces / the

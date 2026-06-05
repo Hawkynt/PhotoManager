@@ -1,6 +1,6 @@
-using PhotoManager.Core.Models;
+using Hawkynt.PhotoManager.Core.Models;
 
-namespace PhotoManager.Core.Interfaces;
+namespace Hawkynt.PhotoManager.Core.Interfaces;
 
 public interface IDateTimeParser {
   IAsyncEnumerable<DateTime> ParseDateFromFileName(FileToImport fileToImport, ImportSettings settings);

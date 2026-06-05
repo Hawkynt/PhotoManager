@@ -1,7 +1,7 @@
 using System.Globalization;
-using PhotoManager.Core.Library;
+using Hawkynt.PhotoManager.Core.Library;
 
-namespace PhotoManager.UI.Models;
+namespace Hawkynt.PhotoManager.UI.Models;
 
 /// <summary>
 /// Row VM for the QualityScanWindow grid. Strings are pre-formatted so the

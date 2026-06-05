@@ -3,7 +3,7 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d" d:DesignWidth="900" d:DesignHeight="600"
-        x:Class="PhotoManager.UI.Views.PersonTimelineWindow"
+        x:Class="Hawkynt.PhotoManager.UI.Views.PersonTimelineWindow"
         Width="900" Height="600"
         MinWidth="640" MinHeight="400"
         WindowStartupLocation="CenterOwner"

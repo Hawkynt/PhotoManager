@@ -1,4 +1,4 @@
-namespace PhotoManager.UI.Models;
+namespace Hawkynt.PhotoManager.UI.Models;
 
 /// <summary>
 /// Where the main-window file grid pulls its rows from.

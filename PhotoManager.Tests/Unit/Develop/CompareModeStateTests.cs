@@ -1,6 +1,6 @@
-using PhotoManager.Core.Develop;
+using Hawkynt.PhotoManager.Core.Develop;
 
-namespace PhotoManager.Tests.Unit.Develop;
+namespace Hawkynt.PhotoManager.Tests.Unit.Develop;
 
 [TestFixture]
 public sealed class CompareModeStateTests {

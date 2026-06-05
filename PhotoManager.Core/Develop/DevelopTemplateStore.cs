@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace PhotoManager.Core.Develop;
+namespace Hawkynt.PhotoManager.Core.Develop;
 
 /// <summary>
 /// One reusable develop preset. Just a name + the settings — no preview

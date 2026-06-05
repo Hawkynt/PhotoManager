@@ -1,4 +1,4 @@
-namespace PhotoManager.UI.Models;
+namespace Hawkynt.PhotoManager.UI.Models;
 
 public class TreeViewNodeData(DirectoryInfo path, bool recursive = true) {
   public DirectoryInfo Path { get; set; } = path;

@@ -1,4 +1,4 @@
-namespace PhotoManager.Core.Detection;
+namespace Hawkynt.PhotoManager.Core.Detection;
 
 /// <summary>
 /// One detected entity in an image — either an object class (car, dog) or

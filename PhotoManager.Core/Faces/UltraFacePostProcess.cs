@@ -1,8 +1,8 @@
-using PhotoManager.Core.Detection;
-using PhotoManager.Core.Metadata;
-using PhotoManager.Core.Regions;
+using Hawkynt.PhotoManager.Core.Detection;
+using Hawkynt.PhotoManager.Core.Metadata;
+using Hawkynt.PhotoManager.Core.Regions;
 
-namespace PhotoManager.Core.Faces;
+namespace Hawkynt.PhotoManager.Core.Faces;
 
 /// <summary>
 /// Decodes UltraFace's raw output into detected face regions. Unlike YOLO,

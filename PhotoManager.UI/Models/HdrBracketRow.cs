@@ -2,7 +2,7 @@ using System.ComponentModel;
 using System.Globalization;
 using System.Runtime.CompilerServices;
 
-namespace PhotoManager.UI.Models;
+namespace Hawkynt.PhotoManager.UI.Models;
 
 /// One row of the HDR-merge file list. ExposureSeconds is editable so the
 /// user can supply a value when EXIF is missing; ExposureText / EvOffsetText

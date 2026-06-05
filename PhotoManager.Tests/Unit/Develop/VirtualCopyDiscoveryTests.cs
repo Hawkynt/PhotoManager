@@ -1,7 +1,7 @@
-using PhotoManager.Core.Develop;
-using PhotoManager.Tests.Helpers;
+using Hawkynt.PhotoManager.Core.Develop;
+using Hawkynt.PhotoManager.Tests.Helpers;
 
-namespace PhotoManager.Tests.Unit.Develop;
+namespace Hawkynt.PhotoManager.Tests.Unit.Develop;
 
 [TestFixture]
 public class VirtualCopyDiscoveryTests {

@@ -1,7 +1,7 @@
-using PhotoManager.UI.Models;
-using PhotoManager.UI.Services;
+using Hawkynt.PhotoManager.UI.Models;
+using Hawkynt.PhotoManager.UI.Services;
 
-namespace PhotoManager.Tests.Unit.Services;
+namespace Hawkynt.PhotoManager.Tests.Unit.Services;
 
 [TestFixture]
 public class PickRejectFilterTests {

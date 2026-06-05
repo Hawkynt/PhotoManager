@@ -1,4 +1,4 @@
-namespace PhotoManager.UI.Models;
+namespace Hawkynt.PhotoManager.UI.Models;
 
 /// <summary>
 /// Per-file row in the auto-keyword scan results grid. <see cref="Keywords"/>

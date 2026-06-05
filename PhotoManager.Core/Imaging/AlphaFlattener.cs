@@ -1,7 +1,7 @@
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 
-namespace PhotoManager.Core.Imaging;
+namespace Hawkynt.PhotoManager.Core.Imaging;
 
 /// <summary>
 /// In-place "src-over-white" composite for any <see cref="Image{Rgba32}"/>.

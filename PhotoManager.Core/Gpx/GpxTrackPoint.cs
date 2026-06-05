@@ -1,6 +1,6 @@
-using PhotoManager.Core.Metadata;
+using Hawkynt.PhotoManager.Core.Metadata;
 
-namespace PhotoManager.Core.Gpx;
+namespace Hawkynt.PhotoManager.Core.Gpx;
 
 /// <summary>
 /// A single point along a GPS track. <see cref="TimeUtc"/> is authoritative —

@@ -1,7 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 
-namespace PhotoManager.Core.Utilities;
+namespace Hawkynt.PhotoManager.Core.Utilities;
 
 internal static class ThrowHelpers {
   [DoesNotReturn]

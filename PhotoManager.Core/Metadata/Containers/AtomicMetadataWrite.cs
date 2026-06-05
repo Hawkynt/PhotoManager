@@ -1,4 +1,4 @@
-namespace PhotoManager.Core.Metadata.Containers;
+namespace Hawkynt.PhotoManager.Core.Metadata.Containers;
 
 /// <summary>
 /// Atomic in-place file rewrite used by every container metadata writer.

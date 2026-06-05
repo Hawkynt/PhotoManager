@@ -1,6 +1,6 @@
-using PhotoManager.Core.Regions;
+using Hawkynt.PhotoManager.Core.Regions;
 
-namespace PhotoManager.Core.Metadata;
+namespace Hawkynt.PhotoManager.Core.Metadata;
 
 /// <summary>
 /// A fully-resolved snapshot of a file's metadata: EXIF values plus any

@@ -1,7 +1,7 @@
-using PhotoManager.Core.Interfaces;
-using PhotoManager.Core.Services;
+using Hawkynt.PhotoManager.Core.Interfaces;
+using Hawkynt.PhotoManager.Core.Services;
 
-namespace PhotoManager.Core.Library;
+namespace Hawkynt.PhotoManager.Core.Library;
 
 /// <summary>One file plus its 64-bit pHash; what the duplicate finder buckets together.</summary>
 public sealed record HashedFile(FileInfo File, ulong Hash);

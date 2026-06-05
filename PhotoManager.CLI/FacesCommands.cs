@@ -1,8 +1,8 @@
 using System.CommandLine;
-using PhotoManager.Core.Faces;
-using PhotoManager.Core.Metadata;
+using Hawkynt.PhotoManager.Core.Faces;
+using Hawkynt.PhotoManager.Core.Metadata;
 
-namespace PhotoManager.CLI;
+namespace Hawkynt.PhotoManager.CLI;
 
 /// <summary>
 /// Builds the <c>faces</c> sub-command tree: list, tag. Writes go into the

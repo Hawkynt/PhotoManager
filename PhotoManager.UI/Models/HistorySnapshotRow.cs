@@ -1,8 +1,8 @@
 using System.Globalization;
 using Avalonia.Media.Imaging;
-using PhotoManager.Core.Develop;
+using Hawkynt.PhotoManager.Core.Develop;
 
-namespace PhotoManager.UI.Models;
+namespace Hawkynt.PhotoManager.UI.Models;
 
 /// <summary>
 /// One row in the EditHistoryWindow snapshot list. Wraps a

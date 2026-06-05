@@ -3,7 +3,7 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d" d:DesignWidth="720" d:DesignHeight="540"
-        x:Class="PhotoManager.UI.Views.GeofenceBatchWindow"
+        x:Class="Hawkynt.PhotoManager.UI.Views.GeofenceBatchWindow"
         Width="720" Height="540"
         MinWidth="600" MinHeight="380"
         WindowStartupLocation="CenterOwner"

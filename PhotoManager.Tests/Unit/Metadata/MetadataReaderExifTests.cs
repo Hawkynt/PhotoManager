@@ -1,7 +1,7 @@
-using PhotoManager.Core.Metadata;
-using PhotoManager.Tests.Helpers;
+using Hawkynt.PhotoManager.Core.Metadata;
+using Hawkynt.PhotoManager.Tests.Helpers;
 
-namespace PhotoManager.Tests.Unit.Metadata;
+namespace Hawkynt.PhotoManager.Tests.Unit.Metadata;
 
 [TestFixture]
 public class MetadataReaderExifTests {

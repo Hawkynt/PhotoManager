@@ -1,4 +1,4 @@
-namespace PhotoManager.UI.Models;
+namespace Hawkynt.PhotoManager.UI.Models;
 
 /// <summary>
 /// One frame queued for the panorama stitcher. The window's grid binds to a

@@ -1,6 +1,6 @@
 using System.Security.Cryptography;
 
-namespace PhotoManager.Core.Ml;
+namespace Hawkynt.PhotoManager.Core.Ml;
 
 /// <summary>
 /// Disk-based cache for per-image CLIP/SigLIP vision embeddings. When users

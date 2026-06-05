@@ -3,7 +3,7 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="60"
-             x:Class="PhotoManager.UI.Controls.TimelineScrubber">
+             x:Class="Hawkynt.PhotoManager.UI.Controls.TimelineScrubber">
   <Border BorderBrush="#DDD" BorderThickness="1" CornerRadius="3" Background="#FAFAFA">
     <Grid RowDefinitions="*,Auto">
       <Canvas Grid.Row="0" x:Name="BarsCanvas" Background="Transparent" Height="44" />

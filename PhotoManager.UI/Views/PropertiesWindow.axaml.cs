@@ -3,11 +3,11 @@ using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
-using PhotoManager.Core.Geocoding;
-using PhotoManager.Core.Metadata;
-using PhotoManager.UI.Services;
+using Hawkynt.PhotoManager.Core.Geocoding;
+using Hawkynt.PhotoManager.Core.Metadata;
+using Hawkynt.PhotoManager.UI.Services;
 
-namespace PhotoManager.UI.Views;
+namespace Hawkynt.PhotoManager.UI.Views;
 
 /// <summary>
 /// GeoSetter-style multi-tab property editor for a single photo. Tabs: General
@@ -437,7 +437,7 @@ public partial class PropertiesWindow : Window {
       return;
     }
 
-    var bitmap = await PhotoManager.UI.Services.ImagePreviewLoader.LoadAsync(this._file);
+    var bitmap = await Hawkynt.PhotoManager.UI.Services.ImagePreviewLoader.LoadAsync(this._file);
     if (bitmap is null) {
       this.SetStatus("Couldn't load the photo for triangulation.");
       return;

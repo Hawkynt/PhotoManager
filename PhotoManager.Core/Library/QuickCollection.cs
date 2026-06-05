@@ -1,4 +1,4 @@
-namespace PhotoManager.Core.Library;
+namespace Hawkynt.PhotoManager.Core.Library;
 
 /// <summary>
 /// Lightroom-style "Quick Collection" — a per-session unsorted bucket of file

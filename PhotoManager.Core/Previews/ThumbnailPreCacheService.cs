@@ -1,7 +1,7 @@
 using System.Collections.Concurrent;
 using System.Threading.Channels;
 
-namespace PhotoManager.Core.Previews;
+namespace Hawkynt.PhotoManager.Core.Previews;
 
 /// <summary>
 /// Background worker that pre-generates thumbnails for a batch of files so

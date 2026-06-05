@@ -1,7 +1,7 @@
-using PhotoManager.Core.Metadata;
-using PhotoManager.UI.Services;
+using Hawkynt.PhotoManager.Core.Metadata;
+using Hawkynt.PhotoManager.UI.Services;
 
-namespace PhotoManager.Tests.Unit.Services;
+namespace Hawkynt.PhotoManager.Tests.Unit.Services;
 
 [TestFixture]
 public class PickRejectHotkeysTests {

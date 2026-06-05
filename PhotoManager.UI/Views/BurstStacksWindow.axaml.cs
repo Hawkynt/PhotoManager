@@ -2,11 +2,11 @@ using System.Collections.ObjectModel;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
-using PhotoManager.Core.Library;
-using PhotoManager.Core.Metadata;
-using PhotoManager.UI.Models;
+using Hawkynt.PhotoManager.Core.Library;
+using Hawkynt.PhotoManager.Core.Metadata;
+using Hawkynt.PhotoManager.UI.Models;
 
-namespace PhotoManager.UI.Views;
+namespace Hawkynt.PhotoManager.UI.Views;
 
 /// <summary>
 /// Lists photo bursts detected from the main window's currently scanned

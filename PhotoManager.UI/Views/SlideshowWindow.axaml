@@ -1,6 +1,6 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        x:Class="PhotoManager.UI.Views.SlideshowWindow"
+        x:Class="Hawkynt.PhotoManager.UI.Views.SlideshowWindow"
         Title="Slideshow"
         Width="1024" Height="768"
         Background="Black"

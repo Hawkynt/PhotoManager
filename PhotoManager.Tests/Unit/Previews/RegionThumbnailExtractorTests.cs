@@ -1,10 +1,10 @@
-using PhotoManager.Core.Detection;
-using PhotoManager.Core.Previews;
-using PhotoManager.Tests.Helpers;
+using Hawkynt.PhotoManager.Core.Detection;
+using Hawkynt.PhotoManager.Core.Previews;
+using Hawkynt.PhotoManager.Tests.Helpers;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 
-namespace PhotoManager.Tests.Unit.Previews;
+namespace Hawkynt.PhotoManager.Tests.Unit.Previews;
 
 [TestFixture]
 public class RegionThumbnailExtractorTests {

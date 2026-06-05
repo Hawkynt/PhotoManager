@@ -1,7 +1,7 @@
-using PhotoManager.Core.Geocoding;
-using static PhotoManager.Core.Geocoding.NominatimReverseGeocoder;
+using Hawkynt.PhotoManager.Core.Geocoding;
+using static Hawkynt.PhotoManager.Core.Geocoding.NominatimReverseGeocoder;
 
-namespace PhotoManager.Tests.Unit.Geocoding;
+namespace Hawkynt.PhotoManager.Tests.Unit.Geocoding;
 
 [TestFixture]
 public class NominatimReverseGeocoderTests {

@@ -6,12 +6,12 @@ using Avalonia.Interactivity;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
-using PhotoManager.Core.Panorama;
-using PhotoManager.Core.Previews;
+using Hawkynt.PhotoManager.Core.Panorama;
+using Hawkynt.PhotoManager.Core.Previews;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 
-namespace PhotoManager.UI.Views;
+namespace Hawkynt.PhotoManager.UI.Views;
 
 /// <summary>
 /// Pan/zoom viewer for 360° equirectangular panoramas. Drag = look around,
@@ -183,14 +183,14 @@ public partial class PanoramaViewerWindow : Window {
     if (raw != null) {
       try {
         using var ms = new MemoryStream(raw, writable: false);
-        return PhotoManager.Core.Imaging.AlphaFlattener.FlattenOntoWhite(
+        return Hawkynt.PhotoManager.Core.Imaging.AlphaFlattener.FlattenOntoWhite(
           await SixLabors.ImageSharp.Image.LoadAsync<Rgba32>(ms));
       } catch {
         // Fall through.
       }
     }
     try {
-      return PhotoManager.Core.Imaging.AlphaFlattener.FlattenOntoWhite(
+      return Hawkynt.PhotoManager.Core.Imaging.AlphaFlattener.FlattenOntoWhite(
         await SixLabors.ImageSharp.Image.LoadAsync<Rgba32>(file.FullName));
     } catch {
       return null;

@@ -2,7 +2,7 @@ using System.Buffers.Binary;
 using System.Text;
 using FileFormat.JpegArchive;
 
-namespace PhotoManager.Tests.Unit.Metadata;
+namespace Hawkynt.PhotoManager.Tests.Unit.Metadata;
 
 [TestFixture]
 public class TiffRoundTripTests {

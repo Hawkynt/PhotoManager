@@ -1,6 +1,6 @@
-using PhotoManager.Core.Interfaces;
+using Hawkynt.PhotoManager.Core.Interfaces;
 
-namespace PhotoManager.Core.Services;
+namespace Hawkynt.PhotoManager.Core.Services;
 
 public class SupportedFormatsService : ISupportedFormatsService {
   

@@ -1,6 +1,6 @@
-using PhotoManager.Core.Metadata;
+using Hawkynt.PhotoManager.Core.Metadata;
 
-namespace PhotoManager.Core.Geocoding;
+namespace Hawkynt.PhotoManager.Core.Geocoding;
 
 public interface IReverseGeocoder {
   Task<GeocodingResult?> ResolveAsync(GpsCoordinate coordinate, CancellationToken cancellationToken = default);

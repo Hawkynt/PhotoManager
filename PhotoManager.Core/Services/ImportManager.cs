@@ -1,10 +1,10 @@
 using System.Diagnostics;
-using PhotoManager.Core.Enums;
-using PhotoManager.Core.Interfaces;
-using PhotoManager.Core.Models;
-using PhotoManager.Core.Utilities;
+using Hawkynt.PhotoManager.Core.Enums;
+using Hawkynt.PhotoManager.Core.Interfaces;
+using Hawkynt.PhotoManager.Core.Models;
+using Hawkynt.PhotoManager.Core.Utilities;
 
-namespace PhotoManager.Core.Services;
+namespace Hawkynt.PhotoManager.Core.Services;
 
 public class ImportManager(IDateTimeParser? dateTimeParser = null, IFileOrganizer? fileOrganizer = null, ISupportedFormatsService? supportedFormatsService = null)
   : IImportManager {

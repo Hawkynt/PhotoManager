@@ -1,6 +1,6 @@
 <Application xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             x:Class="PhotoManager.UI.App"
+             x:Class="Hawkynt.PhotoManager.UI.App"
              RequestedThemeVariant="Default">
   <Application.Resources>
     <ResourceDictionary>
@@ -34,6 +34,6 @@
     <FluentTheme />
     <StyleInclude Source="avares://Avalonia.Controls.DataGrid/Themes/Fluent.xaml" />
     <!-- Custom overrides applied LAST so they win over FluentTheme defaults. -->
-    <StyleInclude Source="avares://PhotoManager.UI/Styles/WindowsClassic.axaml" />
+    <StyleInclude Source="avares://Hawkynt.PhotoManager.UI/Styles/WindowsClassic.axaml" />
   </Application.Styles>
 </Application>

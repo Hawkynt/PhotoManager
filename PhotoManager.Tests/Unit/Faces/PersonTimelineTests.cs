@@ -1,6 +1,6 @@
-using PhotoManager.Core.Faces;
+using Hawkynt.PhotoManager.Core.Faces;
 
-namespace PhotoManager.Tests.Unit.Faces;
+namespace Hawkynt.PhotoManager.Tests.Unit.Faces;
 
 [TestFixture]
 public class PersonTimelineTests {

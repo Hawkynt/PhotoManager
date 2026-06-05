@@ -1,7 +1,7 @@
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 
-namespace PhotoManager.Core.Panorama;
+namespace Hawkynt.PhotoManager.Core.Panorama;
 
 /// <summary>
 /// Pinhole-camera projection of an equirectangular 360° panorama. For each

@@ -1,6 +1,6 @@
 using System.Xml.Linq;
 
-namespace PhotoManager.Core.Metadata;
+namespace Hawkynt.PhotoManager.Core.Metadata;
 
 public sealed class XmpSidecarWriter : IMetadataWriter {
   public async Task<FileInfo> ApplyAsync(FileInfo imageFile, MetadataEdit edit, CancellationToken cancellationToken = default) {

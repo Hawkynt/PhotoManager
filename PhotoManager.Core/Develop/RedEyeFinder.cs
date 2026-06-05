@@ -1,8 +1,8 @@
-using PhotoManager.Core.Detection;
+using Hawkynt.PhotoManager.Core.Detection;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 
-namespace PhotoManager.Core.Develop;
+namespace Hawkynt.PhotoManager.Core.Develop;
 
 /// <summary>
 /// Locates compact red blobs that look like flash-induced red-eye. The

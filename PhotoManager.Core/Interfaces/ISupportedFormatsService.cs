@@ -1,4 +1,4 @@
-namespace PhotoManager.Core.Interfaces;
+namespace Hawkynt.PhotoManager.Core.Interfaces;
 
 public interface ISupportedFormatsService {
   /// <summary>

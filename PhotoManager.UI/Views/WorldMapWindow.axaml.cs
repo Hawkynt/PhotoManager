@@ -14,12 +14,12 @@ using Mapsui.Styles;
 using Mapsui.Tiling;
 using Mapsui.UI.Avalonia;
 using NetTopologySuite.Geometries;
-using PhotoManager.Core.Geo;
-using PhotoManager.Core.Geocoding;
-using PhotoManager.Core.Gpx;
-using PhotoManager.Core.Metadata;
+using Hawkynt.PhotoManager.Core.Geo;
+using Hawkynt.PhotoManager.Core.Geocoding;
+using Hawkynt.PhotoManager.Core.Gpx;
+using Hawkynt.PhotoManager.Core.Metadata;
 
-namespace PhotoManager.UI.Views;
+namespace Hawkynt.PhotoManager.UI.Views;
 
 /// <summary>
 /// Plots every geotagged photo from the caller-supplied file list onto an

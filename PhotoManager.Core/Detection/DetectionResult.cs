@@ -1,4 +1,4 @@
-namespace PhotoManager.Core.Detection;
+namespace Hawkynt.PhotoManager.Core.Detection;
 
 /// <summary>
 /// The set of detections returned from one run of an <see cref="IDetector"/>

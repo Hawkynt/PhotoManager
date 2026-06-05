@@ -11,11 +11,11 @@ using FileFormat.Ico;
 using FileFormat.Jpeg2000;
 using FileFormat.Pcx;
 using FileFormat.Psd;
-using PhotoManager.Core.Imaging;
+using Hawkynt.PhotoManager.Core.Imaging;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 
-namespace PhotoManager.Core.Develop;
+namespace Hawkynt.PhotoManager.Core.Develop;
 
 /// <summary>
 /// Loads any image file the rest of the develop / restoration pipeline

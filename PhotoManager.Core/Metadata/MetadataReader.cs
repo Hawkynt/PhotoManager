@@ -2,7 +2,7 @@ using System.Text;
 using FileFormat.JpegArchive;
 using MetadataExtractor.Formats.Exif;
 
-namespace PhotoManager.Core.Metadata;
+namespace Hawkynt.PhotoManager.Core.Metadata;
 
 public sealed class MetadataReader : IMetadataReader {
   public async Task<FullMetadata> ReadAsync(FileInfo imageFile, CancellationToken cancellationToken = default) {

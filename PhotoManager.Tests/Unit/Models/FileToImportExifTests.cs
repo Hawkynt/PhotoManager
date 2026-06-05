@@ -1,7 +1,7 @@
-using PhotoManager.Core.Models;
-using PhotoManager.Tests.Helpers;
+using Hawkynt.PhotoManager.Core.Models;
+using Hawkynt.PhotoManager.Tests.Helpers;
 
-namespace PhotoManager.Tests.Unit.Models;
+namespace Hawkynt.PhotoManager.Tests.Unit.Models;
 
 [TestFixture]
 public class FileToImportExifTests {

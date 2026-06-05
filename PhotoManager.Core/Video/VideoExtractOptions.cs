@@ -1,4 +1,4 @@
-namespace PhotoManager.Core.Video;
+namespace Hawkynt.PhotoManager.Core.Video;
 
 /// <summary>
 /// Tunables for <see cref="VideoFrameExtractor"/>. Defaults match the

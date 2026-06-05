@@ -1,4 +1,4 @@
-namespace PhotoManager.Core.Previews;
+namespace Hawkynt.PhotoManager.Core.Previews;
 
 /// <summary>
 /// Bounded in-memory LRU cache for decoded preview JPEG byte buffers.

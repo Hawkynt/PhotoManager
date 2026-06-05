@@ -1,6 +1,6 @@
 using Avalonia.Controls;
 
-namespace PhotoManager.UI.Services;
+namespace Hawkynt.PhotoManager.UI.Services;
 
 /// <summary>
 /// Tracks edits on a set of input controls and paints their background

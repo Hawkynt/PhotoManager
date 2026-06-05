@@ -3,7 +3,7 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d" d:DesignWidth="380" d:DesignHeight="160"
-        x:Class="PhotoManager.UI.Views.InputDialogWindow"
+        x:Class="Hawkynt.PhotoManager.UI.Views.InputDialogWindow"
         Width="380" SizeToContent="Height" CanResize="False"
         WindowStartupLocation="CenterOwner"
         Title="Enter value">

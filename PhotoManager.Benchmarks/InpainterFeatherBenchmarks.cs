@@ -1,10 +1,10 @@
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Jobs;
-using PhotoManager.Core.Segmentation;
+using Hawkynt.PhotoManager.Core.Segmentation;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 
-namespace PhotoManager.Benchmarks;
+namespace Hawkynt.PhotoManager.Benchmarks;
 
 /// <summary>
 /// Compares the old brute-force ComputeFeatherWeight against the new

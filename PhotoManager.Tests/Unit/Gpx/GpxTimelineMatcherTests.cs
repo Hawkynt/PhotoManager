@@ -1,7 +1,7 @@
-using PhotoManager.Core.Gpx;
-using PhotoManager.Core.Metadata;
+using Hawkynt.PhotoManager.Core.Gpx;
+using Hawkynt.PhotoManager.Core.Metadata;
 
-namespace PhotoManager.Tests.Unit.Gpx;
+namespace Hawkynt.PhotoManager.Tests.Unit.Gpx;
 
 [TestFixture]
 public class GpxTimelineMatcherTests {

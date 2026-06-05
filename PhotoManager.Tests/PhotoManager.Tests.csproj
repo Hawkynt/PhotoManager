@@ -1,6 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+
+    <AssemblyName>Hawkynt.PhotoManager.Tests</AssemblyName>
+    <RootNamespace>Hawkynt.PhotoManager.Tests</RootNamespace>
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>

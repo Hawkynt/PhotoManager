@@ -1,11 +1,11 @@
-using PhotoManager.Core.Develop;
-using PhotoManager.Core.Imaging;
-using PhotoManager.Core.Models;
-using PhotoManager.Core.Segmentation;
+using Hawkynt.PhotoManager.Core.Develop;
+using Hawkynt.PhotoManager.Core.Imaging;
+using Hawkynt.PhotoManager.Core.Models;
+using Hawkynt.PhotoManager.Core.Segmentation;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 
-namespace PhotoManager.Core.Enhance;
+namespace Hawkynt.PhotoManager.Core.Enhance;
 
 /// <summary>
 /// One-click "make this smartphone shot look like art" orchestrator.

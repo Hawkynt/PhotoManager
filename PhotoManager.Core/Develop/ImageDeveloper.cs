@@ -1,13 +1,13 @@
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.X86;
-using PhotoManager.Core;
+using Hawkynt.PhotoManager.Core;
 using SixLabors.Fonts;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Drawing.Processing;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
 
-namespace PhotoManager.Core.Develop;
+namespace Hawkynt.PhotoManager.Core.Develop;
 
 /// <summary>
 /// Applies <see cref="DevelopSettings"/> to an image, producing a new image.

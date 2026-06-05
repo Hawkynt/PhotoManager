@@ -1,8 +1,8 @@
 using System.Globalization;
 using System.Runtime.InteropServices;
-using PhotoManager.Core.Video;
+using Hawkynt.PhotoManager.Core.Video;
 
-namespace PhotoManager.Tests.Unit.Video;
+namespace Hawkynt.PhotoManager.Tests.Unit.Video;
 
 [TestFixture]
 public class FfmpegLocatorTests {

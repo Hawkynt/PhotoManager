@@ -1,6 +1,6 @@
-using PhotoManager.Core.Utilities;
+using Hawkynt.PhotoManager.Core.Utilities;
 
-namespace PhotoManager.Tests.Unit.Utilities;
+namespace Hawkynt.PhotoManager.Tests.Unit.Utilities;
 
 [TestFixture]
 public class ThrowHelpersTests {

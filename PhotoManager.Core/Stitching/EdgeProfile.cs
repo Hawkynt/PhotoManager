@@ -1,6 +1,6 @@
 using SixLabors.ImageSharp;
 
-namespace PhotoManager.Core.Stitching;
+namespace Hawkynt.PhotoManager.Core.Stitching;
 
 /// <summary>
 /// Resampled, evenly-spaced version of a piece's <see cref="DetectedPiece.Contour"/>.

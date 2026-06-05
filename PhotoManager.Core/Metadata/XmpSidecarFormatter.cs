@@ -1,10 +1,10 @@
 using System.Globalization;
 using System.Xml;
 using System.Xml.Linq;
-using PhotoManager.Core.Detection;
-using PhotoManager.Core.Regions;
+using Hawkynt.PhotoManager.Core.Detection;
+using Hawkynt.PhotoManager.Core.Regions;
 
-namespace PhotoManager.Core.Metadata;
+namespace Hawkynt.PhotoManager.Core.Metadata;
 
 /// <summary>
 /// Serializes and parses XMP sidecar files (RDF/XML). The minimal schema

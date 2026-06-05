@@ -2,7 +2,7 @@ using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
 
-namespace PhotoManager.Core.Imaging;
+namespace Hawkynt.PhotoManager.Core.Imaging;
 
 /// <summary>
 /// Detect the dominant horizontal / vertical edge angle in an image and

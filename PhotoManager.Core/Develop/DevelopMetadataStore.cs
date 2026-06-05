@@ -4,13 +4,13 @@ using System.Text.Json;
 using System.Xml;
 using System.Xml.Linq;
 using FileFormat.JpegArchive;
-using PhotoManager.Core.Metadata.Containers;
+using Hawkynt.PhotoManager.Core.Metadata.Containers;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Formats.Jpeg;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
 
-namespace PhotoManager.Core.Develop;
+namespace Hawkynt.PhotoManager.Core.Develop;
 
 /// <summary>
 /// Reads / writes per-image develop settings inside the JPEG XMP packet. The

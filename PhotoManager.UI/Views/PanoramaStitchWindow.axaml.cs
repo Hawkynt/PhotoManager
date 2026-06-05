@@ -6,15 +6,15 @@ using Avalonia.Interactivity;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
-using PhotoManager.Core.Panorama;
+using Hawkynt.PhotoManager.Core.Panorama;
 using StitcherMode = OpenCvSharp.Stitcher.Mode;
-using PhotoManager.UI.Models;
+using Hawkynt.PhotoManager.UI.Models;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
 using SharpImage = SixLabors.ImageSharp.Image;
 
-namespace PhotoManager.UI.Views;
+namespace Hawkynt.PhotoManager.UI.Views;
 
 public partial class PanoramaStitchWindow : Window {
   private static readonly string[] SupportedExtensions =
@@ -226,7 +226,7 @@ public partial class PanoramaStitchWindow : Window {
           for (var i = 0; i < snapshot.Count; i++) {
             // Flatten alpha onto white so transparent GIF / PNG sources
             // don't paint black through the stitch.
-            sources.Add(PhotoManager.Core.Imaging.AlphaFlattener.FlattenOntoWhite(
+            sources.Add(Hawkynt.PhotoManager.Core.Imaging.AlphaFlattener.FlattenOntoWhite(
               SharpImage.Load<Rgba32>(snapshot[i].FullName)));
             this.PostProgress(2 + (int)(20.0 * (i + 1) / snapshot.Count),
               $"Loading {snapshot[i].Name}");

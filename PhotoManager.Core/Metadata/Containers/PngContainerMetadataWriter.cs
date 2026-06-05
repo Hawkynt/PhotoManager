@@ -1,6 +1,6 @@
 using FileFormat.JpegArchive;
 
-namespace PhotoManager.Core.Metadata.Containers;
+namespace Hawkynt.PhotoManager.Core.Metadata.Containers;
 
 /// <summary>
 /// Embeds our XMP packet into a PNG's iTXt chunk so metadata travels with

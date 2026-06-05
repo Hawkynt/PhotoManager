@@ -1,6 +1,6 @@
-using PhotoManager.Core.Metadata;
+using Hawkynt.PhotoManager.Core.Metadata;
 
-namespace PhotoManager.Core.Gpx;
+namespace Hawkynt.PhotoManager.Core.Gpx;
 
 /// <summary>
 /// Outcome per file for <see cref="GpxGeotaggingService.ApplyToFilesAsync"/>.

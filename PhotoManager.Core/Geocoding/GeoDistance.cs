@@ -1,4 +1,4 @@
-namespace PhotoManager.Core.Geocoding;
+namespace Hawkynt.PhotoManager.Core.Geocoding;
 
 /// <summary>
 /// Bare-bones haversine helper that operates on raw <c>double</c> latitude /

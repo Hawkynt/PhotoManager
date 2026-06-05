@@ -1,6 +1,6 @@
 using FileFormat.JpegArchive;
 
-namespace PhotoManager.Core.Metadata.Containers;
+namespace Hawkynt.PhotoManager.Core.Metadata.Containers;
 
 public sealed class TiffContainerMetadataWriter : IContainerMetadataWriter {
   private static readonly string[] TiffExtensions = { ".tif", ".tiff" };

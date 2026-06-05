@@ -1,8 +1,8 @@
-using PhotoManager.Core.Gpx;
-using PhotoManager.Core.Library;
-using PhotoManager.Tests.Helpers;
+using Hawkynt.PhotoManager.Core.Gpx;
+using Hawkynt.PhotoManager.Core.Library;
+using Hawkynt.PhotoManager.Tests.Helpers;
 
-namespace PhotoManager.Tests.Unit.Library;
+namespace Hawkynt.PhotoManager.Tests.Unit.Library;
 
 [TestFixture]
 public class PhotoDateShifterTests {

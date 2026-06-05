@@ -1,9 +1,9 @@
 using System.Text;
 using FileFormat.JpegArchive;
-using PhotoManager.Core.Metadata.Containers;
+using Hawkynt.PhotoManager.Core.Metadata.Containers;
 // JpegContainerExifBridge lives in Containers namespace via the file in that folder.
 
-namespace PhotoManager.Core.Metadata;
+namespace Hawkynt.PhotoManager.Core.Metadata;
 
 /// <summary>
 /// Routes metadata writes to the best target for each file:

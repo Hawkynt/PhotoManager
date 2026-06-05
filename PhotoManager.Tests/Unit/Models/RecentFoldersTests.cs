@@ -1,8 +1,8 @@
 using System.Text.Json;
-using PhotoManager.UI.Controllers;
-using PhotoManager.UI.Models;
+using Hawkynt.PhotoManager.UI.Controllers;
+using Hawkynt.PhotoManager.UI.Models;
 
-namespace PhotoManager.Tests.Unit.Models;
+namespace Hawkynt.PhotoManager.Tests.Unit.Models;
 
 [TestFixture]
 public class RecentFoldersTests {

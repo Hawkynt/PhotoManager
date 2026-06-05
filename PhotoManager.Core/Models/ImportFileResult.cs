@@ -1,4 +1,4 @@
-namespace PhotoManager.Core.Models;
+namespace Hawkynt.PhotoManager.Core.Models;
 
 public record ImportFileResult(FileInfo SourcePath, FileInfo? DestinationPath, bool Success, string? ErrorMessage, DateTime? DetectedDate) {
 

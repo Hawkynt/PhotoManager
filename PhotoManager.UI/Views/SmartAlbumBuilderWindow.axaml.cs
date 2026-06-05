@@ -1,11 +1,11 @@
 using System.Collections.ObjectModel;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
-using PhotoManager.Core.Library;
-using PhotoManager.Core.Metadata;
-using PhotoManager.UI.Models;
+using Hawkynt.PhotoManager.Core.Library;
+using Hawkynt.PhotoManager.Core.Metadata;
+using Hawkynt.PhotoManager.UI.Models;
 
-namespace PhotoManager.UI.Views;
+namespace Hawkynt.PhotoManager.UI.Views;
 
 /// <summary>
 /// Builds and edits <see cref="SmartAlbumRule"/> records. Returns the newest

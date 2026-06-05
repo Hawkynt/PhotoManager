@@ -2,9 +2,9 @@ using System.Globalization;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Text.Json.Serialization;
-using PhotoManager.Core.Metadata;
+using Hawkynt.PhotoManager.Core.Metadata;
 
-namespace PhotoManager.Core.Geocoding;
+namespace Hawkynt.PhotoManager.Core.Geocoding;
 
 /// <summary>
 /// Elevation lookup backed by the free OpenTopoData service

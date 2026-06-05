@@ -1,7 +1,7 @@
 using System.Text;
 using FileFormat.JpegArchive;
 
-namespace PhotoManager.Core.Metadata.Containers;
+namespace Hawkynt.PhotoManager.Core.Metadata.Containers;
 
 public sealed class JpegContainerMetadataWriter : IContainerMetadataWriter {
   private static readonly string[] JpegExtensions = { ".jpg", ".jpeg", ".jpe", ".jfif" };
@@ -47,7 +47,7 @@ public sealed class JpegContainerMetadataWriter : IContainerMetadataWriter {
 /// <summary>
 /// Combines EXIF + XMP + IPTC updates into a single JPEG rewrite. All three
 /// metadata segments are replaced/inserted in one pass so the file is only
-/// written once. Used by <see cref="PhotoManager.Core.Metadata.CompositeMetadataWriter"/>
+/// written once. Used by <see cref="Hawkynt.PhotoManager.Core.Metadata.CompositeMetadataWriter"/>
 /// for JPEGs where we want native EXIF + legacy IPTC (which many tools read
 /// instead of XMP) kept in sync with our canonical XMP.
 /// </summary>

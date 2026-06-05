@@ -1,6 +1,6 @@
-using PhotoManager.Core.Segmentation;
+using Hawkynt.PhotoManager.Core.Segmentation;
 
-namespace PhotoManager.Tests.Unit.Segmentation;
+namespace Hawkynt.PhotoManager.Tests.Unit.Segmentation;
 
 [TestFixture]
 public class InpainterFeatherTests {

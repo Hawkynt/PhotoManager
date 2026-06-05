@@ -1,8 +1,8 @@
-using PhotoManager.Core.Detection;
-using PhotoManager.Core.Faces;
-using PhotoManager.Core.Regions;
+using Hawkynt.PhotoManager.Core.Detection;
+using Hawkynt.PhotoManager.Core.Faces;
+using Hawkynt.PhotoManager.Core.Regions;
 
-namespace PhotoManager.Tests.Unit.Faces;
+namespace Hawkynt.PhotoManager.Tests.Unit.Faces;
 
 [TestFixture]
 public class FaceClusterIndexTests {

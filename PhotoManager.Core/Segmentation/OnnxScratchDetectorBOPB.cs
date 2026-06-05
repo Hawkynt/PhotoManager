@@ -4,7 +4,7 @@ using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
 
-namespace PhotoManager.Core.Segmentation;
+namespace Hawkynt.PhotoManager.Core.Segmentation;
 
 /// <summary>
 /// ONNX-backed scratch detector — Microsoft's UNet from
@@ -52,7 +52,7 @@ public sealed class OnnxScratchDetectorBOPB : IDisposable {
   /// transparent elsewhere) at the source's resolution. Same mask
   /// convention the brush canvas + LaMa inpaint pipeline expect, so
   /// the output is a drop-in replacement for the classical
-  /// <see cref="PhotoManager.Core.Develop.ScratchDetector.Detect"/>.
+  /// <see cref="Hawkynt.PhotoManager.Core.Develop.ScratchDetector.Detect"/>.
   /// Returns null when the model isn't installed.
   /// </summary>
   /// <param name="source">Image to analyse. Not mutated.</param>

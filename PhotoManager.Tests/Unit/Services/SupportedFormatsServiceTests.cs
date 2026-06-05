@@ -1,6 +1,6 @@
-using PhotoManager.Core.Services;
+using Hawkynt.PhotoManager.Core.Services;
 
-namespace PhotoManager.Tests.Unit.Services;
+namespace Hawkynt.PhotoManager.Tests.Unit.Services;
 
 [TestFixture]
 public class SupportedFormatsServiceTests {

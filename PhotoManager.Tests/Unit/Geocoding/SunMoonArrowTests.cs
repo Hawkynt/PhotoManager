@@ -1,6 +1,6 @@
-using PhotoManager.Core.Geocoding;
+using Hawkynt.PhotoManager.Core.Geocoding;
 
-namespace PhotoManager.Tests.Unit.Geocoding;
+namespace Hawkynt.PhotoManager.Tests.Unit.Geocoding;
 
 [TestFixture]
 public class SunMoonArrowTests {

@@ -1,7 +1,7 @@
 using System.Reflection;
-using PhotoManager.UI.Models;
+using Hawkynt.PhotoManager.UI.Models;
 
-namespace PhotoManager.UI.Controllers;
+namespace Hawkynt.PhotoManager.UI.Controllers;
 
 public class AboutController {
   public AboutViewModel GetAboutInfo() {

@@ -2,9 +2,9 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
-using PhotoManager.Core.Develop;
+using Hawkynt.PhotoManager.Core.Develop;
 
-namespace PhotoManager.UI.Controls;
+namespace Hawkynt.PhotoManager.UI.Controls;
 
 /// <summary>
 /// Transparent control overlaid on the develop preview while a local

@@ -1,8 +1,8 @@
 using Microsoft.ML.OnnxRuntime;
-using PhotoManager.Core.Segmentation;
+using Hawkynt.PhotoManager.Core.Segmentation;
 using Microsoft.ML.OnnxRuntime.Tensors;
 
-namespace PhotoManager.Core.Detection;
+namespace Hawkynt.PhotoManager.Core.Detection;
 
 /// <summary>
 /// ONNX-backed YOLO v8 object detector. Looks for <c>yolov8n.onnx</c> (or a

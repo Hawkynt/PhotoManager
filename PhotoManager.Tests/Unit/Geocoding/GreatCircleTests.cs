@@ -1,7 +1,7 @@
-using PhotoManager.Core.Geocoding;
-using PhotoManager.Core.Metadata;
+using Hawkynt.PhotoManager.Core.Geocoding;
+using Hawkynt.PhotoManager.Core.Metadata;
 
-namespace PhotoManager.Tests.Unit.Geocoding;
+namespace Hawkynt.PhotoManager.Tests.Unit.Geocoding;
 
 [TestFixture]
 public class GreatCircleTests {

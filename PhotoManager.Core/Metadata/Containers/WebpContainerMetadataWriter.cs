@@ -1,6 +1,6 @@
 using FileFormat.JpegArchive;
 
-namespace PhotoManager.Core.Metadata.Containers;
+namespace Hawkynt.PhotoManager.Core.Metadata.Containers;
 
 public sealed class WebpContainerMetadataWriter : IContainerMetadataWriter {
   public bool SupportsExtension(string extension)

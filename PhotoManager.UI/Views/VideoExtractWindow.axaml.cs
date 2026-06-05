@@ -3,10 +3,10 @@ using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
-using PhotoManager.Core.Video;
-using PhotoManager.UI.Services;
+using Hawkynt.PhotoManager.Core.Video;
+using Hawkynt.PhotoManager.UI.Services;
 
-namespace PhotoManager.UI.Views;
+namespace Hawkynt.PhotoManager.UI.Views;
 
 /// <summary>
 /// Front-end for <see cref="VideoFrameExtractor"/>. Drives ffmpeg via

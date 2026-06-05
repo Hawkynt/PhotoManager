@@ -1,6 +1,6 @@
 using System.Globalization;
 
-namespace PhotoManager.Core.Develop;
+namespace Hawkynt.PhotoManager.Core.Develop;
 
 /// <summary>
 /// Parses Adobe <c>.cube</c> and Autodesk <c>.3dl</c> 3D LUT files into a

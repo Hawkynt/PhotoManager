@@ -3,7 +3,7 @@ using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
 
-namespace PhotoManager.Core.Hdr;
+namespace Hawkynt.PhotoManager.Core.Hdr;
 
 public sealed record HdrOptions(
   bool AlignBeforeMerge = true,

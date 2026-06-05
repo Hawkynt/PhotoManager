@@ -5,7 +5,7 @@ using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
 using SixLabors.ImageSharp.Processing.Processors.Transforms;
 
-namespace PhotoManager.Core.Imaging;
+namespace Hawkynt.PhotoManager.Core.Imaging;
 
 /// <summary>
 /// Adaptive resize service. Callers hand it a source image and target

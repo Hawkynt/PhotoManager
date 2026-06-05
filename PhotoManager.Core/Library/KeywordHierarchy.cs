@@ -1,4 +1,4 @@
-namespace PhotoManager.Core.Library;
+namespace Hawkynt.PhotoManager.Core.Library;
 
 /// <summary>
 /// Pure logic for the hierarchical keyword tree. The internal model lets the
