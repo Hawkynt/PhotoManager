@@ -31,7 +31,7 @@ PhotoManager helps photographers and photo enthusiasts:
 - **Search** the library by keyword, person, place, rating, color label, or any-text — with saved searches, an in-memory index, and instant re-query.
 - **Export** geotagged photos to KML for Google Earth or any GPX viewer.
 
-## Features
+## ✨ Features
 
 ### What's new (May 2026)
 - 🎛️ **Develop window redesign** — right-hand control surface restructured into 6 focused tabs (⚡ Basic / 🤖 AI / ✂️ Crop / 🎨 Color / 🎭 Masks / 🌈 Effects) instead of a single 1300-line vertical scroll. AI tab puts Magic Enhance, mask helpers, and per-feature AI fixers front-and-centre.
@@ -180,7 +180,7 @@ PhotoManager/
 └── CLAUDE.md               # AI assistant instructions
 ```
 
-## Build Instructions
+## 🛠️ Build Instructions
 
 ### Prerequisites
 - .NET 8.0 SDK or later
@@ -287,7 +287,7 @@ Settings can be configured through:
 - Settings stored locally in user profile
 - No sensitive data is logged or transmitted
 
-## Contributing
+## 🤝 Contributing
 
 Contributions are welcome! Please read our contributing guidelines before submitting PRs.
 
@@ -298,3 +298,14 @@ LGPLv3 - See LICENSE file for details
 ## Support
 
 For issues, feature requests, or questions, please open an issue on GitHub.
+
+## ❤️ Support
+
+If this project saves you time or money, consider supporting its development:
+
+[![GitHub Sponsors](https://img.shields.io/badge/GitHub-Sponsor-EA4AAA?logo=githubsponsors)](https://github.com/sponsors/Hawkynt)
+[![PayPal](https://img.shields.io/badge/PayPal-Donate-00457C?logo=paypal)](https://www.paypal.me/hawkynt)
+
+## 📜 License
+
+Licensed under LGPL-3.0-or-later — see [LICENSE](LICENSE).
