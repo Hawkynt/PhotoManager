@@ -14,7 +14,7 @@
 ![Repo Size](https://img.shields.io/github/repo-size/Hawkynt/PhotoManager?color=FF9800)
 
 [![Release](https://img.shields.io/github/v/release/Hawkynt/PhotoManager)](https://github.com/Hawkynt/PhotoManager/releases/latest)
-[![Nightly](https://img.shields.io/github/v/release/Hawkynt/PhotoManager?include_prereleases&sort=date&label=nightly&color=FF9800)](https://github.com/Hawkynt/PhotoManager/releases)
+[![Nightly](https://img.shields.io/github/v/release/Hawkynt/PhotoManager?include_prereleases&sort=date&filter=nightly-*&label=nightly&color=FF9800)](https://github.com/Hawkynt/PhotoManager/releases)
 [![Downloads](https://img.shields.io/github/downloads/Hawkynt/PhotoManager/total)](https://github.com/Hawkynt/PhotoManager/releases)
 [![NuGet Core](https://img.shields.io/nuget/v/Hawkynt.PhotoManager.Core?label=Core)](https://www.nuget.org/packages/Hawkynt.PhotoManager.Core/)
 
