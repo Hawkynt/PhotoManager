@@ -18,6 +18,8 @@
     <Description>Core library for photo organization and management with metadata-driven sorting, duplicate handling, and flexible import strategies.</Description>
     <PackageProjectUrl>https://github.com/Hawkynt/PhotoManager</PackageProjectUrl>
     <PackageReadmeFile>README.md</PackageReadmeFile>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageTags>photo;organization;metadata;exif;duplicate-handling;file-management</PackageTags>
     <RepositoryUrl>https://github.com/Hawkynt/PhotoManager</RepositoryUrl>
