@@ -1,111 +1,25 @@
 name: CI
 
+# The gate a pull request has to pass. Nothing runs on a push to main: a pull request must be green
+# to merge, so re-running the same matrix on the merge commit proves nothing and costs a machine —
+# nightly.yml builds main after the merge instead. workflow_call stays because release.yml runs this
+# as its own first gate.
 on:
   pull_request:
-    branches: [main, master]
+    branches: [main]
   workflow_call: {}
   workflow_dispatch: {}
 
-# Pushing three times to a branch used to queue three full matrices and run all of them. A newer
-# pull-request run supersedes the older one; a push to main is not cancelled, because main wants a
-# recorded result for every commit rather than only for the newest.
-concurrency:
-  group: ci-${{ github.event_name }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
-
-# Force JavaScript-based actions to run on Node 24 instead of the deprecated Node 20 ahead of
-# the 2026-06-16 hard cutover, until we bump each action to a Node-24-native major version.
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
-
 jobs:
-  test:
-    name: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '8.x'
-
-      # PhotoManager.Core has a sibling-repo ProjectReference to
-      # ..\..\CompressionWorkbench\FileFormat.JpegArchive\... so the runner
-      # needs that repo cloned next to the PhotoManager checkout. Default
-      # GITHUB_WORKSPACE is .../work/PhotoManager/PhotoManager, so cloning
-      # to ../CompressionWorkbench lands it at the path the csproj expects.
-      - name: Clone sibling CompressionWorkbench
-        shell: bash
-        run: git clone --depth=1 https://github.com/Hawkynt/CompressionWorkbench.git "$GITHUB_WORKSPACE/../CompressionWorkbench"
-
-      # PNGCrushCS no longer needs to be cloned at runtime — every adapter
-      # ships in the bundled `Hawkynt.FileFormats.Images` package, which we
-      # source from .local-nuget/ while the published copy works through
-      # NuGet's >24 h validation queue. The CompressionWorkbench sibling
-      # above stays for now (its JpegArchive lib still ships as a project
-      # reference). Drop .local-nuget/ and the NuGet.Config local source
-      # once `Hawkynt.FileFormats.Images` lands on nuget.org.
-
-      - name: Stamp versions into csprojs
-        shell: bash
-        run: perl .github/workflows/scripts/version.pl --stamp
-
-      - name: Restore
-        run: dotnet restore PhotoManager.slnx
-
-      - name: Build
-        run: dotnet build PhotoManager.slnx --configuration Release --no-restore
-      # The package README must follow the house template, and its API reference must still match
-      # the assembly just built. The template lives in RepositoryTemplate; nothing is copied here.
-      # One OS only, so the reference cannot depend on which runner produced it.
-      - name: Check package READMEs
-        if: matrix.os == 'ubuntu-latest'
-        uses: Hawkynt/RepositoryTemplate/package-readme@v1
-
-      - name: Test
-        run: dotnet test PhotoManager.Tests/PhotoManager.Tests.csproj --configuration Release --no-build --logger "trx;LogFileName=tests.trx"
-
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: test-results-${{ matrix.os }}
-          path: '**/TestResults/*.trx'
-
-  coverage:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '8.x'
-
-      - name: Clone sibling CompressionWorkbench
-        shell: bash
-        run: git clone --depth=1 https://github.com/Hawkynt/CompressionWorkbench.git "$GITHUB_WORKSPACE/../CompressionWorkbench"
-
-      # PNGCrushCS is consumed via the bundled `Hawkynt.FileFormats.Images`
-      # package (sourced from .local-nuget/ until the public feed catches up).
-
-      - name: Stamp versions
-        run: perl .github/workflows/scripts/version.pl --stamp
-
-      - name: Test with coverage
-        run: dotnet test PhotoManager.Tests/PhotoManager.Tests.csproj --configuration Release --collect:"XPlat Code Coverage" --results-directory ./coverage
-
-      - name: Generate coverage report
-        run: |
-          dotnet tool install -g dotnet-reportgenerator-globaltool
-          reportgenerator -reports:./coverage/**/coverage.cobertura.xml -targetdir:./coverage/report -reporttypes:HtmlInline_AzurePipelines
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: coverage-report
-          path: ./coverage/report
+  ci:
+    uses: Hawkynt/RepositoryTemplate/.github/workflows/dotnet-ci.yml@v1
+    with:
+      solution: PhotoManager.slnx
+      test-target: PhotoManager.Tests/PhotoManager.Tests.csproj
+      dotnet-version: '8.x'
+      os-matrix: '["ubuntu-latest","windows-latest","macos-latest"]'
+      # PhotoManager.Core has a ..\..\CompressionWorkbench\FileFormat.JpegArchive\... reference, so
+      # the sibling has to sit BESIDE the workspace — which actions/checkout cannot do.
+      clone-siblings: '[{"repository":"Hawkynt/CompressionWorkbench","path":"../CompressionWorkbench"}]'
+      # One runner only: the committed reference must not depend on which machine produced it.
+      package-readme-os: ubuntu-latest
