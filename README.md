@@ -138,6 +138,17 @@ PhotoManager helps photographers and photo enthusiasts:
 - [ ] Crash-safe metadata write-back queue
 - [ ] Background pre-cache of thumbnails
 
+
+## 🖼️ Screenshots
+
+### Library
+
+![PhotoManager library window](screenshots/main-window.png)
+
+### Develop
+
+![PhotoManager develop window](screenshots/develop-window.png)
+
 ## How It Works
 
 1. **Scanning**: The application scans specified directories for image files
