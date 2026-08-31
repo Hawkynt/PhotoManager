@@ -23,3 +23,48 @@ jobs:
       clone-siblings: '[{"repository":"Hawkynt/CompressionWorkbench","path":"../CompressionWorkbench"}]'
       # One runner only: the committed reference must not depend on which machine produced it.
       package-readme-os: ubuntu-latest
+
+  screenshots:
+    name: README screenshots
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.x'
+
+      - name: Clone sibling CompressionWorkbench
+        shell: bash
+        run: git clone --depth 1 https://github.com/Hawkynt/CompressionWorkbench.git "$GITHUB_WORKSPACE/../CompressionWorkbench"
+
+      - name: Generate README screenshots
+        env:
+          PHOTOMANAGER_CAPTURE_SCREENSHOTS: '1'
+        run: >
+          dotnet test PhotoManager.Tests/PhotoManager.Tests.csproj
+          --configuration Release
+          --filter Category=Screenshot
+          --logger "trx;LogFileName=screenshot-tests.trx"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: readme-screenshots
+          path: |
+            screenshots/*.png
+            PhotoManager.Tests/TestResults/screenshot-tests.trx
+          if-no-files-found: warn
+
+      - name: Verify README screenshots are current
+        shell: bash
+        run: |
+          test -s screenshots/main-window.png
+          test -s screenshots/develop-window.png
+          git ls-files --error-unmatch screenshots/main-window.png >/dev/null
+          git ls-files --error-unmatch screenshots/develop-window.png >/dev/null
+          grep -Fq '![PhotoManager library window](screenshots/main-window.png)' README.md
+          grep -Fq '![PhotoManager develop window](screenshots/develop-window.png)' README.md
+          git diff --exit-code -- screenshots/

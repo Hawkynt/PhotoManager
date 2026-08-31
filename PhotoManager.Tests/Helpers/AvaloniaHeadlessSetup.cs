@@ -15,9 +15,16 @@ namespace Hawkynt.PhotoManager.Tests.Helpers;
 /// substituted with the headless equivalents.
 /// </summary>
 public static class HeadlessAppBuilderFactory {
-  public static AppBuilder BuildAvaloniaApp()
-    => AppBuilder.Configure<App>()
-      .UseHeadless(new AvaloniaHeadlessPlatformOptions {
-        UseHeadlessDrawing = true
-      });
+  public const string ScreenshotEnvironmentVariable = "PHOTOMANAGER_CAPTURE_SCREENSHOTS";
+
+  public static AppBuilder BuildAvaloniaApp() {
+    var builder = AppBuilder.Configure<App>();
+
+    return Environment.GetEnvironmentVariable(ScreenshotEnvironmentVariable) == "1"
+      ? builder
+        .UseSkia()
+        .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+      : builder
+        .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = true });
+  }
 }
