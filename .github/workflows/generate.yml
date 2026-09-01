@@ -1,0 +1,98 @@
+name: Generate
+
+# Cheap generation stage: every push to a working branch refreshes derived files and commits them
+# straight back onto that branch. By the time the pull request runs its full CI battery, the README
+# screenshots are already part of the branch rather than being CI-only artifacts.
+#
+# Never on main: that branch takes changes through pull requests only, and the shared action refuses
+# to touch the default branch as an additional guard.
+on:
+  push:
+    branches-ignore: [main]
+  workflow_dispatch: {}
+
+permissions:
+  actions: write
+  contents: write
+  pull-requests: read
+
+concurrency:
+  group: generate-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
+jobs:
+  screenshots:
+    name: refresh README screenshots
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.x'
+
+      - name: Clone sibling CompressionWorkbench
+        shell: bash
+        run: git clone --depth 1 https://github.com/Hawkynt/CompressionWorkbench.git "$GITHUB_WORKSPACE/../CompressionWorkbench"
+
+      - name: Generate README screenshots
+        env:
+          PHOTOMANAGER_CAPTURE_SCREENSHOTS: '1'
+        run: >
+          dotnet test PhotoManager.Tests/PhotoManager.Tests.csproj
+          --configuration Release
+          --filter Category=Screenshot
+
+      - name: Validate generated screenshots
+        shell: bash
+        run: |
+          for screenshot in screenshots/main-window.png screenshots/develop-window.png; do
+            test -s "$screenshot"
+            signature=$(od -An -tx1 -N8 "$screenshot" | tr -d ' \n')
+            if [ "$signature" != "89504e470d0a1a0a" ]; then
+              echo "::error::$screenshot is not a PNG file."
+              exit 1
+            fi
+          done
+
+      - name: Commit refreshed main window screenshot
+        uses: Hawkynt/RepositoryTemplate/commit-generated-file@v1
+        with:
+          file: screenshots/main-window.png
+          message: '* refresh the main window screenshot'
+
+      - name: Commit refreshed develop window screenshot
+        uses: Hawkynt/RepositoryTemplate/commit-generated-file@v1
+        with:
+          file: screenshots/develop-window.png
+          message: '* refresh the develop window screenshot'
+
+      # GITHUB_TOKEN updates to an already-open PR intentionally create an approval-required
+      # pull_request/synchronize run. workflow_dispatch is the documented exception that may start
+      # another workflow with GITHUB_TOKEN, so dispatch CI explicitly when generation actually
+      # advanced a branch that already belongs to an open PR.
+      - name: Run CI on the generated head
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          branch="$GITHUB_REF_NAME"
+          generated_head=$(gh api "repos/$GITHUB_REPOSITORY/branches/$branch" --jq '.commit.sha')
+          if [ "$generated_head" = "$GITHUB_SHA" ]; then
+            echo "::notice::The screenshots were already current; the normal PR synchronize run covers this head."
+            exit 0
+          fi
+
+          owner="${GITHUB_REPOSITORY%%/*}"
+          open_prs=$(gh api --method GET "repos/$GITHUB_REPOSITORY/pulls" \
+            -f state=open -f head="$owner:$branch" --jq 'length')
+          if [ "$open_prs" -eq 0 ]; then
+            echo "::notice::No open pull request for $branch; keeping generation as the cheap pre-PR stage."
+            exit 0
+          fi
+
+          echo "Dispatching CI for generated head $generated_head."
+          gh workflow run ci.yml --ref "$branch"
