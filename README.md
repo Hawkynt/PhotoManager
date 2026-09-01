@@ -20,6 +20,16 @@
 
 > A cross-platform photo manager and lightweight DAM that organises your collection by metadata, develops RAWs/JPEGs non-destructively, and stays out of the way — no local database, no cloud sync, your folders + sidecar XMP are the source of truth.
 
+## 🖼️ Screenshots
+
+### Library
+
+![PhotoManager library window](screenshots/main-window.png)
+
+### Develop
+
+![PhotoManager develop window](screenshots/develop-window.png)
+
 ## Purpose
 
 PhotoManager helps photographers and photo enthusiasts:
@@ -137,17 +147,6 @@ PhotoManager helps photographers and photo enthusiasts:
 - [ ] Photometric modelling (photogrammetry / surface normals — requires user-story scoping)
 - [ ] Crash-safe metadata write-back queue
 - [ ] Background pre-cache of thumbnails
-
-
-## 🖼️ Screenshots
-
-### Library
-
-![PhotoManager library window](screenshots/main-window.png)
-
-### Develop
-
-![PhotoManager develop window](screenshots/develop-window.png)
 
 ## How It Works
 
