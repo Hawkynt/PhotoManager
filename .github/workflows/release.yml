@@ -22,6 +22,7 @@ jobs:
   version:
     needs: test
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     outputs:
       version: ${{ steps.v.outputs.version }}
     steps:
@@ -46,6 +47,7 @@ jobs:
     # is a release in name only. Without this a rejected push still produced a green GitHub release.
     needs: [version, build, publish-nuget]
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
         with:
@@ -92,6 +94,7 @@ jobs:
   publish-nuget:
     needs: [version, build]
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: read
       # Lets the job mint the short-lived OIDC token that nuget.org's Trusted Publishing exchanges

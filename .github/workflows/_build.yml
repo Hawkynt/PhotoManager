@@ -45,6 +45,7 @@ env:
 jobs:
   build-exe:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     outputs:
       cli-win-artifact:   PhotoManager-CLI-win-x64-${{ inputs.version }}
       cli-linux-artifact: PhotoManager-CLI-linux-x64-${{ inputs.version }}
@@ -138,6 +139,7 @@ jobs:
   pack-nuget:
     if: inputs.release-kind == 'release'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     outputs:
       artifact-name: PhotoManagerCore-nupkg-${{ inputs.version }}
     steps:
