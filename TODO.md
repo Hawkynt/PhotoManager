@@ -55,7 +55,7 @@ Checklist re-verified against the tree. What landed since 2025-09-10:
   - [x] MetadataExtractor tests
   - [x] FileOrganizer tests
 - [ ] Integration Tests
-  - [ ] End-to-end import workflow (nothing exercises `ImportManager.ProcessDirectoryAsync`; there is no integration tier, only `Unit/`)
+  - [ ] End-to-end import workflow (no test exercises `ImportManager.ProcessDirectoryAsync` — only `MainController` calls it; there is no integration tier, just `Unit/`)
   - [x] File system operations (real temp-directory I/O in the FileOrganizer and ImportManager tests)
 - [x] Test Data
   - [x] Sample images with various metadata (synthesised by `Helpers/TestJpegFactory`)

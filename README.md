@@ -141,12 +141,13 @@ PhotoManager helps photographers and photo enthusiasts:
 - ✅ MVC pattern (UI), atomic metadata writes (preserved mtime), comprehensive unit + integration tests
 
 ### Planned Features
-- [ ] AI sky mask using a dedicated ONNX model (heuristic version is shipped)
-- [ ] Sun/moon arrows on the world map (calculator is shipped; map overlay is the follow-up)
-- [ ] Healing brush / spot remover
+- [x] AI sky mask using a dedicated ONNX model (`OnnxSkySegmenter`, alongside the heuristic `HeuristicSkyMask`)
+- [x] Healing brush / spot remover (`HealingBrush`)
+- [x] Crash-safe metadata write-back queue (`WriteBackQueue`; pending items persist through an atomic replace)
+- [x] Background pre-cache of thumbnails (`ThumbnailPreCacheService`)
+- [ ] Sun/moon arrows on the world map — the calculator and the arrow data are shipped
+      (`SolarLunarCalculator`, `SunMoonArrowData`); no map view consumes them yet
 - [ ] Photometric modelling (photogrammetry / surface normals — requires user-story scoping)
-- [ ] Crash-safe metadata write-back queue
-- [ ] Background pre-cache of thumbnails
 
 ## How It Works
 
