@@ -20,26 +20,17 @@
 
 > A cross-platform photo manager and lightweight DAM that organises your collection by metadata, develops RAWs/JPEGs non-destructively, and stays out of the way — no local database, no cloud sync, your folders + sidecar XMP are the source of truth.
 
-## 🖼️ Screenshots
+![The library window, with the catalogue and the filmstrip](screenshots/main-window.png)
 
-### Library
+## 🧭 Vision
 
-![PhotoManager library window](screenshots/main-window.png)
+A photo library is two problems wearing one coat: finding the picture, and finishing it. Most tools
+pick a side — a cataloguer that cannot develop, or an editor that cannot organise — and leave the
+other half to a second application and a second copy of the files.
 
-### Develop
-
-![PhotoManager develop window](screenshots/develop-window.png)
-
-## Purpose
-
-PhotoManager helps photographers and photo enthusiasts:
-
-- **Organise** sprawling photo libraries by detecting creation dates from EXIF, GPS, filename patterns, and file-system metadata, then sorting into a `yyyy/yyyyMMdd/HHmmss` folder hierarchy.
-- **Cull** with Picasa-style picks/rejects (P/X/U hotkeys), star ratings, color labels, perceptual-hash duplicate detection, and side-by-side compare.
-- **Tag** with keywords, GPS coordinates (manual map picker, GPX track sync, reverse geocoding, map bookmarks), face detection + clustering, and ONNX-based object detection.
-- **Develop** with a Lightroom-lite pipeline: tone (exposure, contrast, highlights, shadows, whites, blacks, clarity, vibrance, saturation), white balance, sharpening + noise reduction, master + R/G/B + parametric curves, HSL, color grading, B&W mixer, split toning, vignette + grain, lens corrections, calibration, crop + perspective, brush/linear/radial local masks with luminance + hue range filters and Add/Subtract/Intersect compositing.
-- **Search** the library by keyword, person, place, rating, color label, or any-text — with saved searches, an in-memory index, and instant re-query.
-- **Export** geotagged photos to KML for Google Earth or any GPX viewer.
+PhotoManager does both against one catalogue: dates recovered from whatever the file actually carries,
+culling and tagging that keep up with a real shoot, and a non-destructive development pipeline over
+the same images. Nothing is moved into a proprietary vault to make that work.
 
 ## ✨ Features
 
@@ -149,7 +140,41 @@ PhotoManager helps photographers and photo enthusiasts:
       (`SolarLunarCalculator`, `SunMoonArrowData`); no map view consumes them yet
 - [ ] Photometric modelling (photogrammetry / surface normals — requires user-story scoping)
 
-## How It Works
+## 📦 Installation
+
+Download the application from the [latest release](../../releases/latest) (or a `nightly-*`
+prerelease) and unpack it. Requires Windows and .NET; see [Building](#-building) to run from source.
+
+## 🚀 Quick start
+
+1. Point PhotoManager at a folder of photos — it reads them in place, nothing is imported into a vault.
+2. Cull with `P` / `X` / `U`, star ratings and colour labels; compare side by side.
+3. Tag with keywords, people and places, or let face and object detection propose them.
+4. Switch to **Develop** for tone, colour, masks and lens corrections.
+5. Sort into a `yyyy/yyyyMMdd/HHmmss` hierarchy, or export geotagged shots to KML.
+
+## 🖼️ Screenshots
+
+### Library
+
+![PhotoManager library window](screenshots/main-window.png)
+
+### Develop
+
+![PhotoManager develop window](screenshots/develop-window.png)
+
+## 🎯 Purpose
+
+PhotoManager helps photographers and photo enthusiasts:
+
+- **Organise** sprawling photo libraries by detecting creation dates from EXIF, GPS, filename patterns, and file-system metadata, then sorting into a `yyyy/yyyyMMdd/HHmmss` folder hierarchy.
+- **Cull** with Picasa-style picks/rejects (P/X/U hotkeys), star ratings, color labels, perceptual-hash duplicate detection, and side-by-side compare.
+- **Tag** with keywords, GPS coordinates (manual map picker, GPX track sync, reverse geocoding, map bookmarks), face detection + clustering, and ONNX-based object detection.
+- **Develop** with a Lightroom-lite pipeline: tone (exposure, contrast, highlights, shadows, whites, blacks, clarity, vibrance, saturation), white balance, sharpening + noise reduction, master + R/G/B + parametric curves, HSL, color grading, B&W mixer, split toning, vignette + grain, lens corrections, calibration, crop + perspective, brush/linear/radial local masks with luminance + hue range filters and Add/Subtract/Intersect compositing.
+- **Search** the library by keyword, person, place, rating, color label, or any-text — with saved searches, an in-memory index, and instant re-query.
+- **Export** geotagged photos to KML for Google Earth or any GPX viewer.
+
+## ⚙️ How it works
 
 1. **Scanning**: The application scans specified directories for image files
 2. **Metadata Extraction**: Extracts dates from multiple sources:
@@ -168,7 +193,7 @@ PhotoManager helps photographers and photo enthusiasts:
    │   │   └── 145533.png
    ```
 
-## Project Structure
+## 📁 Project structure
 
 ```
 PhotoManager/
@@ -191,7 +216,73 @@ PhotoManager/
 └── CLAUDE.md               # AI assistant instructions
 ```
 
-## 🛠️ Build Instructions
+## 🧪 Testing
+
+```bash
+# Run all tests
+dotnet test
+
+# Run with coverage
+dotnet test /p:CollectCoverage=true /p:CoverletOutputFormat=cobertura
+
+# Run specific test category
+dotnet test --filter Category=Unit
+```
+
+## 🔧 Configuration
+
+Settings can be configured through:
+- UI: Settings dialog
+- CLI: Command-line arguments or config file
+- Config file: `appsettings.json`
+
+## 🛡️ Security considerations
+
+- The application requires read/write access to specified directories
+- No network communication or data collection
+- Settings stored locally in user profile
+- No sensitive data is logged or transmitted
+
+## 🏗️ Architecture
+
+The application follows a clean architecture pattern with separation of concerns:
+
+- **Core**: Contains business logic, models, and interfaces. No UI dependencies.
+- **UI**: Avalonia 11 desktop application using MVC pattern; runs on Windows, macOS, and Linux from one codebase.
+- **CLI**: Command-line interface for automation.
+- **Tests**: Comprehensive test coverage using NUnit.
+
+### No-database principle
+
+PhotoManager has **no local database**. The truth lives in:
+
+1. The folder structure (file location = "imported")
+2. The file's own metadata (EXIF, XMP packet)
+3. XMP sidecar files (`.xmp` next to each photo) for fields the format doesn't support natively
+
+Caches (face embeddings, perceptual hashes, library index) are in-memory only and rebuilt on scan. Settings live in a small JSON file under `%AppData%/PhotoManager/`.
+
+### Date Detection Priority System
+
+The system assigns reliability scores to different date sources:
+
+1. **GPS Data** (Score: 50) - Most reliable for photos with location data
+2. **EXIF SubIFD** (Score: 40) - Original capture date
+3. **EXIF IFD0** (Score: 30) - Last modification date
+4. **Filename** (Score: 20) - Parsed from filename patterns
+5. **File Modified** (Score: 10) - File system modification date
+6. **File Created** (Score: 1) - File system creation date
+
+## ⚠️ Limitations
+
+- Image files only — video support is not on the roadmap.
+- No cloud storage integration; PhotoManager works entirely on local files. The XMP sidecars and embedded XMP packets are designed to interoperate cleanly with cloud-syncing tools that respect them.
+- The AI subject mask requires a one-time ~25 MB MODNet ONNX download (`Tools → Download detection models…` or click `🎭 Detect subject` and confirm the prompt).
+- The video → frames extractor requires `ffmpeg` to be installed and on PATH (`winget install ffmpeg` / `brew install ffmpeg` / `apt install ffmpeg`). PhotoManager doesn't bundle the ffmpeg binary because of its size.
+- The spherical 360° stitcher uses OpenCV's mosaic-into-canvas fallback (true cleanroom equirectangular reprojection isn't reachable through OpenCvSharp4 4.10's bindings). Output is a 2:1 canvas with the stitched mosaic centred; full-sphere coverage requires aligned input.
+- pHash duplicate detection is in-memory only — re-scanning a 10k+ photo library re-computes hashes (mtime-keyed cache short-circuits unchanged files).
+
+## 🛠️ Building
 
 ### Prerequisites
 - .NET 8.0 SDK or later
@@ -232,81 +323,11 @@ dotnet run --project PhotoManager.CLI -- \
   --dry-run
 ```
 
-## Testing
-
-```bash
-# Run all tests
-dotnet test
-
-# Run with coverage
-dotnet test /p:CollectCoverage=true /p:CoverletOutputFormat=cobertura
-
-# Run specific test category
-dotnet test --filter Category=Unit
-```
-
-## Architecture
-
-The application follows a clean architecture pattern with separation of concerns:
-
-- **Core**: Contains business logic, models, and interfaces. No UI dependencies.
-- **UI**: Avalonia 11 desktop application using MVC pattern; runs on Windows, macOS, and Linux from one codebase.
-- **CLI**: Command-line interface for automation.
-- **Tests**: Comprehensive test coverage using NUnit.
-
-### No-database principle
-
-PhotoManager has **no local database**. The truth lives in:
-
-1. The folder structure (file location = "imported")
-2. The file's own metadata (EXIF, XMP packet)
-3. XMP sidecar files (`.xmp` next to each photo) for fields the format doesn't support natively
-
-Caches (face embeddings, perceptual hashes, library index) are in-memory only and rebuilt on scan. Settings live in a small JSON file under `%AppData%/PhotoManager/`.
-
-### Date Detection Priority System
-
-The system assigns reliability scores to different date sources:
-
-1. **GPS Data** (Score: 50) - Most reliable for photos with location data
-2. **EXIF SubIFD** (Score: 40) - Original capture date
-3. **EXIF IFD0** (Score: 30) - Last modification date
-4. **Filename** (Score: 20) - Parsed from filename patterns
-5. **File Modified** (Score: 10) - File system modification date
-6. **File Created** (Score: 1) - File system creation date
-
-## Configuration
-
-Settings can be configured through:
-- UI: Settings dialog
-- CLI: Command-line arguments or config file
-- Config file: `appsettings.json`
-
-## Known Issues and Limitations
-
-- Image files only — video support is not on the roadmap.
-- No cloud storage integration; PhotoManager works entirely on local files. The XMP sidecars and embedded XMP packets are designed to interoperate cleanly with cloud-syncing tools that respect them.
-- The AI subject mask requires a one-time ~25 MB MODNet ONNX download (`Tools → Download detection models…` or click `🎭 Detect subject` and confirm the prompt).
-- The video → frames extractor requires `ffmpeg` to be installed and on PATH (`winget install ffmpeg` / `brew install ffmpeg` / `apt install ffmpeg`). PhotoManager doesn't bundle the ffmpeg binary because of its size.
-- The spherical 360° stitcher uses OpenCV's mosaic-into-canvas fallback (true cleanroom equirectangular reprojection isn't reachable through OpenCvSharp4 4.10's bindings). Output is a 2:1 canvas with the stitched mosaic centred; full-sphere coverage requires aligned input.
-- pHash duplicate detection is in-memory only — re-scanning a 10k+ photo library re-computes hashes (mtime-keyed cache short-circuits unchanged files).
-
-## Security Considerations
-
-- The application requires read/write access to specified directories
-- No network communication or data collection
-- Settings stored locally in user profile
-- No sensitive data is logged or transmitted
-
 ## 🤝 Contributing
 
 Contributions are welcome! Please read our contributing guidelines before submitting PRs.
 
-## License
-
-LGPLv3 - See LICENSE file for details
-
-## Support
+## 🆘 Getting Help
 
 For issues, feature requests, or questions, please open an issue on GitHub.
 
